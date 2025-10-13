@@ -9,3 +9,7 @@ n_mode_prod_cpp <- function(tensor, mat, n) {
     .Call(`_tensormodels_n_mode_prod_cpp`, tensor, mat, n)
 }
 
+tensor_prod_cpp <- function(A, B, simplify = TRUE) {
+    .Call(`_tensormodels_tensor_prod_cpp`, A, B, simplify)
+}
+
