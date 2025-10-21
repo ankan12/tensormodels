@@ -15,19 +15,19 @@
 #' matrixVarNorm <- matrixVarNorm <- rtnorm(n = 10000, mu = matrix(1:6, nrow = 2, ncol = 3),
 #' listSigmas = list(diag(2), diag(3)))
 #' @export
-rtnorm <- function(n = 50, mu = 0, listSigmas = NULL) {
+rtnorm <- function(n = 50, mu = 0, list_sigmas = NULL) {
   allDims <- dim(mu)
 
   if(is.null(allDims)) { #mu was a scalar
     allDims <- c(1)
   }
 
-  if (is.null(listSigmas)) { #no sigmas provided, use identity
-    listSigmas <- lapply(seq_along(allDims), function(k) diag(allDims[k]))
+  if (is.null(list_sigmas)) { #no sigmas provided, use identity
+    list_sigmas <- lapply(seq_along(allDims), function(k) diag(allDims[k]))
   }
 
   X <- array(rnorm(prod(c(n, allDims))), c(n, allDims)) #get all Z draws
-  cholSigma <- lapply(listSigmas, chol) #compute Cholesly
+  cholSigma <- lapply(list_sigmas, chol) #compute Cholesly
 
   for (k in seq_along(cholSigma)) {
     X <- n_mode_prod(X, t(cholSigma[[k]]), k+1) #multiply

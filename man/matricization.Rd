@@ -4,12 +4,12 @@
 \alias{matricization}
 \title{matricization}
 \usage{
-matricization(array, k)
+matricization(X, k)
 }
 \arguments{
-\item{array}{An array representing a tensor.}
-
 \item{k}{A mode to matricize along.}
+
+\item{array}{An array representing a tensor.}
 }
 \value{
 An array: the result of the nm-mode product between A and B.

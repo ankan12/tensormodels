@@ -15,7 +15,7 @@
 #' @export
 matricization <- function(X, k) {
   # Check tensor structure
-  if (is.null(dim(X))) stop("X must be an array (have a dim attribute).")
+  if (is.null(dim(X))) return(X)
 
   dims <- dim(X)
   N <- length(dims)

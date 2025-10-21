@@ -24,6 +24,13 @@ mle_est <- function(data, max_iter = 1000, tol = 1e-6) {
   num_dim  <- length(all_dims)
   n <- dim(data)[1]
 
+  if (num_dim == 1) { #univar case
+    n <- length(data)
+    mu <- mean(data)
+    sigma <- var(data)
+    return(list(mu = mu, sigmas = list(matrix(sigma, 1, 1))))
+  }
+
   #center input data
   mean_array <- apply(data, MARGIN = 2:(num_dim+1), FUN = mean)
   centeredX <- sweep(data, MARGIN = 2:(num_dim+1), STATS = mean_array, FUN = "-")
@@ -32,7 +39,7 @@ mle_est <- function(data, max_iter = 1000, tol = 1e-6) {
   est_sigmas <- lapply(all_dims, diag)
 
   for (t in 1:max_iter) {
-    oldSigmas <- lapply(est_sigmas, identity)  # store previous iteration
+    old_sigmas <- lapply(est_sigmas, identity)  # store previous iteration
 
     for (k in 1:num_dim) {
       invSigma <- lapply(est_sigmas, solve) #inverses of all sigma
@@ -65,7 +72,7 @@ mle_est <- function(data, max_iter = 1000, tol = 1e-6) {
     #convergence check
     rel_changes <- mapply(function(new, old)
       norm(new - old, "F") / (norm(old, "F") + 1e-12),
-      est_sigmas, oldSigmas)
+      est_sigmas, old_sigmas)
 
     max_change <- max(rel_changes)
     cat(sprintf("Iteration %d: max relative change = %.3e\n", t, max_change))

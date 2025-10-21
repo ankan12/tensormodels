@@ -19,7 +19,7 @@ Tensor operations, decompositions, and distributions in R.
 
 ## Installation
 
-You can install the development version of regexcite from [GitHub](https://github.com/) with:
+You can install the development version of tensormodels from [GitHub](https://github.com/) with:
     
 ```{r, eval = FALSE}
 #install.packages("devtools")
@@ -62,3 +62,59 @@ b <- matrix(c(5, 6), nrow = 2)
 tensor_prod(A, b)
 ```
 
+# Simulating Tensor Variate Normal Draws
+
+The function `rtnorm` simulates from the tensor variate normal with a specified mean array mu and a list of covariance matrices called list_sigmas. 
+
+Since the univariate normal and matrix variate normal are simpler cases of the tensor variate normal, this function can simulate from them as well.  Here, we simulate from a univariate normal with mean $-2$ and variance $4$. 
+```{r}
+univar_draws <- rtnorm(n = 10000, mu = -2, list_sigmas = 4)
+mean(univar_draws)
+sd(univar_draws)
+```
+
+
+And now we simulate from the matrix variate normal of size $2 \times 3$. By default, the covariance matrices will be the identity. 
+```{r}
+matrix_draws <- rtnorm(n = 10000, mu = matrix(1:6, nrow = 2, ncol = 3))
+
+matrix_draws[1, , ]
+```
+
+
+Below is a simulation from a tensor variate normal of size $3 \times 4 \times 2$. 
+```{r}
+tensor_draws <- rtnorm(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
+
+tensor_draws[1, , , ]
+```
+
+
+# MLE Estimation for the Tensor Variate Normal 
+
+The package supports MLE estimation for the mean and list of covariance matrices. 
+```{r}
+univar_est <- mle_est(univar_draws)
+
+univar_est$mu
+univar_est$sigmas
+```
+
+
+
+Here, the mean matrix from the draws above has values 1 through 6. The covariance matrices are the identity matrices. 
+```{r}
+matrix_est <- mle_est(matrix_draws)
+
+matrix_est$mu
+matrix_est$sigmas
+```
+
+
+This function works on array objects of dimensions above 2. 
+```{r}
+tensor_est <- mle_est(tensor_draws)
+
+tensor_est$mu
+tensor_est$sigmas
+```

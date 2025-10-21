@@ -4,7 +4,7 @@
 \alias{rtnorm}
 \title{rtnorm}
 \usage{
-rtnorm(n = 50, mu = 0, listSigmas = NULL)
+rtnorm(n = 50, mu = 0, list_sigmas = NULL)
 }
 \arguments{
 \item{n}{An integer stating the sample size.}
