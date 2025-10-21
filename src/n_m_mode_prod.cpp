@@ -1,4 +1,6 @@
 #include <Rcpp.h>
+#include "tensor_functions.h"
+
 using namespace Rcpp;
 
 // [[Rcpp::export]]

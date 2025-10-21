@@ -1,83 +1,59 @@
 #include <Rcpp.h>
-using namespace Rcpp;
+#include "tensor_functions.h"
 
 // [[Rcpp::export]]
-NumericVector n_mode_prod_cpp(NumericVector tensor, NumericMatrix mat, int n) {
-  IntegerVector dims = tensor.attr("dim"); // get modes of tensor
-  int nd = dims.size(); // order of tensor
-  int mode_dim = dims[n-1]; //size of nth mode
+Rcpp::NumericVector n_mode_prod_cpp(Rcpp::NumericVector tensor,
+                                    Rcpp::NumericMatrix mat,
+                                    int n) {
+  using namespace Rcpp;
 
-  if (mode_dim != mat.ncol()) //check if nth mode = cols of matrix
-    stop("Dimension mismatch: tensor mode %d is %d but matrix has %d columns",
-         n, mode_dim, mat.ncol());
+  // --- Step 1: Extract and validate tensor dimensions ---
+  IntegerVector dimsA = tensor.attr("dim");
+  int NdA = dimsA.size();
+  if (n < 1 || n > NdA)
+    stop("Invalid mode index: n must be between 1 and %d", NdA);
 
-  IntegerVector res_dims = clone(dims); //build result dims
-  res_dims[n-1] = mat.nrow(); //replace nth dim with rows of mat
-
-  int total = 1;
-  for (int i = 0; i < res_dims.size(); i++) {
-    total *= res_dims[i]; //compute total number of elements in result
+  // --- Step 2: Check dimension compatibility ---
+  // The contracted dimension (mode n of A) must equal ncol(B)
+  if (mat.ncol() != dimsA[n - 1]) {
+    stop("Dimension mismatch: A dim[%d]=%d but B ncol=%d",
+         n, dimsA[n - 1], mat.ncol());
   }
 
-  std::vector<int> strides(nd); //strides for original tensor in column-major order
-  strides[0] = 1;
-  for (int i = 1; i < nd; i++){
-    strides[i] = strides[i-1] * dims[i-1];
-  }
+  // --- Step 3: Perform contraction along mode n ---
+  // mn_mode_prod_cpp returns a tensor with dimensions:
+  //   (A_except_n, B_except_m)
+  // For a matrix B (m = 2), B_except_m = (mat.nrow())
+  NumericVector res = mn_mode_prod_cpp(tensor, mat, n, /*m=*/2);
 
-  NumericVector res(total); //flat vector
-  double *tensor_ptr = REAL(tensor); //pointers for speed
-  double *mat_ptr = REAL(mat);
-  int mat_ncol = mat.ncol(); //cols of mat
-  int mat_nrow = mat.nrow(); //rows of mat
+  // --- Step 4: Verify the resulting tensor rank ---
+  IntegerVector dimsRes = res.attr("dim");
+  if (dimsRes.size() != NdA)
+    stop("Unexpected result rank: got %d, expected %d.",
+         dimsRes.size(), NdA);
 
-  int slice_total = total / res_dims[n-1]; // number of combinations for the fixed indices
+  // --- Step 5: Build the correct permutation order ---
+  // Current dims: (A₁..Aₙ₋₁, Aₙ₊₁..AₙdA, J₁)
+  // Desired dims: (A₁..Aₙ₋₁, J₁, Aₙ₊₁..AₙdA)
+  // → permutation = c(1:(n-1), NdA, n:(NdA-1))
 
-  // loop over all combinations of indices for dimensions other than n
-  for (int slice = 0; slice < slice_total; slice++){
-    int tmp = slice;
-    int base_tensor_offset = 0;
+  IntegerVector perm(NdA);
+  int pos = 0;
 
-    std::vector<int> multi_idx(nd, 0); //store multi-index except at dim n
-    for (int k = 0; k < nd; k++){
-      if (k == n-1) { //skip mode n
-        continue;
-      }
-      int idx = tmp % dims[k];
-      tmp /= dims[k];
-      multi_idx[k] = idx;
-      base_tensor_offset += idx * strides[k];
-    }
+  // (1) A₁..Aₙ₋₁
+  for (int i = 1; i <= n - 1; ++i)
+    perm[pos++] = i;
 
-    // This slice is the set of elements tensor[base_tensor_offset + j * strides[n-1]]
-    // for j = 0, ..., mode_dim - 1.
-    std::vector<double> tensor_slice(mode_dim); //cache tensor slice for this index
-    for (int j = 0; j < mode_dim; j++){
-      tensor_slice[j] = tensor_ptr[ base_tensor_offset + j * strides[n-1] ];
-    }
+  // (2) J₁ (currently last axis, index NdA)
+  perm[pos++] = NdA;
 
-    // Now compute the dot product for each row r in the matrix.
-    for (int r = 0; r < mat_nrow; r++){
-      double sum_val = 0.0;
-      // Multiply the matrix row by the cached tensor slice.
-      for (int j = 0; j < mode_dim; j++){
-        double mval = mat_ptr[r + j * mat_nrow];
-        sum_val += mval * tensor_slice[j];
-      }
+  // (3) Remaining Aₙ₊₁..AₙdA
+  for (int i = n; i <= NdA - 1; ++i)
+    perm[pos++] = i;
 
-      // Reconstruct the full multi-index for the result.
-      // Insert the current r into the n-th dimension.
-      int res_index = 0;
-      int multiplier = 1;
-      for (int k = 0; k < nd; k++){
-        int idx = (k == n-1) ? r : multi_idx[k];
-        res_index += idx * multiplier;
-        multiplier *= res_dims[k];
-      }
-      res[res_index] = sum_val;
-    }
-  }
+  // --- Step 6: Apply permutation and return result ---
+  Function aperm("aperm");
+  NumericVector out = aperm(res, perm);
 
-  res.attr("dim") = res_dims;
-  return res;
+  return out;
 }
