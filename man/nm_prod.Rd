@@ -4,12 +4,12 @@
 \alias{nm_prod}
 \title{nm-mode product}
 \usage{
-nm_prod(tensorA, tensorB, n, m)
+nm_prod(tensor_A, tensor_B, n, m)
 }
 \arguments{
-\item{tensorA}{An array representing the tensor A.}
+\item{tensor_A}{An array representing the tensor A.}
 
-\item{tensorB}{An array representing tensor B.}
+\item{tensor_B}{An array representing tensor B.}
 
 \item{n}{An integer specifying which mode of tensor A to multiply across.}
 

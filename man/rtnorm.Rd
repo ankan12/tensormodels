@@ -4,25 +4,24 @@
 \alias{rtnorm}
 \title{rtnorm}
 \usage{
-rtnorm(n = 50, mu = 0, list_sigmas = NULL)
+rtnorm(n = 50, mu = 0, sigmas = NULL)
 }
 \arguments{
 \item{n}{An integer stating the sample size.}
 
 \item{mu}{An array containing the mean values of and dims of each draw.}
 
-\item{listSigmas}{A list of covariance matrices. Defaults to the identity.}
+\item{sigmas}{A list of covariance matrices. Defaults to the identity.}
 }
 \value{
-An array containing n draws of the tensor variate normal.
+An array containing n draws of the tensor variate normal distribution.
 }
 \description{
 Simulate random draws from the tensor variate normal distribution
 }
 \examples{
-univarNorm <- rtnorm(n = 10000, mu = -2)
-mean(univarNorm)
-sd(univarNorm)
-matrixVarNorm <- matrixVarNorm <- rtnorm(n = 10000, mu = matrix(1:6, nrow = 2, ncol = 3),
-listSigmas = list(diag(2), diag(3)))
+univar_norm <- rtnorm(n = 10000, mu = -2)
+mean(univar_norm)
+sd(univar_norm)
+matrix_var_norm <- matrix_var_norm <- rtnorm(n = 10000, mu = matrix(1:6, nrow = 2, ncol = 3))
 }

@@ -4,12 +4,12 @@
 \alias{tensor_prod}
 \title{tensor product}
 \usage{
-tensor_prod(tensorA, tensorB, simplify = TRUE)
+tensor_prod(tensor_A, tensor_B, simplify = TRUE)
 }
 \arguments{
-\item{tensorA}{An array representing the tensor A.}
+\item{tensor_A}{An array representing the tensor A.}
 
-\item{tensorB}{An array representing tensor B.}
+\item{tensor_B}{An array representing tensor B.}
 
 \item{simplify}{A bool saying whether to simplify the output. Defaults to TRUE.}
 }

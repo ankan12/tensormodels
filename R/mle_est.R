@@ -33,43 +33,46 @@ mle_est <- function(data, max_iter = 1000, tol = 1e-6) {
 
   #center input data
   mean_array <- apply(data, MARGIN = 2:(num_dim+1), FUN = mean)
-  centeredX <- sweep(data, MARGIN = 2:(num_dim+1), STATS = mean_array, FUN = "-")
+  centered_X <- sweep(data, MARGIN = 2:(num_dim+1), STATS = mean_array, FUN = "-")
 
   #intialize as identity matrices
   est_sigmas <- lapply(all_dims, diag)
 
   for (t in 1:max_iter) {
-    old_sigmas <- lapply(est_sigmas, identity)  # store previous iteration
+    # store previous iteration
+    old_sigmas <- lapply(est_sigmas, identity)
 
     for (k in 1:num_dim) {
-      invSigma <- lapply(est_sigmas, solve) #inverses of all sigma
+      #inverses of all sigma
+      invSigma <- lapply(est_sigmas, solve)
 
-      invSigma_except_k <- invSigma[-k] #exclude kth mode
+      #exclude kth mode
+      invSigma_except_k <- invSigma[-k]
 
-      #Kronecker product of inverses except k
+      # Kronecker product of inverses except k
       kron_except_k <- Reduce(function(A,B) kronecker(B, A), invSigma_except_k)
 
-      #dim for kth mode
+      # dim for kth mode
       d_k    <- all_dims[k]
       d_negk <- prod(all_dims[-k])
       s_k    <- matrix(0, d_k, d_k)
 
-      #accumlate mode-k covar
+      # accumlate mode-k covar
       for (draw in 1:n) {
         idx_list <- c(list(draw), rep(list(bquote()), num_dim))
-        Xi <- do.call("[", c(list(centeredX), idx_list, list(drop = TRUE)))
+        Xi <- do.call("[", c(list(centered_X), idx_list, list(drop = TRUE)))
         Xik <- tensormodels::matricization(Xi, k)
         s_k <- s_k + Xik %*% kron_except_k %*% t(Xik)
       }
 
-      #update sigma_k
+      # update sigma_k
       est_sigmas[[k]] <- s_k / (n * d_negk)
 
-      #normalize sigmas
+      # normalize sigmas
       est_sigmas[[k]] <- est_sigmas[[k]] / mean(diag(est_sigmas[[k]]))
     }
 
-    #convergence check
+    # convergence check
     rel_changes <- mapply(function(new, old)
       norm(new - old, "F") / (norm(old, "F") + 1e-12),
       est_sigmas, old_sigmas)
