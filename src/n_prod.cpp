@@ -1,8 +1,22 @@
 #include <Rcpp.h>
 #include "tensor_functions.h"
-
+//' n-mode product
+//'
+//' Compute the n-mode product of a tensor with a matrix.
+//'
+//' @param tensor An array representing the tensor.
+//' @param mat A matrix of size \eqn{m \times n} to multiply with.
+//' @param n  An integer specifying the mode to multiply across.
+//'
+//' @return An array: the result of the n-mode product.
+//'
+//' @examples
+//' a <- array(1:3, dim = c(3, 1, 1))
+//' x <- matrix(4:9, nrow = 2, ncol = 3)
+//' n_prod(a, x, 1)
+//'
 // [[Rcpp::export]]
-Rcpp::NumericVector n_mode_prod_cpp(Rcpp::NumericVector tensor,
+Rcpp::NumericVector n_prod(Rcpp::NumericVector tensor,
                                     Rcpp::NumericMatrix mat,
                                     int n) {
   using namespace Rcpp;
@@ -24,7 +38,7 @@ Rcpp::NumericVector n_mode_prod_cpp(Rcpp::NumericVector tensor,
   // mn_mode_prod_cpp returns a tensor with dimensions:
   //   (A_except_n, B_except_m)
   // For a matrix B (m = 2), B_except_m = (mat.nrow())
-  NumericVector res = mn_mode_prod_cpp(tensor, mat, n, /*m=*/2);
+  NumericVector res = nm_prod(tensor, mat, n, /*m=*/2);
 
   // --- Step 4: Verify the resulting tensor rank ---
   IntegerVector dimsRes = res.attr("dim");

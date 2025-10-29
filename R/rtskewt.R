@@ -18,23 +18,23 @@
 #' @importFrom invgamma rinvgamma
 
 
-rtskewt <- function(n = 50, mu = 0, sigmas = NULL, skew = 1, v = 2) {
-  all_dims <- dim(mu)
+rtskewt <- function(n, mu = 0, sigmas = 1, skew = 1, nu = 2) {
+  dims <- dim(mu)
 
   # mu was a scalar
-  if(is.null(all_dims)) all_dims <- 1
+  if(is.vector(dims)) dims <- 1
 
   # draw tensor variate normals
   tensor_norms <- rtnorm(n, mu = mu, sigmas)
 
   # generate inv gamma
-  inv_gammas <- rinvgamma(n = n, shape = v/2, rate = v/2)
+  inv_gammas <- rinvgamma(n = n, shape = nu/2, rate = nu/2)
 
   # scale normals by inv gamma
   scale_norms <- sweep(tensor_norms, 1, sqrt(inv_gammas), `*`)
 
   # scale skew by inv gamma
-  scale_skew <- sweep(array(rep(skew, each = n), dim = c(n, all_dims)), 1, inv_gammas, `*`)
+  scale_skew <- sweep(array(rep(skew, each = n), dim = c(n, dims)), 1, inv_gammas, `*`)
 
-  array(rep(mu, each = n), dim = c(n, all_dims)) + scale_skew + scale_norms
+  array(rep(mu, each = n), dim = c(n, dims)) + scale_skew + scale_norms
 }

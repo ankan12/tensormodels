@@ -19,11 +19,11 @@
 #' @importFrom GIGrvg rgig
 
 
-rtgenhyper <- function(n = 50, mu = 0, sigmas = NULL, skew = 1, omega = 2, lambda = 2) {
-  all_dims <- dim(mu)
+rtgenhyper <- function(n = 50, mu = 0, sigmas = 1, skew = 1, omega = 2, lambda = 2) {
+  dims <- dim(mu)
 
   # mu was a scalar
-  if(is.null(all_dims)) all_dims <- 1
+  if(is.null(dims)) dims <- 1
 
   # draw tensor variate normals
   tensor_norms <- rtnorm(n, mu = mu, sigmas)
@@ -35,7 +35,7 @@ rtgenhyper <- function(n = 50, mu = 0, sigmas = NULL, skew = 1, omega = 2, lambd
   scale_norms <- sweep(tensor_norms, 1, sqrt(inv_gig), `*`)
 
   # scale skew by inv GIG
-  scale_skew <- sweep(array(rep(skew, each = n), dim = c(n, all_dims)), 1, inv_gig, `*`)
+  scale_skew <- sweep(array(rep(skew, each = n), dim = c(n, dims)), 1, inv_gig, `*`)
 
-  array(rep(mu, each = n), dim = c(n, all_dims)) + scale_skew + scale_norms
+  array(rep(mu, each = n), dim = c(n, dims)) + scale_skew + scale_norms
 }

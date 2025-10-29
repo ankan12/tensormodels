@@ -18,11 +18,11 @@
 #' @importFrom statmod rinvgauss
 
 
-rtinvgauss <- function(n = 50, mu = 0, sigmas = NULL, skew = 1, kappa = 2) {
-  all_dims <- dim(mu)
+rtinvgauss <- function(n = 50, mu = 0, sigmas = 1, skew = 1, kappa = 2) {
+  dims <- dim(mu)
 
   # mu was a scalar
-  if(is.null(all_dims)) all_dims <- 1
+  if(is.null(dims)) dims <- 1
 
   # draw tensor variate normals
   tensor_norms <- rtnorm(n, mu = mu, sigmas)
@@ -34,7 +34,7 @@ rtinvgauss <- function(n = 50, mu = 0, sigmas = NULL, skew = 1, kappa = 2) {
   scale_norms <- sweep(tensor_norms, 1, sqrt(inv_gauss), `*`)
 
   # scale skew by inv Gauss
-  scale_skew <- sweep(array(rep(skew, each = n), dim = c(n, all_dims)), 1, inv_gauss, `*`)
+  scale_skew <- sweep(array(rep(skew, each = n), dim = c(n, dims)), 1, inv_gauss, `*`)
 
-  array(rep(mu, each = n), dim = c(n, all_dims)) + scale_skew + scale_norms
+  array(rep(mu, each = n), dim = c(n, dims)) + scale_skew + scale_norms
 }

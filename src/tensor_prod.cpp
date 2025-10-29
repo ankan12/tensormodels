@@ -1,8 +1,22 @@
 #include <Rcpp.h>
+#include "tensor_functions.h"
 using namespace Rcpp;
-
+//' tensor product
+//'
+//' Compute the tensor product of a tensor with a tensor
+//'
+//' @param tensor_A An array representing the tensor A.
+//' @param tensor_B An array representing tensor B.
+//' @param simplify A bool saying whether to simplify the output. Defaults to TRUE.
+//'
+//' @return An array: the result of the tensor product between A and B.
+//'
+//' @examples
+//' A <- matrix(c(1, 2, 3, 4), nrow = 2)
+//' x <- matrix(c(5, 6), nrow = 2)
+//' tensor_prod(A, x)
 // [[Rcpp::export]]
-NumericVector tensor_prod_cpp(NumericVector A, NumericVector B, bool simplify = true) {
+NumericVector tensor_prod(NumericVector A, NumericVector B, bool simplify = true) {
   // --- Get dims and orders ---
   IntegerVector dimsA = A.hasAttribute("dim") ? A.attr("dim") : IntegerVector::create(A.size());
   IntegerVector dimsB = B.hasAttribute("dim") ? B.attr("dim") : IntegerVector::create(B.size());

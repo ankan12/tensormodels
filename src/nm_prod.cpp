@@ -2,9 +2,24 @@
 #include "tensor_functions.h"
 
 using namespace Rcpp;
-
+//' nm-mode product
+//'
+//' Compute the nm-mode product of a tensor with a tensor
+//'
+//' @param tensor_A An array representing the tensor A.
+//' @param tensor_B An array representing tensor B.
+//' @param n An integer specifying which mode of tensor A to multiply across.
+//' @param m An integer specifying which mode of tensor B to multiply across.
+//'
+//' @return An array: the result of the nm-mode product between A and B.
+//'
+//' @examples
+//' A <- matrix(c(1, 2, 3, 4), nrow = 2)
+//' x <- matrix(c(5, 6), nrow = 2)
+//' nm_prod(A, x, 1, 1)
+//'
 // [[Rcpp::export]]
-NumericVector mn_mode_prod_cpp(NumericVector A, NumericVector B, int n, int m) {
+NumericVector nm_prod(NumericVector A, NumericVector B, int n, int m) {
   // --- Dimensions and checks ---
   IntegerVector dimsA = A.attr("dim");
   IntegerVector dimsB = B.attr("dim");

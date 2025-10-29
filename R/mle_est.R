@@ -12,10 +12,10 @@
 #' all_dims <- c(2, 10, 10, 2)
 #' fourth_mu = array(rnorm(400), dim = all_dims)
 #' fourth_sigma = lapply(seq_along(all_dims), function(k) diag(all_dims[k]))
-#' fourth_tensor <- rtnorm(n = 1e3, mu = fourth_mu, listSigmas = fourth_sigma)
+#' fourth_tensor <- rtnorm(n = 1e3, mu = fourth_mu, sigmas = fourth_sigma)
 #' est_fourth <- mle_est(fourth_tensor)
 #' (fourth_mu - est_fourth$mu)^2 |> mean()
-#' fourth_scaled <- lapply(fourth_sigma, function(S) S / det(S)^(1/nrow(S)))
+#' fourth_scaled <- lapply(fourth_sigma, function(S) S * (nrow(S) / sum(diag(S))))
 #' (mse_each <- mapply(function(est, true) mean((est - true)^2), est_fourth$sigmas, fourth_scaled))
 #' @export
 mle_est <- function(data, max_iter = 1000, tol = 1e-6) {
@@ -44,13 +44,13 @@ mle_est <- function(data, max_iter = 1000, tol = 1e-6) {
 
     for (k in 1:num_dim) {
       #inverses of all sigma
-      invSigma <- lapply(est_sigmas, solve)
+      inv_sigma <- lapply(est_sigmas, solve)
 
       #exclude kth mode
-      invSigma_except_k <- invSigma[-k]
+      inv_sigma_except_k <- inv_sigma[-k]
 
       # Kronecker product of inverses except k
-      kron_except_k <- Reduce(function(A,B) kronecker(B, A), invSigma_except_k)
+      kron_except_k <- Reduce(function(A,B) kronecker(B, A), inv_sigma_except_k)
 
       # dim for kth mode
       d_k    <- all_dims[k]
@@ -85,6 +85,8 @@ mle_est <- function(data, max_iter = 1000, tol = 1e-6) {
       break
     }
   }
-  list(mu = mean_array, sigmas =
-         lapply(est_sigmas, function(S) S / det(S)^(1/nrow(S))))
+
+  # normalize covariance matrices with trace
+  list(mu = mean_array,
+       sigmas = lapply(est_sigmas, function(S) S * (nrow(S) / sum(diag(S)))))
 }

@@ -4,7 +4,7 @@
 \alias{rtinvgauss}
 \title{rtinvgass}
 \usage{
-rtinvgauss(n = 50, mu = 0, sigmas = NULL, skew = 1, kappa = 2)
+rtinvgauss(n = 50, mu = 0, sigmas = 1, skew = 1, kappa = 2)
 }
 \arguments{
 \item{n}{An integer stating the sample size.}

@@ -14,25 +14,25 @@
 #' sd(univar_norm)
 #' matrix_var_norm <- matrix_var_norm <- rtnorm(n = 10000, mu = matrix(1:6, nrow = 2, ncol = 3))
 #' @export
-rtnorm <- function(n = 50, mu = 0, sigmas = NULL) {
-  all_dims <- dim(mu)
+rtnorm <- function(n, mu = 0, sigmas = 1) {
+  dims <- dim(mu)
 
   # mu was a scalar
-  if(is.null(all_dims)) all_dims <- 1
+  if(is.null(dims)) dims <- 1
 
   # no sigmas provided, use identity
-  if (is.null(sigmas)) {
-    sigmas <- lapply(seq_along(all_dims), function(k) diag(all_dims[k]))
+  if (sigmas == 1) {
+    sigmas <- lapply(dims, diag)
   }
 
   # get all Z draws
-  X <- array(rnorm(prod(c(n, all_dims))), c(n, all_dims))
+  X <- array(rnorm(prod(c(n, dims))), c(n, dims))
 
   # compute Cholesky
   chol_sigmas <- lapply(sigmas, chol)
 
   for (k in seq_along(chol_sigmas)) {
-    X <- n_mode_prod(X, t(chol_sigmas[[k]]), k+1) # multiply
+    X <- n_prod(X, t(chol_sigmas[[k]]), k+1) # multiply
   }
-  X + array(rep(mu, each = n), dim = c(n, all_dims)) # add mean
+  X + array(rep(mu, each = n), dim = c(n, dims)) # add mean
 }

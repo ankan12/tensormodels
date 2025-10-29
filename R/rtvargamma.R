@@ -16,11 +16,11 @@
 #' sd(univar_vargam)
 #' @export
 
-rtvargamma <- function(n = 50, mu = 0, sigmas = NULL, skew = 1, scale = 2) {
-  all_dims <- dim(mu)
+rtvargamma <- function(n = 50, mu = 0, sigmas = 1, skew = 1, scale = 2) {
+  dims <- dim(mu)
 
   # mu was a scalar
-  if(is.null(all_dims)) all_dims <- 1
+  if(is.null(dims)) dims <- 1
 
   # draw tensor variate normals
   tensor_norms <- rtnorm(n, mu = mu, sigmas)
@@ -31,7 +31,9 @@ rtvargamma <- function(n = 50, mu = 0, sigmas = NULL, skew = 1, scale = 2) {
   scale_norms <- sweep(tensor_norms, 1, sqrt(gammas), `*`)
 
   # scale skew by gamma
-  scale_skew <- sweep(array(rep(skew, each = n), dim = c(n, all_dims)), 1, gammas, `*`)
+  scale_skew <- sweep(array(rep(skew, each = n), dim = c(n, dims)), 1, gammas, `*`)
 
-  array(rep(mu, each = n), dim = c(n, all_dims)) + scale_skew + scale_norms
+  array(rep(mu, each = n), dim = c(n, dims)) +
+    scale_skew +
+    scale_norms
 }

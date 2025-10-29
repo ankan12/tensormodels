@@ -10,9 +10,22 @@ Rcpp::Rostream<true>&  Rcpp::Rcout = Rcpp::Rcpp_cout_get();
 Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 #endif
 
-// mn_mode_prod_cpp
-NumericVector mn_mode_prod_cpp(NumericVector A, NumericVector B, int n, int m);
-RcppExport SEXP _tensormodels_mn_mode_prod_cpp(SEXP ASEXP, SEXP BSEXP, SEXP nSEXP, SEXP mSEXP) {
+// n_prod
+Rcpp::NumericVector n_prod(Rcpp::NumericVector tensor, Rcpp::NumericMatrix mat, int n);
+RcppExport SEXP _tensormodels_n_prod(SEXP tensorSEXP, SEXP matSEXP, SEXP nSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type tensor(tensorSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type mat(matSEXP);
+    Rcpp::traits::input_parameter< int >::type n(nSEXP);
+    rcpp_result_gen = Rcpp::wrap(n_prod(tensor, mat, n));
+    return rcpp_result_gen;
+END_RCPP
+}
+// nm_prod
+NumericVector nm_prod(NumericVector A, NumericVector B, int n, int m);
+RcppExport SEXP _tensormodels_nm_prod(SEXP ASEXP, SEXP BSEXP, SEXP nSEXP, SEXP mSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -20,41 +33,28 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< NumericVector >::type B(BSEXP);
     Rcpp::traits::input_parameter< int >::type n(nSEXP);
     Rcpp::traits::input_parameter< int >::type m(mSEXP);
-    rcpp_result_gen = Rcpp::wrap(mn_mode_prod_cpp(A, B, n, m));
+    rcpp_result_gen = Rcpp::wrap(nm_prod(A, B, n, m));
     return rcpp_result_gen;
 END_RCPP
 }
-// n_mode_prod_cpp
-Rcpp::NumericVector n_mode_prod_cpp(Rcpp::NumericVector tensor, Rcpp::NumericMatrix mat, int n);
-RcppExport SEXP _tensormodels_n_mode_prod_cpp(SEXP tensorSEXP, SEXP matSEXP, SEXP nSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type tensor(tensorSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type mat(matSEXP);
-    Rcpp::traits::input_parameter< int >::type n(nSEXP);
-    rcpp_result_gen = Rcpp::wrap(n_mode_prod_cpp(tensor, mat, n));
-    return rcpp_result_gen;
-END_RCPP
-}
-// tensor_prod_cpp
-NumericVector tensor_prod_cpp(NumericVector A, NumericVector B, bool simplify);
-RcppExport SEXP _tensormodels_tensor_prod_cpp(SEXP ASEXP, SEXP BSEXP, SEXP simplifySEXP) {
+// tensor_prod
+NumericVector tensor_prod(NumericVector A, NumericVector B, bool simplify);
+RcppExport SEXP _tensormodels_tensor_prod(SEXP ASEXP, SEXP BSEXP, SEXP simplifySEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< NumericVector >::type A(ASEXP);
     Rcpp::traits::input_parameter< NumericVector >::type B(BSEXP);
     Rcpp::traits::input_parameter< bool >::type simplify(simplifySEXP);
-    rcpp_result_gen = Rcpp::wrap(tensor_prod_cpp(A, B, simplify));
+    rcpp_result_gen = Rcpp::wrap(tensor_prod(A, B, simplify));
     return rcpp_result_gen;
 END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_tensormodels_mn_mode_prod_cpp", (DL_FUNC) &_tensormodels_mn_mode_prod_cpp, 4},
-    {"_tensormodels_n_mode_prod_cpp", (DL_FUNC) &_tensormodels_n_mode_prod_cpp, 3},
-    {"_tensormodels_tensor_prod_cpp", (DL_FUNC) &_tensormodels_tensor_prod_cpp, 3},
+    {"_tensormodels_n_prod", (DL_FUNC) &_tensormodels_n_prod, 3},
+    {"_tensormodels_nm_prod", (DL_FUNC) &_tensormodels_nm_prod, 4},
+    {"_tensormodels_tensor_prod", (DL_FUNC) &_tensormodels_tensor_prod, 3},
     {NULL, NULL, 0}
 };
 
