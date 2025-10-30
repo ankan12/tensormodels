@@ -16,11 +16,11 @@
 #' sd(univar_vargam)
 #' @export
 
-rtvargamma <- function(n = 50, mu = 0, sigmas = 1, skew = 1, scale = 2) {
+rtvargamma <- function(n, mu = 0, sigmas = 1, skew = 1, scale = 2) {
   dims <- dim(mu)
 
   # mu was a scalar
-  if(is.null(dims)) dims <- 1
+  if(is.vector(mu)) dims <- 1
 
   # draw tensor variate normals
   tensor_norms <- rtnorm(n, mu = mu, sigmas)

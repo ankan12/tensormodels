@@ -15,6 +15,7 @@ using namespace Rcpp;
 //' A <- matrix(c(1, 2, 3, 4), nrow = 2)
 //' x <- matrix(c(5, 6), nrow = 2)
 //' tensor_prod(A, x)
+//' @export
 // [[Rcpp::export]]
 NumericVector tensor_prod(NumericVector A, NumericVector B, bool simplify = true) {
   // --- Get dims and orders ---

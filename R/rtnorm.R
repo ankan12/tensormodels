@@ -1,7 +1,7 @@
 #' rtnorm
 #'
-#' Simulate random draws from the tensor variate normal distribution
-#'
+#' Simulate random draws from the tensor variate normal distribution.
+#' \deqn{\frac{(x-\mu)^2}{2\sigma^2}}
 #' @param n An integer stating the sample size.
 #' @param mu An array containing the mean values of and dims of each draw.
 #' @param sigmas A list of covariance matrices. Defaults to the identity.
@@ -21,7 +21,7 @@ rtnorm <- function(n, mu = 0, sigmas = 1) {
   if(is.null(dims)) dims <- 1
 
   # no sigmas provided, use identity
-  if (sigmas == 1) {
+  if (length(sigmas) == 1 && sigmas == 1) {
     sigmas <- lapply(dims, diag)
   }
 

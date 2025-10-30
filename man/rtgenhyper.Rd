@@ -4,7 +4,7 @@
 \alias{rtgenhyper}
 \title{rtgenhyper}
 \usage{
-rtgenhyper(n = 50, mu = 0, sigmas = 1, skew = 1, omega = 2, lambda = 2)
+rtgenhyper(n, mu = 0, sigmas = 1, skew = 1, omega = 2, lambda = 2)
 }
 \arguments{
 \item{n}{An integer stating the sample size.}

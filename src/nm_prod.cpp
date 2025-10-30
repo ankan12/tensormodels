@@ -4,7 +4,7 @@
 using namespace Rcpp;
 //' nm-mode product
 //'
-//' Compute the nm-mode product of a tensor with a tensor
+//' Compute the nm-mode product of a tensor with a tensor.
 //'
 //' @param tensor_A An array representing the tensor A.
 //' @param tensor_B An array representing tensor B.
@@ -17,7 +17,7 @@ using namespace Rcpp;
 //' A <- matrix(c(1, 2, 3, 4), nrow = 2)
 //' x <- matrix(c(5, 6), nrow = 2)
 //' nm_prod(A, x, 1, 1)
-//'
+//' @export
 // [[Rcpp::export]]
 NumericVector nm_prod(NumericVector A, NumericVector B, int n, int m) {
   // --- Dimensions and checks ---

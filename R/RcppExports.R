@@ -15,14 +15,14 @@
 #' a <- array(1:3, dim = c(3, 1, 1))
 #' x <- matrix(4:9, nrow = 2, ncol = 3)
 #' n_prod(a, x, 1)
-#'
+#' @export
 n_prod <- function(tensor, mat, n) {
     .Call(`_tensormodels_n_prod`, tensor, mat, n)
 }
 
 #' nm-mode product
 #'
-#' Compute the nm-mode product of a tensor with a tensor
+#' Compute the nm-mode product of a tensor with a tensor.
 #'
 #' @param tensor_A An array representing the tensor A.
 #' @param tensor_B An array representing tensor B.
@@ -35,7 +35,7 @@ n_prod <- function(tensor, mat, n) {
 #' A <- matrix(c(1, 2, 3, 4), nrow = 2)
 #' x <- matrix(c(5, 6), nrow = 2)
 #' nm_prod(A, x, 1, 1)
-#'
+#' @export
 nm_prod <- function(A, B, n, m) {
     .Call(`_tensormodels_nm_prod`, A, B, n, m)
 }
@@ -54,6 +54,7 @@ nm_prod <- function(A, B, n, m) {
 #' A <- matrix(c(1, 2, 3, 4), nrow = 2)
 #' x <- matrix(c(5, 6), nrow = 2)
 #' tensor_prod(A, x)
+#' @export
 tensor_prod <- function(A, B, simplify = TRUE) {
     .Call(`_tensormodels_tensor_prod`, A, B, simplify)
 }

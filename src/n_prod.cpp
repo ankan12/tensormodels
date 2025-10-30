@@ -14,7 +14,7 @@
 //' a <- array(1:3, dim = c(3, 1, 1))
 //' x <- matrix(4:9, nrow = 2, ncol = 3)
 //' n_prod(a, x, 1)
-//'
+//' @export
 // [[Rcpp::export]]
 Rcpp::NumericVector n_prod(Rcpp::NumericVector tensor,
                                     Rcpp::NumericMatrix mat,
