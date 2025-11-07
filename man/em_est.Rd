@@ -4,10 +4,10 @@
 \alias{em_est}
 \title{em_est}
 \usage{
-em_est(data, max_iter = 1000, tol = 1e-06, method = "skewt")
+em_est(draws, max_iter = 1000, tol = 1e-06, model = "skewt", quiet = TRUE)
 }
 \arguments{
-\item{data}{An array containing the draws, where the first mode represents each draw.}
+\item{draws}{An array containing the draws, where the first mode represents each draw.}
 
 \item{max_iter}{A max number of iterations to try to get covariance matrices that converge.}
 
@@ -26,6 +26,7 @@ s2 <- matrix(rnorm(9), nrow = 3)
 s2 <- crossprod(s2, s2)
 s3 <- matrix(rnorm(16), nrow = 4)
 s3 <- crossprod(s3, s3)
-rand_mu <- array(rtnorm(24), dim = c(2, 3, 4))
-rtskewt_draws <- rtskewt(n = 1e3, mu = rand_mu, sigmas = list(s1, s2, s3))
+rand_mu <- array(rnorm(24), dim = c(2, 3, 4))
+rtskewt_draws <- rtskewt(n = 1e3, mu = rand_mu, skew = 0.5, sigmas = list(s1, s2, s3))
+(res <- em_est(rtskewt_draws))
 }

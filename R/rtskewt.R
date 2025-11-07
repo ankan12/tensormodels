@@ -16,25 +16,23 @@
 #' sd(univar_skewt)
 #' @export
 #' @importFrom invgamma rinvgamma
-
-
-rtskewt <- function(n, mu = 0, sigmas = 1, skew = 1, nu = 2) {
+rtskewt <- function(n, mu = 0, sigmas = 1, skew = 1, nu = 4) {
   dims <- dim(mu)
 
   # mu was a scalar
   if(is.vector(mu)) dims <- 1
 
   # draw tensor variate normals
-  tensor_norms <- rtnorm(n, mu = mu, sigmas)
+  tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
+
+  all_dim <- dim(tensor_norms)
 
   # generate inv gamma
   inv_gammas <- rinvgamma(n = n, shape = nu/2, rate = nu/2)
 
-  # scale normals by inv gamma
-  scale_norms <- sweep(tensor_norms, 1, sqrt(inv_gammas), `*`)
+  scale_norms <- tensor_norms * array(sqrt(inv_gammas), dim = all_dim)
 
-  # scale skew by inv gamma
-  scale_skew <- sweep(array(rep(skew, each = n), dim = c(n, dims)), 1, inv_gammas, `*`)
+  scale_skew <- array(rep(skew, each = n), dim = all_dim) * array(inv_gammas, dim = all_dim)
 
-  array(rep(mu, each = n), dim = c(n, dims)) + scale_skew + scale_norms
+  array(rep(mu, each = n), dim = all_dim) + scale_skew + scale_norms
 }

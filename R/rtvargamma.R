@@ -23,7 +23,7 @@ rtvargamma <- function(n, mu = 0, sigmas = 1, skew = 1, scale = 2) {
   if(is.vector(mu)) dims <- 1
 
   # draw tensor variate normals
-  tensor_norms <- rtnorm(n, mu = mu, sigmas)
+  tensor_norms <- rtnorm(n, mu = 0, sigmas)
 
   gammas <- rgamma(n = n, shape = scale, rate = scale)
 
