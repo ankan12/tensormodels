@@ -11,7 +11,7 @@
 #' @return An array containing n draws of the tensor variate variance gamma distribution.
 #'
 #' @examples
-#' univar_vargam <- rtskewt(n = 1e3, mu = 0, skew = 0, scale = 2)
+#' univar_vargam <- rtvargamma(n = 1e3, mu = 0)
 #' mean(univar_vargam)
 #' sd(univar_vargam)
 #' @export
@@ -23,17 +23,18 @@ rtvargamma <- function(n, mu = 0, sigmas = 1, skew = 1, scale = 2) {
   if(is.vector(mu)) dims <- 1
 
   # draw tensor variate normals
-  tensor_norms <- rtnorm(n, mu = 0, sigmas)
+  tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
 
+  all_dim <- dim(tensor_norms)
+
+  # generate gamma draws
   gammas <- rgamma(n = n, shape = scale, rate = scale)
 
   # scale normals by gamma
-  scale_norms <- sweep(tensor_norms, 1, sqrt(gammas), `*`)
+  scale_norms <- tensor_norms * array(sqrt(gammas), dim = all_dim)
 
   # scale skew by gamma
-  scale_skew <- sweep(array(rep(skew, each = n), dim = c(n, dims)), 1, gammas, `*`)
+  scale_skew <- array(rep(skew, each = n), dim = all_dim) * array(gammas, dim = all_dim)
 
-  array(rep(mu, each = n), dim = c(n, dims)) +
-    scale_skew +
-    scale_norms
+  array(rep(mu, each = n), dim = c(n, dims)) + scale_skew + scale_norms
 }

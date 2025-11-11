@@ -12,9 +12,9 @@
 #' @return An array containing n draws of the tensor generalized hyperbolic distribution.
 #'
 #' @examples
-#' univar_skewt <- rtskewt(n = 1e3, mu = 0, skew = 0, v = 4)
-#' mean(univar_skewt)
-#' sd(univar_skewt)
+#' univar_genhyper <- rtgenhyper(n = 1e3, mu = 0)
+#' mean(univar_genhyper)
+#' sd(univar_genhyper)
 #' @export
 #' @importFrom GIGrvg rgig
 
@@ -28,14 +28,16 @@ rtgenhyper <- function(n, mu = 0, sigmas = 1, skew = 1, omega = 2, lambda = 2) {
   # draw tensor variate normals
   tensor_norms <- rtnorm(n, mu = mu, sigmas)
 
+  all_dim <- dim(tensor_norms)
+
   # generate inv GIG
   inv_gig <- rgig(n = n, lambda = lambda, chi = omega, psi = 2)
 
   # scale normals by inv GIG
-  scale_norms <- sweep(tensor_norms, 1, sqrt(inv_gig), `*`)
+  scale_norms <-  tensor_norms * array(sqrt(inv_gig), dim = all_dim)
 
   # scale skew by inv GIG
-  scale_skew <- sweep(array(rep(skew, each = n), dim = c(n, dims)), 1, inv_gig, `*`)
+  scale_skew <- array(rep(skew, each = n), dim = all_dim) * array(inv_gig, dim = all_dim)
 
   array(rep(mu, each = n), dim = c(n, dims)) + scale_skew + scale_norms
 }

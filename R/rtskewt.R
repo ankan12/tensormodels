@@ -11,7 +11,7 @@
 #' @return An array containing n draws of the tensor variate skewed t distribution.
 #'
 #' @examples
-#' univar_skewt <- rtskewt(n = 1e3, mu = 0, skew = 0, v = 4)
+#' univar_skewt <- rtskewt(n = 1e3, mu = 0)
 #' mean(univar_skewt)
 #' sd(univar_skewt)
 #' @export
@@ -30,8 +30,10 @@ rtskewt <- function(n, mu = 0, sigmas = 1, skew = 1, nu = 4) {
   # generate inv gamma
   inv_gammas <- rinvgamma(n = n, shape = nu/2, rate = nu/2)
 
+  # scale normals by inv gamma
   scale_norms <- tensor_norms * array(sqrt(inv_gammas), dim = all_dim)
 
+  # scale skew by inv gamma
   scale_skew <- array(rep(skew, each = n), dim = all_dim) * array(inv_gammas, dim = all_dim)
 
   array(rep(mu, each = n), dim = all_dim) + scale_skew + scale_norms

@@ -11,7 +11,7 @@
 #' @return An array containing n draws of the tensor variate inverse Gaussian distribution.
 #'
 #' @examples
-#' univar_skewt <- rtskewt(n = 1e3, mu = 0, skew = 0, v = 4)
+#' univar_invgauss <- rtinvgauss(n = 1e3, mu = 0)
 #' mean(univar_skewt)
 #' sd(univar_skewt)
 #' @export
@@ -27,14 +27,16 @@ rtinvgauss <- function(n, mu = 0, sigmas = 1, skew = 1, kappa = 2) {
   # draw tensor variate normals
   tensor_norms <- rtnorm(n, mu = mu, sigmas)
 
+  all_dim <- dim(tensor_norms)
+
   # generate inv Gauss
   inv_gauss <- rinvgauss(n = n, mean = 1, shape = kappa)
 
   # scale normals by inv Gauss
-  scale_norms <- sweep(tensor_norms, 1, sqrt(inv_gauss), `*`)
+  scale_norms <- tensor_norms * array(sqrt(inv_gauss), dim = all_dim)
 
   # scale skew by inv Gauss
-  scale_skew <- sweep(array(rep(skew, each = n), dim = c(n, dims)), 1, inv_gauss, `*`)
+  scale_skew <- array(rep(skew, each = n), dim = all_dim) * array(inv_gauss, dim = all_dim)
 
   array(rep(mu, each = n), dim = c(n, dims)) + scale_skew + scale_norms
 }

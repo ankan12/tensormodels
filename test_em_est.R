@@ -1,12 +1,12 @@
 s1 <- matrix(rnorm(4), nrow = 2); s2 <- matrix(rnorm(9), nrow = 3); s3 <- matrix(rnorm(16), nrow = 4)
 s1 <- crossprod(s1, s1); s2 <- crossprod(s2, s2); s3 <- crossprod(s3, s3)
 rand_mu <- array(rnorm(24), dim = c(2, 3, 4))
-nu <- 10
+nu <- 20
 rand_skew <- array(rnorm(24), dim = c(2, 3, 4))
 rtskewt_draws <- rtskewt(n = 1e3, mu = rand_mu, sigmas = list(s1, s2, s3),
                          skew = rand_skew, nu = nu)
 exp_mu <- rand_mu + (nu/(nu-2)) * rand_skew
-(res <- em_est(rtskewt_draws, quiet = FALSE))
+(res <- em_est(rtskewt_draws, quiet = FALSE, model = "skewt"))
 
 # test correctness
 tensormodels:::frob_norm_diff(s1/(sum(diag(s1))) * 2, res$sigmas[[1]])
