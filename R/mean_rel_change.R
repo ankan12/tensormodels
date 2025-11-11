@@ -15,5 +15,6 @@ mean_rel_change <- function(mu_new, mu_old, skew_new, skew_old, sig_new, sig_old
   }
 
   nu_frob <- frob_norm_diff(nu_new, nu_old)
+
   mean(c(mu_frob, skew_frob, sig_frobs, nu_frob))
 }

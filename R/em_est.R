@@ -14,14 +14,14 @@
 em_est <- function(draws, max_iter = 1000, tol = 1e-6, model = "skewt", quiet = TRUE) {
   # get dim of input
   dims <- dim(draws)[-1]
-  num_dim  <- length(dims)
+  num_dim <- length(dims)
   n <- dim(draws)[1]
   n_star <- prod(dims)
 
   # Step 1: Initialize vals
   mu <- apply(X = draws, MARGIN = 2:(num_dim+1), FUN = mean)
 
-  skew <- array(1, dim = dims)
+  skew <- array(rnorm(prod(dims)), dim = dims)
   sigmas <- lapply(dims, diag)
 
   nu <- 10
@@ -54,6 +54,28 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, model = "skewt", quiet = 
 
     delta_vals <- delta_vals + nu
 
+    # argument for K_λ(z)
+    # z <- sqrt(rho * delta_vals)
+    # z <- pmin(pmax(z, 1e-12), 1e6)        # clip extremes
+    #
+    # lam <- -(nu + n_star)/2
+    # param_vals <- -(nu + n_star)/2
+    #
+    # # stable log-K and its ν-derivative
+    # logK <- function(l) log(besselK(z, l, expon.scaled = TRUE))
+    # Kratio <- exp(logK(lam + 1) - logK(lam))          # K_{λ+1}/K_{λ}
+    # eps <- max(1e-3, 1e-3 * max(1, abs(lam)))         # ν-step
+    # dlogK <- (logK(lam + eps) - logK(lam - eps)) / (2 * eps)
+    #
+    # # paper’s weights with stable pieces
+    # a <- sqrt(delta_vals / rho) * Kratio
+    # b <- sqrt(rho / delta_vals) * Kratio - (2 * lam) / delta_vals
+    # c <- 0.5 * log(delta_vals / rho) + dlogK
+    #
+    # # clean non-finite
+    # b[!is.finite(b)] <- 0
+    # c[!is.finite(c)] <- 0
+
     param_vals <- -(nu + n_star)/2
 
     k_lambda_1 <- besselK(x = sqrt(rho * delta_vals),
@@ -66,11 +88,7 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, model = "skewt", quiet = 
     b <- sqrt(rho/delta_vals) * (k_lambda_1/k_lambda) -
          (2 * param_vals)/delta_vals
 
-    eps <- 1e-3
-
-    #k_lambda_noexp <- besselK(x = sqrt(rho * delta_vals), nu = param_vals)
-
-    #print(k_lambda_noexp)
+    eps <- 1e-5
 
     K_plus <- besselK(x = sqrt(rho * delta_vals), nu = param_vals + eps,
                       expon.scaled = TRUE)
@@ -78,11 +96,10 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, model = "skewt", quiet = 
     K_minus <- besselK(x = sqrt(rho * delta_vals), nu = param_vals - eps,
                        expon.scaled = TRUE)
 
-    c <- log(sqrt(delta_vals/rho)) + (log(K_plus) - log(K_minus))/(2 * eps)
+    c <- 1/2 * log(delta_vals/rho) + (log(K_plus) - log(K_minus))/(2 * eps)
 
     # replace NaN or Inf values
     b[!is.finite(b)] <- 0
-
     c[!is.finite(c)] <- 0
 
     #browser()
@@ -98,15 +115,16 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, model = "skewt", quiet = 
        num_skew <- num_skew + weight_skew[i] * draws[i, , ,]
     }
 
-    den_mean <- sum(mean(a) * b) - n
+    den_mean <- sum(mean(a) * b - n)
+
     new_mu <- num_mean/den_mean
 
-    den_skew <- sum(a * mean(b)) - n
+    den_skew <- sum(a * mean(b) - n)
     new_skew <- num_skew/den_skew
 
     new_sigmas <- sigmas
 
-    update_nu <- function(nu, b, c, n) log(nu/2) + 1 - digamma(nu/2) - 1/n * sum(b + c)
+    update_nu <- function(nu, b, c, n) log(nu/2) + 1 - digamma(nu/2) - 1/n * sum(b+c)
 
     new_nu <- uniroot(update_nu, interval = c(1e-3, 1e3), b = b, c = c, n = n)$root
 
@@ -259,6 +277,8 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, model = "skewt", quiet = 
     #     new_sigmas[[l]] <- curr_sigma/sum(diag(curr_sigma))
     #   }
 
+    scale_prod <- 1
+
   for (j in 1:num_dim) {
     first <- 0; second <- 0; third <- 0; fourth <- 0
 
@@ -268,7 +288,7 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, model = "skewt", quiet = 
     sigma_j <- matrix(0, nrow = n_d, ncol = n_d)
 
     # other modes
-    other_modes <- setdiff(seq_len(num_dim), j)
+    other_modes <- (1:num_dim)[-j]
 
     # Build the whitening operator
     inv_others <- diag(1)
@@ -292,9 +312,15 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, model = "skewt", quiet = 
     }
 
     sigma_j <- n_d/(n * n_star) * (first - second - third + fourth)
-    sigma_j <- sigma_j / sum(diag(sigma_j))
+
+    scale_prod <- 1
+
+    if(j < num_dim) sigma_j <- sigma_j/(sum(diag(sigma_j))) * n_d
+
     new_sigmas[[j]] <- sigma_j
   }
+
+   #new_mu <- rand_mu; new_skew <- new_skew; new_sigmas <- list(s1, s2, s3); new_nu <- 20
 
    # Step 5: Check convergence
    mean_change <- mean_rel_change(new_mu, mu, new_skew, skew, new_sigmas, sigmas, new_nu, nu)
@@ -308,11 +334,19 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, model = "skewt", quiet = 
      message("Converged at iteration ", t)
      break
    }
+   # update all parameters
 
-   mu <- new_mu
-   skew <- new_skew
-   sigmas <- new_sigmas
-   nu <- new_nu
+   #mu <- rand_mu; skew <- new_skew; sigmas <- list(s1, s2, s3); nu <- 20
+   # #print(list(mu = mu, skew = skew, sigmas = sigmas, nu = nu))
+   # kappa <- new_nu / (new_nu - 2)
+   # Xbar  <- apply(draws, 2:(num_dim+1), mean)
+   #
+   # Lambda   <- new_mu + kappa * new_skew - Xbar
+   # new_mu   <- new_mu   - 0.5 * Lambda
+   # new_skew <- new_skew - (0.5 / kappa) * Lambda
+
+   mu <- new_mu; skew <- new_skew; sigmas <- new_sigmas; nu <- new_nu
+   #print(skew)
   }
   list(mu = mu, skew = skew, sigmas = sigmas, nu = nu)
 }
