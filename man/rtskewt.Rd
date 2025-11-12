@@ -4,7 +4,7 @@
 \alias{rtskewt}
 \title{rtskewt}
 \usage{
-rtskewt(n, mu = 0, sigmas = 1, skew = 1, nu = 2)
+rtskewt(n, mu = 0, sigmas = 1, skew = 1, nu = 4)
 }
 \arguments{
 \item{n}{An integer stating the sample size.}
@@ -24,7 +24,7 @@ An array containing n draws of the tensor variate skewed t distribution.
 Simulate random draws from the tensor variate skewed t distribution.
 }
 \examples{
-univar_skewt <- rtskewt(n = 1e3, mu = 0, skew = 0, v = 4)
+univar_skewt <- rtskewt(n = 1e3, mu = 0)
 mean(univar_skewt)
 sd(univar_skewt)
 }

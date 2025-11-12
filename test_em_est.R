@@ -46,3 +46,48 @@ rand_mu + skew * rinvgamma(n = 2*3*4, shape = nu/2, rate = nu/2)
 ggplot() +
   geom_function(fun = dinvgamma, args = list(b = b, c = c, n = n)) +
   xlim(1, 100)
+
+
+
+library(tidyverse)
+
+#---------------------------------------
+# 1. Make a parameter grid
+#---------------------------------------
+param_grid <- expand_grid(
+  mu_scale   = c(0, 1, 2),      # center magnitude
+  skew_scale = c(0, 1, 5, 10),  # skew magnitude
+  nu         = c(5, 10, 20, 50), # df-like parameter
+  n = c(1e3, 1e4)
+)
+
+#---------------------------------------
+# 2. Safe EM wrapper (returns NULL on error)
+#---------------------------------------
+safe_em <- safely(function(mu_scale, skew_scale, nu, n) {
+
+  # Construct test tensor
+  dims <- c(2, 3, 4)
+  mu   <- array(mu_scale, dim = dims)
+  skew <- array(skew_scale, dim = dims)
+
+  # Example SPD covariances for testing
+  sigmas <- list(diag(2), diag(3), diag(4))
+
+  # Simulate from your generator
+  draws <- rtskewt(mu = mu, skew = skew, sigmas = sigmas, nu = nu, n = n)
+
+  # Run EM estimation
+  em_est(draws, model = "skewt")
+})
+
+all_res <- pmap(param_grid, safe_em)
+
+saveRDS(all_res, "rtskewt_sim.RDS")
+
+nu_est <- rep(0,  96)
+
+for(i in 1:96) {
+  if(!is.null(all_res[[i]]$result)) nu_est[i] <- all_res[[i]]$result$nu
+}
+

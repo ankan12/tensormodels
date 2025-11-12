@@ -24,7 +24,7 @@ An array containing n draws of the tensor variate variance gamma distribution.
 Simulate random draws from the tensor variate variance gamma distribution.
 }
 \examples{
-univar_vargam <- rtskewt(n = 1e3, mu = 0, skew = 0, scale = 2)
+univar_vargam <- rtvargamma(n = 1e3, mu = 0)
 mean(univar_vargam)
 sd(univar_vargam)
 }

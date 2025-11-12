@@ -24,7 +24,7 @@ An array containing n draws of the tensor variate inverse Gaussian distribution.
 Simulate random draws from the tensor variate inverse Gaussian distribution.
 }
 \examples{
-univar_skewt <- rtskewt(n = 1e3, mu = 0, skew = 0, v = 4)
+univar_invgauss <- rtinvgauss(n = 1e3, mu = 0)
 mean(univar_skewt)
 sd(univar_skewt)
 }

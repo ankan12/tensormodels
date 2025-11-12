@@ -26,7 +26,7 @@ An array containing n draws of the tensor generalized hyperbolic distribution.
 Simulate random draws from the tensor variate generalized hyperbolic distribution.
 }
 \examples{
-univar_skewt <- rtskewt(n = 1e3, mu = 0, skew = 0, v = 4)
-mean(univar_skewt)
-sd(univar_skewt)
+univar_genhyper <- rtgenhyper(n = 1e3, mu = 0)
+mean(univar_genhyper)
+sd(univar_genhyper)
 }

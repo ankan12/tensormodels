@@ -4,7 +4,7 @@
 \alias{em_est}
 \title{em_est}
 \usage{
-em_est(draws, max_iter = 1000, tol = 1e-06, model = "skewt", quiet = TRUE)
+em_est(draws, max_iter = 1000, tol = 1e-06, quiet = TRUE, model)
 }
 \arguments{
 \item{draws}{An array containing the draws, where the first mode represents each draw.}
@@ -18,15 +18,4 @@ A list containing the estimated mean array and the list of covariance matrices.
 }
 \description{
 Estimates the mean array and covariance matrices from an array of tensor variate normal draws using an expectation-maximization algorithm.
-}
-\examples{
-s1 <- matrix(rnorm(4), nrow = 2)
-s1 <- crossprod(s1, s1)
-s2 <- matrix(rnorm(9), nrow = 3)
-s2 <- crossprod(s2, s2)
-s3 <- matrix(rnorm(16), nrow = 4)
-s3 <- crossprod(s3, s3)
-rand_mu <- array(rnorm(24), dim = c(2, 3, 4))
-rtskewt_draws <- rtskewt(n = 1e3, mu = rand_mu, skew = 0.5, sigmas = list(s1, s2, s3))
-(res <- em_est(rtskewt_draws))
 }

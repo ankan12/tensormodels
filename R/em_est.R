@@ -126,16 +126,14 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE, model) {
     new_sigmas <- sigmas
 
     # update params based on model
-
     update_nu <- function(nu, b, c, n) log(nu/2) + 1 - digamma(nu/2) - 1/n * sum(b+c)
     update_gamma <- function(gamma, a, c) log(gamma) + 1 - digamma(gamma) + mean(c) - mean(a)
-
 
     switch(model,
            "skewt" = {
              new_nu <- uniroot(update_nu, interval = c(1e-3, 1e3),
                                b = b, c = c, n = n)$root
-            },
+           },
            "genhyper" = {
              K_plus <- besselK(x = omega, nu = lambda + eps,
                                expon.scaled = TRUE)
@@ -153,10 +151,10 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE, model) {
                besselK(x = omega, nu = -new_lambda + 1, expon.scaled = TRUE)/
                besselK(x = omega, nu = -new_lambda, expon.scaled = TRUE)
 
-             first_deriv <- 1/2(R_lambda + R_neg_lambda - (mean(a) + mean(b)))
+             first_deriv <- 1/2 * (R_lambda + R_neg_lambda - (mean(a) + mean(b)))
 
-             second_deriv <- R_lambda^2 - (1 + 2 * new_lambda)/omega * R_lambda - 1 +
-                                R_neg_lambda^2 - (1 - 2 * lambda)/omega * R_neg_lambda - 1
+             second_deriv <- 1/2 * (R_lambda^2 - (1 + 2 * new_lambda)/omega * R_lambda - 1 +
+                                R_neg_lambda^2 - (1 - 2 * new_lambda)/omega * R_neg_lambda - 1)
 
              new_omega <- omega - first_deriv/second_deriv
            },
