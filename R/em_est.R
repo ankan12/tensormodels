@@ -46,11 +46,14 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE, model) {
 
     delta_vals <- rep(0, n)
 
-    centered <- draws - array(mu, dim = dim(draws))
+    mu_array <- replicate(n, mu, simplify = "array") |>
+      aperm(c(num_dim+1, (1:(num_dim))))
+
+    centered <- draws - mu_array
 
     for(i in 1:n) {
 
-      center_draw <- centered[i, , , ]
+      center_draw <- centered[i, , ,]
 
       centered_compute <- center_draw
 
@@ -116,11 +119,11 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE, model) {
        num_skew <- num_skew + weight_skew[i] * draws[i, , ,]
     }
 
-    den_mean <- sum(mean(a) * b - n)
+    den_mean <- sum(mean(a) * b) - n
 
     new_mu <- num_mean/den_mean
 
-    den_skew <- sum(a * mean(b) - n)
+    den_skew <- sum(a * mean(b)) - n
     new_skew <- num_skew/den_skew
 
     new_sigmas <- sigmas
@@ -201,8 +204,6 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE, model) {
     }
 
     sigma_j <- n_d/(n * n_star) * (first - second - third + fourth)
-
-    scale_prod <- 1
 
     if(j < num_dim) sigma_j <- sigma_j/(sum(diag(sigma_j))) * n_d
 
