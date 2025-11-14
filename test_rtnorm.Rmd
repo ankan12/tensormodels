@@ -1,0 +1,110 @@
+---
+title: 'test_rtnorm'
+output: pdf_document
+---
+
+```{r}
+s1 <- matrix(rnorm(4), nrow = 2); s2 <- matrix(rnorm(9), nrow = 3); s3 <- matrix(rnorm(16), nrow = 4)
+s1 <- crossprod(s1, s1); s2 <- crossprod(s2, s2); s3 <- crossprod(s3, s3)
+list_sigmas <- list(s1, s2, s3)
+rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
+rand_skew <- array(rnorm(24, mean = 2), dim = c(2, 3, 4))
+
+rtnorm_draws <- rtnorm(n = 1e3, mu = rand_mu, sigmas = list(s1, s2, s3))
+
+full_covar <- kronecker(s3, s2) |> kronecker(s1)
+inv_covar <- chol2inv(chol(full_covar))
+
+res <- rep(0, 1e3)
+
+for(i in 1:1e3) {
+  curr_draw <- rtnorm_draws[i, , ,]
+  
+  diff <- c(curr_draw - rand_mu)
+  
+  res[i] <- t(diff) %*% inv_covar %*% diff
+}
+
+cutoff <- qchisq(p = 0.95, df = 24)
+sum(res > cutoff)
+
+ggplot() +
+  geom_histogram(aes(x = res, y = after_stat(density)), 
+                 fill = "pink", color = "black") +
+  geom_function(fun = dchisq, args = list(df = 24), color = "red") +
+  geom_vline(aes(xintercept = cutoff), color = "purple") +
+  labs(x = "Vectorized Draws", y = "Density") +
+  theme_minimal()
+```
+
+
+```{r}
+#rtskewt_draws <- rtskewt(n = 1e3, mu = rand_mu, sigmas = list(s1, s2, s3),
+                         #skew = rand_skew, nu = 4)
+
+# full_covar <- kronecker(mle_estimates$sigmas[[3]],
+#                         mle_estimates$sigmas[[2]]) |>
+#               kronecker(mle_estimates$sigmas[[1]])
+
+
+# full_covar[1:10]
+# full_covar_true[1:10]
+
+#full_covar <- full_covar/sum(diag(full_covar))
+
+# test_norm <- function(draws) {
+#   mle_estimates <- mle_est(draws)
+#   
+#   sample_size <- dim(draws)[1]
+#   num_dim <- length(dim(draws)) - 1
+#   
+#   resids <- rep(0, sample_size)
+#   
+#   for(i in 1:sample_size) {
+#     centered <- draws[i, , ,] - mle_estimates$mu
+#     
+#       for(d in 1:3) {
+#         S_half_inv <- chol2inv(chol(mle_estimates$sigmas[[d]]))
+#         centered <- n_prod(centered, S_half_inv, n = d)
+#       }
+#     resids[i] <- sum(centered^2)
+#   }
+# }
+
+# 
+# for(i in 1:sample_size) {
+#   centered <- draws[i, , ,] - mu
+# 
+#   # Apply whitening: multiply by Sigma_d^{-1/2}
+#   for(d in 1:3) {
+#     S_half_inv <- chol2inv(chol(sigmas[[d]]))   # Σ_d^{-1/2} Σ_d^{-1/2}ᵀ = Σ_d^{-1}
+#     centered <- n_prod(centered, S_half_inv, n = d)
+#   }
+# 
+#   res[i] <- sum(centered^2)   # equivalent to diffᵀ Σ^{-1} diff
+# }
+
+
+
+
+
+res2 <- rep(0, 1e3)
+
+for(i in 1:1e3) {
+  curr_draw <- rtnorm_draws[i, , ,]
+  
+  diff <- c(curr_draw - rand_mu)
+  
+  res2[i] <- t(diff) %*% inv_covar %*% diff
+}
+
+ggplot() +
+  geom_histogram(aes(x = res2, y = after_stat(density)), 
+                 fill = "pink", color = "black") +
+  geom_function(fun = dchisq, args = list(df = 24), color = "red") +
+  labs(x = "Vectorized Draws", y = "Density") +
+  theme_minimal() 
+
+vec <- c(rtnorm_draws)
+```
+

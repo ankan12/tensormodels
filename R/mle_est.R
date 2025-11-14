@@ -69,7 +69,7 @@ mle_est <- function(data, max_iter = 1000, tol = 1e-6) {
       est_sigmas[[k]] <- s_k / (n * d_negk)
 
       # normalize sigmas
-      est_sigmas[[k]] <- est_sigmas[[k]] / mean(diag(est_sigmas[[k]]))
+      est_sigmas[[k]] <- est_sigmas[[k]] / sum(diag(est_sigmas[[k]]))
     }
 
     # convergence check

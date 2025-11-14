@@ -30,7 +30,7 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE, model) {
   # different params based on model
   switch(model,
          "skewt" = nu <- 10,
-         "vargamma" = gamma <- 10,
+         "vargamma" = gamma <- 6,
          "invgamma" = kappa <- 10,
          "genhyper" = {lambda <- 10; omega <- 10 })
 
@@ -213,7 +213,12 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE, model) {
    #new_mu <- rand_mu; new_skew <- new_skew; new_sigmas <- list(s1, s2, s3); new_nu <- 20
 
    # Step 5: Check convergence
-   mean_change <- mean_rel_change(new_mu, mu, new_skew, skew, new_sigmas, sigmas, new_nu, nu)
+
+   switch(model,
+          "skewt" = mean_change <- mean_rel_change(new_mu, mu, new_skew, skew, new_sigmas, sigmas, new_nu, nu),
+          "genhyper" = {mean_change <- mean_rel_change(new_mu, mu, new_skew, skew, new_sigmas, sigmas, new_lambda, lambda, new_omega, omega)},
+          "vargamma" = mean_change <- mean_rel_change(new_mu, mu, new_skew, skew, new_sigmas, sigmas, new_gamma, gamma),
+          "invgamma" = mean_change <- mean_rel_change(new_mu, mu, new_skew, skew, new_sigmas, sigmas, new_kappa, kappa))
 
    if(t %% 50 == 0 & !quiet) {
      cat(sprintf("Iteration %d: mean relative change = %.3e\n", t, mean_change))
