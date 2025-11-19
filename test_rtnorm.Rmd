@@ -3,14 +3,145 @@ title: 'test_rtnorm'
 output: pdf_document
 ---
 
+Test with sigma 1 being diagonal
 ```{r}
-s1 <- matrix(rnorm(4), nrow = 2); s2 <- matrix(rnorm(9), nrow = 3); s3 <- matrix(rnorm(16), nrow = 4)
-s1 <- crossprod(s1, s1); s2 <- crossprod(s2, s2); s3 <- crossprod(s3, s3)
+s1 <- diag(2); s2 <- matrix(rnorm(9), nrow = 3); s3 <- matrix(rnorm(16), nrow = 4)
+s1 <- 4 * s1
+s2 <- crossprod(s2, s2); s3 <- crossprod(s3, s3)
 list_sigmas <- list(s1, s2, s3)
 rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
-rand_skew <- array(rnorm(24, mean = 2), dim = c(2, 3, 4))
-
 rtnorm_draws <- rtnorm(n = 1e3, mu = rand_mu, sigmas = list(s1, s2, s3))
+
+est_mle <- mle_est(rtnorm_draws)
+
+est_sig <- est_mle$sigmas
+
+num_sigs <- length(dim(est_mle$mu))
+
+p_vals <- rep(0, num_sigs)
+
+for(d in 1:num_sigs) {
+  curr_sig <- est_sig[[d]]
+  rho <- dim(curr_sig)[[1]]
+  f <- 1/2 * (rho - 1) * (rho + 2)
+  
+  Vn <- det(curr_sig) * (sum(diag(curr_sig))/rho)^(-rho)
+  
+  test_stat <- -(n - 1) * 2 * log(Vn)
+
+  p_vals[d] <- pchisq(q = test_stat, df = f, lower.tail = FALSE)
+}
+
+p_vals
+```
+
+
+Test with sigma 1, 2, 3 being diagonal
+```{r}
+s1 <- diag(2); s2 <- diag(3); s3 <- diag(4)
+s1 <- 4 * s1
+s2 <- 2 * s2
+s3 <- 8 * s3
+rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
+rtnorm_draws <- rtnorm(n = 1e3, mu = rand_mu, 
+                       sigmas = list(s1, s2, s3))
+
+est_mle <- mle_est(rtnorm_draws)
+
+est_sig <- est_mle$sigmas
+
+num_sigs <- length(dim(est_mle$mu))
+
+p_vals <- rep(0, num_sigs)
+
+for(d in 1:num_sigs) {
+  curr_sig <- est_sig[[d]]
+  rho <- dim(curr_sig)[[1]]
+  f <- 1/2 * (rho - 1) * (rho + 2)
+  
+  Vn <- det(curr_sig) * (sum(diag(curr_sig))/rho)^(-rho)
+  
+  test_stat <- -(n - 1) * 2 * log(Vn)
+
+  p_vals[d] <- pchisq(q = test_stat, df = f, lower.tail = FALSE)
+}
+
+p_vals
+```
+
+
+Test with sigma 2 being diagonal with some error
+
+```{r}
+s1 <- diag(2); s2 <- diag(3); s3 <- diag(4)
+s1 <- 4 * s1
+s2 <- 2 * s2 + rnorm(9, mean = 0.4, sd = 0.2)
+s3 <- 8 * s3
+rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
+rtnorm_draws <- rtnorm(n = 1e3, mu = rand_mu, 
+                       sigmas = list(s1, s2, s3))
+
+est_mle <- mle_est(rtnorm_draws)
+
+est_sig <- est_mle$sigmas
+
+num_sigs <- length(dim(est_mle$mu))
+
+p_vals <- rep(0, num_sigs)
+
+for(d in 1:num_sigs) {
+  curr_sig <- est_sig[[d]]
+  rho <- dim(curr_sig)[[1]]
+  f <- 1/2 * (rho - 1) * (rho + 2)
+  
+  Vn <- det(curr_sig) * (sum(diag(curr_sig))/rho)^(-rho)
+  
+  test_stat <- -(n - 1) * 2 * log(Vn)
+
+  p_vals[d] <- pchisq(q = test_stat, df = f, lower.tail = FALSE)
+}
+
+p_vals
+```
+
+
+```{r}
+sig1_mle <- est_mle$sigmas[[2]]
+
+n <- 1e3
+
+rho <- dim(sig1_mle)[[1]]
+
+f <- 1/2 * (rho - 1) * (rho + 2)
+
+Vn <- det(sig1_mle) * (sum(diag(sig1_mle))/rho)^(-rho)
+
+test_stat <- -(n - 1) * 2 * log(Vn)
+
+pchisq(q = test_stat, df = f, lower.tail = FALSE)
+
+xbar <- apply(rtnorm_draws, 2:4, mean)
+
+d <- 1
+
+tot_sum <- 0
+
+for(i in 1:1e3) {
+  centered <- matricization(rtnorm_draws[[i]] - xbar, k = d)
+  
+  tot_sum <- tot_sum + centered %*% t(centered)
+}
+
+tot_sum/(1e3)
+
+tot_sum/sum(diag(tot_sum))
+```
+
+
+
+
+```{r}
+rand_skew <- array(rnorm(24, mean = 2), dim = c(2, 3, 4))
 
 full_covar <- kronecker(s3, s2) |> kronecker(s1)
 inv_covar <- chol2inv(chol(full_covar))
