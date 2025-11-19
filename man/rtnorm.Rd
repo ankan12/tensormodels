@@ -24,5 +24,6 @@ Simulate random draws from the tensor variate normal distribution.
 univar_norm <- rtnorm(n = 10000, mu = -2)
 mean(univar_norm)
 sd(univar_norm)
-matrix_var_norm <- matrix_var_norm <- rtnorm(n = 10000, mu = matrix(1:6, nrow = 2, ncol = 3))
+matrix_var_norm <- rtnorm(n = 10000, mu = matrix(1:6, nrow = 2, ncol = 3))
+
 }

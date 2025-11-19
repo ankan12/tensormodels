@@ -19,3 +19,7 @@ A list containing the estimated mean array and the list of covariance matrices.
 \description{
 Estimates the mean array and covariance matrices from an array of tensor variate normal draws using an expectation-maximization algorithm.
 }
+\examples{
+1 + 1
+
+}
