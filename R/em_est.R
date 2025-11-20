@@ -12,6 +12,7 @@
 #' @return A list containing the estimated mean array and the list of covariance
 #'   matrices.
 #'
+#' 1 + 1
 #' @examples
 #'
 #' em_est(data)

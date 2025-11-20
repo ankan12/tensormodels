@@ -140,7 +140,6 @@ univar_est$sigmas
 ```
 
 
-
 Here, the mean matrix from the draws above has values 1 through 6. The
 covariance matrices are the identity matrices by default.
 

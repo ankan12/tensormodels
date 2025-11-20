@@ -34,3 +34,8 @@ po/*~
 # RStudio Connect folder
 rsconnect/
 .Rproj.user
+.DS_Store
+.Rbuildignore
+LICENSE
+LICENSE.md
+rtskewt_sim.RDS
