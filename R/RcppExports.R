@@ -11,6 +11,8 @@
 #'
 #' @return An array: the result of the n-mode product.
 #'
+#' @details Test
+#'
 #' @examples
 #' a <- array(1:3, dim = c(3, 1, 1))
 #' x <- matrix(4:9, nrow = 2, ncol = 3)

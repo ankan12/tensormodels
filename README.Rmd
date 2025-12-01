@@ -1,5 +1,36 @@
 ---
 output: github_document
+bibliography: Bibliography.bib
+csl: nature.csl
+header-includes: 
+  - |
+    \AtBeginDocument{
+      \renewcommand{\r}[1]{\textcolor{red}{#1}}
+      \renewcommand{\b}[1]{\textcolor{blue}{#1}}
+    }
+  - \usepackage{xcolor}
+  - \usepackage{algorithm}
+  - \usepackage{algpseudocode}
+  - \usepackage{mathtools}
+  - \usepackage{float}
+  - \newcommand{\coleq}{\mathrel{\mathop:}=}
+  - \newcommand{\ve}[1]{\textbf{#1}}
+  - \newcommand{\field}[1]{\mathbb{#1}}
+  - \newcommand{\defn}[1]{\emph{#1}}
+  - \newcommand{\oneVect}[1]{#1}
+  - \newcommand{\mat}[1]{\textbf{#1}}
+  - \newcommand{\oneMat}[1]{#1}
+  - \newcommand{\tensor}[1]{\mathcal{#1}}
+  - \newcommand{\oneTensor}[1]{#1} 
+  - \newcommand{\vs}[1]{\mathcal{#1}}
+  #- \newcommand{\mn}[1]{{#1} \choose {#2}}
+  #- \newcommand{\mn}[2]{\mathrel{\underset{\scriptstyle {#1}\,{#2}}{\times}}}
+  #- \newcommand{\mn}[2]{\underset{\scriptsize\color{red}{#1}\,\color{blue}{#2}}{\times}}
+  #- \newcommand{\mn}[2]{\mathbb{#1}}
+  #- \newcommand{\mn}[2]{\sideset{_{\color{red}{#1}}}{_{\color{blue}{#2}}}{\boldsymbol{\times}}}
+  - \newcommand{\mn}[2]{\sideset{_{#1}}{_{#2}}{\mathop{\boldsymbol{\times}}}}
+  - \newtheorem{proposition}{Proposition}[section]
+  - \newtheorem{proof}{Proof}[section]
 ---
 
 
@@ -38,8 +69,11 @@ options(digits = 3)
 
 ## n-mode prod
 
-The n-mode product between a tensor and a matrix can be computed with
-`n_mode_prod`.
+The $n$-mode matrix product of  a tensor $\tensor{A} \in \field{k}^{I_1 \times I_2 \times ... \times I_n}$ with a matrix $\mat{U} \in \field{k}^{J \times I_n}$  
+is
+$$(\tensor{A} \times_n \mat{U}) \in \field{k}^{I_1 \times ... \times I_{n-1} \times J \times I_{n+1} \times ... \times I_N}$$ with entries $$(\tensor{A} \times_n \mat{U})_{i_1, ..., i_{n-1}, j, i_{n+1}, ... I_N} = \sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_N} u_{j, i_n}.$$ The tensor and matrix share one mode in common, denoted here as $I_n$. This operation is also called the tensor times matrix product.
+
+The n-mode product between a tensor and a matrix can be computed with `n_mode_prod`.
 
 ```{r}
 a <- array(1:3, dim = c(3, 1, 1))
@@ -85,6 +119,10 @@ tensor_prod(A, x)
 
 
 # Simulating tensor variate normal draws
+
+The density function of the multilinear normal distribution is @tensornormprop
+$$f(x) = (2\pi)^{-p*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p*/(2\pi)}\right) \exp\left\{-\frac{1}{2} (x-\mu)' \Sigma_{1:k}^{-1} (x-\mu\right\}$$
+where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$, $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
 The function `rtnorm()`{.R} simulates from the tensor variate normal with a
 specified mean array mu and a list of covariance matrices called list_sigmas.

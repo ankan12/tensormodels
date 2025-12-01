@@ -17,9 +17,13 @@ rtnorm(n, mu = 0, sigmas = 1)
 An array containing n draws of the tensor variate normal distribution.
 }
 \description{
-Simulate random draws from the tensor variate normal distribution.
+Test simulates random draws from the tensor variate normal distribution.
 \deqn{\frac{(x-\mu)^2}{2\sigma^2}}
 }
+\section{Details}{
+ This is the details section. I am testing adding details.
+}
+
 \examples{
 univar_norm <- rtnorm(n = 10000, mu = -2)
 mean(univar_norm)

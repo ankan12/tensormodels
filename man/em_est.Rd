@@ -4,22 +4,22 @@
 \alias{em_est}
 \title{em_est}
 \usage{
-em_est(draws, max_iter = 1000, tol = 1e-06, quiet = TRUE, model)
+em_est(draws, max_iter = 1000, tol = 1e-06, quiet = TRUE)
 }
 \arguments{
-\item{draws}{An array containing the draws, where the first mode represents each draw.}
+\item{draws}{An array containing the draws, where the first mode represents
+each draw.}
 
-\item{max_iter}{A max number of iterations to try to get covariance matrices that converge.}
+\item{max_iter}{A max number of iterations to try to get covariance matrices
+that converge.}
 
 \item{tol}{A tolerance level to define the convergence of matrices.}
 }
 \value{
-A list containing the estimated mean array and the list of covariance matrices.
+A list containing the estimated mean array and the list of covariance
+matrices.
 }
 \description{
-Estimates the mean array and covariance matrices from an array of tensor variate normal draws using an expectation-maximization algorithm.
-}
-\examples{
-1 + 1
-
+Estimates the mean array and covariance matrices from an array of tensor
+variate normal draws using an expectation-maximization algorithm.
 }

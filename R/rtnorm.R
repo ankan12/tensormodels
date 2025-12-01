@@ -1,12 +1,14 @@
 #' rtnorm
 #'
-#' Simulate random draws from the tensor variate normal distribution.
+#' Simulates random draws from the tensor variate normal distribution.
 #' \deqn{\frac{(x-\mu)^2}{2\sigma^2}}
+#'
 #' @param n An integer stating the sample size.
 #' @param mu An array containing the mean values of and dims of each draw.
 #' @param sigmas A list of covariance matrices. Defaults to the identity.
 #'
 #' @return An array containing n draws of the tensor variate normal distribution.
+#' @section Details: This is the details section. I am testing adding details.
 #'
 #' @examples
 #' univar_norm <- rtnorm(n = 10000, mu = -2)

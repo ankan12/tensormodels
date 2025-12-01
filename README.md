@@ -1,4 +1,42 @@
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # **tensormodels**
 
 Tensor operations, decompositions, and distributions in R.
@@ -13,6 +51,16 @@ options(digits = 3)
 # Operations
 
 ## n-mode prod
+
+The $n$-mode matrix product of a tensor
+$\mathcal{A} \in \mathbb{k}^{I_1 \times I_2 \times ... \times I_n}$ with
+a matrix $\textbf{U} \in \mathbb{k}^{J \times I_n}$  
+is
+$$(\mathcal{A} \times_n \textbf{U}) \in \mathbb{k}^{I_1 \times ... \times I_{n-1} \times J \times I_{n+1} \times ... \times I_N}$$
+with entries
+$$(\mathcal{A} \times_n \textbf{U})_{i_1, ..., i_{n-1}, j, i_{n+1}, ... I_N} = \sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_N} u_{j, i_n}.$$
+The tensor and matrix share one mode in common, denoted here as $I_n$.
+This operation is also called the tensor times matrix product.
 
 The n-mode product between a tensor and a matrix can be computed with
 `n_mode_prod`.
@@ -69,6 +117,12 @@ tensor_prod(A, x)
 
 # Simulating tensor variate normal draws
 
+The density function of the multilinear normal distribution
+is<sup>1</sup>
+$$f(x) = (2\pi)^{-p*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p*/(2\pi)}\right) \exp\left\{-\frac{1}{2} (x-\mu)' \Sigma_{1:k}^{-1} (x-\mu\right\}$$
+where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
+$\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
+
 The function `rtnorm()` simulates from the tensor variate normal with a
 specified mean array mu and a list of covariance matrices called
 list_sigmas.
@@ -82,10 +136,10 @@ variance $4$.
 univar_draws <- rtnorm(n = 1000, mu = -2, sigmas = 4)
 
 mean(univar_draws)
-#> [1] -2.12
+#> [1] -1.97
 
 sd(univar_draws)
-#> [1] 1.99
+#> [1] 1.98
 ```
 
 And now we simulate from the matrix variate normal of size $2 \times 3$.
@@ -96,8 +150,8 @@ matrix_draws <- rtnorm(n = 1e3, mu = matrix(1:6, nrow = 2, ncol = 3))
 
 matrix_draws[1, , ]
 #>       [,1] [,2] [,3]
-#> [1,] 1.341 2.04 3.83
-#> [2,] 0.461 5.49 5.95
+#> [1,] 0.741 1.55 5.35
+#> [2,] 1.197 2.35 4.61
 ```
 
 Below is a simulation from a tensor variate normal of size
@@ -110,17 +164,17 @@ tensor_draws <- rtnorm(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
 tensor_draws[1, , , ]
 #> , , 1
 #> 
-#>       [,1] [,2] [,3] [,4]
-#> [1,] 0.979 2.94 6.89 10.1
-#> [2,] 1.409 4.73 7.59 10.2
-#> [3,] 3.130 5.57 9.95 12.0
+#>      [,1] [,2] [,3]  [,4]
+#> [1,] 2.09 6.14 7.60  9.64
+#> [2,] 2.22 4.80 7.86 10.47
+#> [3,] 2.54 7.74 9.63 11.77
 #> 
 #> , , 2
 #> 
 #>      [,1] [,2] [,3] [,4]
-#> [1,] 15.0 14.4 16.9 23.8
-#> [2,] 13.2 19.1 21.2 24.5
-#> [3,] 12.9 18.3 21.9 25.4
+#> [1,] 12.7 17.1 18.1 21.2
+#> [2,] 14.5 18.9 20.4 22.4
+#> [3,] 15.2 17.7 21.4 22.7
 ```
 
 # Estimation
@@ -134,12 +188,12 @@ matrices.
 univar_est <- mle_est(univar_draws)
 
 univar_est$mu
-#> [1] -2.12
+#> [1] -1.97
 
 univar_est$sigmas
 #> [[1]]
 #>      [,1]
-#> [1,] 3.96
+#> [1,] 3.92
 ```
 
 Here, the mean matrix from the draws above has values 1 through 6. The
@@ -147,27 +201,27 @@ covariance matrices are the identity matrices by default.
 
 ``` r
 matrix_est <- mle_est(matrix_draws)
-#> Iteration 1: max relative change = 6.667e-01
-#> Iteration 2: max relative change = 3.827e-04
-#> Iteration 3: max relative change = 5.834e-07
+#> Iteration 1: max relative change = 6.669e-01
+#> Iteration 2: max relative change = 3.319e-04
+#> Iteration 3: max relative change = 2.885e-07
 #> Converged at iteration 3
 
 matrix_est$mu
-#>      [,1] [,2] [,3]
-#> [1,] 1.05 3.01 4.99
-#> [2,] 1.98 4.05 6.01
+#>       [,1] [,2] [,3]
+#> [1,] 0.987 3.03 4.98
+#> [2,] 1.978 3.97 6.02
 
 matrix_est$sigmas |> lapply(round, 3)
 #> [[1]]
-#>       [,1]   [,2]
-#> [1,]  1.02 -0.010
-#> [2,] -0.01  0.984
+#>        [,1]   [,2]
+#> [1,]  0.979 -0.013
+#> [2,] -0.013  1.021
 #> 
 #> [[2]]
-#>        [,1]   [,2]   [,3]
-#> [1,]  1.010  0.022 -0.010
-#> [2,]  0.022  0.970 -0.009
-#> [3,] -0.010 -0.009  1.020
+#>       [,1]  [,2]  [,3]
+#> [1,] 1.023 0.056 0.036
+#> [2,] 0.056 0.995 0.001
+#> [3,] 0.036 0.001 0.982
 ```
 
 This function works on array objects of dimensions above 2.
@@ -175,44 +229,44 @@ This function works on array objects of dimensions above 2.
 ``` r
 tensor_est <- mle_est(tensor_draws)
 #> Iteration 1: max relative change = 7.500e-01
-#> Iteration 2: max relative change = 9.260e-04
-#> Iteration 3: max relative change = 1.010e-05
-#> Iteration 4: max relative change = 3.509e-08
+#> Iteration 2: max relative change = 6.259e-04
+#> Iteration 3: max relative change = 7.643e-06
+#> Iteration 4: max relative change = 1.534e-08
 #> Converged at iteration 4
 
 tensor_est$mu
 #> , , 1
 #> 
-#>       [,1] [,2] [,3] [,4]
-#> [1,] 0.978 3.98 6.99   10
-#> [2,] 2.060 5.04 8.01   11
-#> [3,] 2.962 6.03 9.04   12
+#>      [,1] [,2] [,3] [,4]
+#> [1,] 1.09 4.09 7.01 10.0
+#> [2,] 1.99 5.04 8.00 10.9
+#> [3,] 3.01 6.06 9.00 12.0
 #> 
 #> , , 2
 #> 
 #>      [,1] [,2] [,3] [,4]
-#> [1,] 12.9 16.0   19 21.9
-#> [2,] 14.0 17.0   20 23.0
-#> [3,] 15.0 18.1   21 24.0
+#> [1,]   13 16.1 18.9   22
+#> [2,]   14 17.0 20.0   23
+#> [3,]   15 18.0 21.0   24
 
 tensor_est$sigmas |> lapply(round, 3)
 #> [[1]]
-#>       [,1]  [,2]  [,3]
-#> [1,] 1.005 0.000 0.018
-#> [2,] 0.000 0.991 0.007
-#> [3,] 0.018 0.007 1.004
+#>       [,1]   [,2]   [,3]
+#> [1,] 1.009  0.013  0.009
+#> [2,] 0.013  0.991 -0.002
+#> [3,] 0.009 -0.002  1.000
 #> 
 #> [[2]]
 #>        [,1]   [,2]   [,3]   [,4]
-#> [1,]  1.039  0.007  0.007 -0.004
-#> [2,]  0.007  0.989 -0.020  0.004
-#> [3,]  0.007 -0.020  0.970  0.004
-#> [4,] -0.004  0.004  0.004  1.003
+#> [1,]  1.024 -0.021  0.000 -0.010
+#> [2,] -0.021  0.996 -0.018  0.011
+#> [3,]  0.000 -0.018  0.979  0.016
+#> [4,] -0.010  0.011  0.016  1.001
 #> 
 #> [[3]]
 #>        [,1]   [,2]
-#> [1,]  1.006 -0.009
-#> [2,] -0.009  0.994
+#> [1,]  1.008 -0.012
+#> [2,] -0.012  0.992
 ```
 
 # Other models
@@ -306,7 +360,7 @@ tibble(skew25 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 0.
   geom_histogram(aes(x = value), color = "black", fill = "pink") +
   facet_wrap(~name, nrow = 2, scales = "free_x") +
   theme_minimal()
-#> `stat_bin()` using `bins = 30`. Pick better value `binwidth`.
+#> `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
 ```
 
 <img src="man/figures/README-unnamed-chunk-16-1.png" width="100%" />
@@ -324,7 +378,7 @@ tibble(nu05 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, n
   geom_histogram(aes(x = value), color = "black", fill = "pink") +
   facet_wrap(~name, nrow = 2, scales = "free_x") +
   theme_minimal()
-#> `stat_bin()` using `bins = 30`. Pick better value `binwidth`.
+#> `stat_bin()` using `bins = 30`. Pick better value with `binwidth`.
 ```
 
 <img src="man/figures/README-unnamed-chunk-16-2.png" width="100%" />
@@ -344,3 +398,18 @@ Reset digits
 ``` r
 options(digits = old_digits)
 ```
+
+<div id="refs" class="references csl-bib-body" entry-spacing="0"
+line-spacing="2">
+
+<div id="ref-tensornormprop" class="csl-entry">
+
+<span class="csl-left-margin">1.
+</span><span class="csl-right-inline">Ohlson, M., Rauf Ahmad, M. & von
+Rosen, D. [The multilinear normal distribution: Introduction and some
+basic properties](https://doi.org/10.1016/j.jmva.2011.05.015). *Journal
+of Multivariate Analysis* **113**, 37–47 (2013).</span>
+
+</div>
+
+</div>
