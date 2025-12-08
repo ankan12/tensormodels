@@ -16,7 +16,7 @@ rtskewt_draws <- rtskewt(n = 1e3, mu = rand_mu,
 exp_mu <- rand_mu + (nu/(nu-2)) * rand_skew
 
 #36 seconds to run
-(res <- em_est(rtskewt_draws, quiet = FALSE, model = "skewt"))
+(res <- em_est_skewt(rtskewt_draws, quiet = FALSE))
 
 ```
 

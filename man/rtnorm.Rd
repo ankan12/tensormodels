@@ -17,13 +17,28 @@ rtnorm(n, mu = 0, sigmas = 1)
 An array containing n draws of the tensor variate normal distribution.
 }
 \description{
-Test simulates random draws from the tensor variate normal distribution.
-\deqn{\frac{(x-\mu)^2}{2\sigma^2}}
+Simulates random draws from the tensor variate normal distribution.
+The density function of the multilinear normal distribution is
+\deqn{f(x) = (2\pi)^{-p*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p*/(2\pi)}\right) \exp\left\{-\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu)\right\}}
 }
-\section{Details}{
- This is the details section. I am testing adding details.
+\details{
+Let \eqn{\textbf{Z}} be an array of independent standard normal entries.
+Let \eqn{\mathcal{Y} = \mathcal{U} + \textbf{Z} \times \bold{\Sigma}} with
+\eqn{\mathcal{U} \in \mathbb{R}^{m_{1} \times \dots \times m_{K}}} and \eqn{\bold{\Sigma}}
+is a list of covariance matrices. For the covariance matrices,
+\eqn{\bold{\Sigma}_{1} \in \mathbb{R}^{m_{1} \times m_{1}}, \bold{\Sigma}_{2} \in \mathbb{R}^{m_{2} \times m_{2}}, \dots \bold{\Sigma}_{K}
+\in \mathbb{R}^{m_{K} \times m_{K}}.} \cr \cr
+We can also write this model as
+\eqn{\textbf{X} \sim N(\textbf{U}, \bold{\Sigma}_{1} \otimes \bold{\Sigma}_{2} \dots \otimes \bold{\Sigma}_{K}).} \cr
+To simulate draws from the multilinear normal, instead of multiplying by the
+full covariance matrix, we can use the Cholesky decomposition to obtain the
+covariance in an easier equation. \cr \cr
+For each \eqn{A_{k}}, we compute the Cholesky to obtain \eqn{\bold{\Sigma}_{k} = R_{k}^{T} RL_{k}.}
+We can then use those Cholesky versions of the covariance matrices to sample
+from a multilinear normal distribution. We can rewrite
+\eqn{\mathcal{Y} = \mathcal{U} + \textbf{Z} \times \bold{\Sigma}} as
+\eqn{\mathcal{Y} = \mathcal{U} + \textbf{Z} \times \bold{R}_{k}.}
 }
-
 \examples{
 univar_norm <- rtnorm(n = 10000, mu = -2)
 mean(univar_norm)

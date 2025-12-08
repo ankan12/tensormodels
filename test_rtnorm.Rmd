@@ -3,7 +3,32 @@ title: 'test_rtnorm'
 output: pdf_document
 ---
 
-Test with sigma 1 being diagonal
+# Multivariate Normal Tests
+
+## Mardia's test
+
+This test is based on skewness and kurtosis. Given we observe $k$ samples of $X_{1}, X_{2}, \dots, X_{k}$ we compute 
+
+\begin{align*}
+\hat{\Sigma} &= \frac{1}{n} \sum_{j=1}^{n} (x_{j} - \bar{x})(x_{j} - \bar{x})^{T} \\
+A &= \frac{1}{6n} \sum_{i=1}^{n} \sum_{j=1}^{n} \left[(x_{i} - \bar{x}) \hat{\Sigma}^{-1} (x_{j} - \bar{x})^{T}\right]^{3} \\
+B &= \sqrt{\frac{n}{8k(k+2)}} \left\{\frac{1}{n} \sum_{i=1}^{n} \left[(x_{i} - \bar{x})^{T} \hat{\Sigma}^{-1} (x_{i} - \bar{x})\right]^{2}\right\}
+\end{align*}
+
+Under $H_0: X \sim N_{p}(\mu, \sigma), A \sim \chi^2_{1/6 k (k+1) (k+2)}$ and $B \sim N(0, 1)$. 
+
+```{r}
+MVN::mardia(iris[1:50, 1:4])
+
+multivariate_diagnostic_plot(iris[1:50, 1:4])
+```
+
+
+
+# Matrix Variate Normal Tests
+
+## Malahanobis Distance
+
 ```{r}
 s1 <- diag(2); s2 <- matrix(rnorm(9), nrow = 3); s3 <- matrix(rnorm(16), nrow = 4)
 s1 <- 4 * s1
@@ -12,27 +37,95 @@ list_sigmas <- list(s1, s2, s3)
 rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
 rtnorm_draws <- rtnorm(n = 1e3, mu = rand_mu, sigmas = list(s1, s2, s3))
 
-est_mle <- mle_est(rtnorm_draws)
+flat_dim <- prod(dim(rtnorm_draws)[-1])
 
-est_sig <- est_mle$sigmas
+draws_vec <- 
+  matrix(rtnorm_draws, 
+         nrow = dim(rtnorm_draws)[1],
+         ncol = flat_dim)
 
-num_sigs <- length(dim(est_mle$mu))
+mu_vec <- apply(draws_vec, MARGIN = 2, FUN = mean)
 
-p_vals <- rep(0, num_sigs)
+sig_mat <- matrix(0, nrow = flat_dim, ncol = flat_dim)
 
-for(d in 1:num_sigs) {
-  curr_sig <- est_sig[[d]]
-  rho <- dim(curr_sig)[[1]]
-  f <- 1/2 * (rho - 1) * (rho + 2)
-  
-  Vn <- det(curr_sig) * (sum(diag(curr_sig))/rho)^(-rho)
-  
-  test_stat <- -(n - 1) * 2 * log(Vn)
-
-  p_vals[d] <- pchisq(q = test_stat, df = f, lower.tail = FALSE)
+for(i in 1:flat_dim) {
+  sig_mat[i, i] <- sum((draws_vec[i, ] - mu_vec) %*% t(draws_vec[i, ] - mu_vec))
 }
 
-p_vals
+sig_mat <- sig_mat * 1/(n-1)
+
+
+```
+
+
+```{r}
+dim(sig_mat)
+
+#24 x 1000
+
+all <- (draws_vec - mu_vec) %*% chol(sig_mat) %*% t(draws_vec - mu_vec)
+
+all
+```
+
+
+## Likelihood Ratio Tests for Sigma
+
+Using the paper Likelihood Ratio Tests for High-Dimensional Normal Distributions by Jiang and Qi (2015), they suggest a spherical test. For a multivariate normal distribution $N_{p}(\mathbf{\mu}, \mathbf{\Sigma})$ where $\mathbf{\mu} \in \mathbb{R}^{p}$ is a mean vector and $\mathbf{\Sigma}$ is a $p \times p$ covariance matrix, we consider this spherical test. 
+
+$$H_{0}: \mathbf{\Sigma} = \lambda \textbf{I}_{p} \text{ vs } H_{a}: \mathbf{\Sigma} \neq \lambda \textbf{I}_{p}$$
+
+with unspecified $\lambda$. 
+
+Suppose $\textbf{x}_{1}, \dots, \textbf{x}_{n}$ are iid $\mathbb{R}^{p}$ from the normal distribution. As usual, set
+
+$$\bar{\textbf{x}} = \frac{1}{n} \sum_{i=1}^n x_i \text{ and } \textbf{S} = \frac{1}{n} \sum_{i=1}^{n} (\textbf{x}_{i} - \bar{\textbf{x}})(\textbf{x}_{i} - \bar{\textbf{x}})^{T}.$$ 
+
+Then the LRT statistic for this test is 
+
+$$V_{n} = |\textbf{S}| \left(\frac{\text{tr}(\textbf{S})}{p}\right)^{-p}.$$
+
+Then $-(n-1) \rho \log{V_{n}}$ converges to $\chi^{2}_{f}$ as $n \to \infty$ where
+
+$$\rho = 1 - \frac{2p^2 + p + 2}{6(n-1) * p} \text{ and } f = \frac{1}{2} (p-1)(p+2).$$
+
+```{r}
+test_sigmas <- function(est_sig) {
+  p_vals <- rep(0, length(est_sig))
+  
+  for(d in 1:length(est_sig)) {
+    curr_sig <- est_sig[[d]]
+    p <- dim(curr_sig)[[1]]
+    
+    rho <- 1 - (2 * p^2 + p + 2)/(6 * (n-1) * p)
+    f <- 1/2 * (p - 1) * (p + 2)
+    
+    Vn <- det(curr_sig) * (sum(diag(curr_sig))/p)^(-p)
+    
+    test_stat <- -(n - 1) * rho * log(Vn)
+  
+    p_vals[d] <- pchisq(q = test_stat, df = f, lower.tail = FALSE)
+  }
+  
+  p_vals
+}
+
+n <- 1e3
+```
+
+
+Test with sigma 1 being diagonal. Since the null is that the sigma is diagonal, we expect to fail to reject for the first sigma. 
+```{r}
+s1 <- diag(2); s2 <- matrix(rnorm(9), nrow = 3); s3 <- matrix(rnorm(16), nrow = 4)
+s1 <- 4 * s1
+s2 <- crossprod(s2, s2); s3 <- crossprod(s3, s3)
+list_sigmas <- list(s1, s2, s3)
+rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
+rtnorm_draws <- rtnorm(n = n, mu = rand_mu, sigmas = list(s1, s2, s3))
+
+est_mle <- mle_est(rtnorm_draws)
+
+test_sigmas(est_mle$sigmas)
 ```
 
 
@@ -43,65 +136,74 @@ s1 <- 4 * s1
 s2 <- 2 * s2
 s3 <- 8 * s3
 rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
-rtnorm_draws <- rtnorm(n = 1e3, mu = rand_mu, 
+rtnorm_draws <- rtnorm(n = n, mu = rand_mu, 
                        sigmas = list(s1, s2, s3))
 
 est_mle <- mle_est(rtnorm_draws)
-
-est_sig <- est_mle$sigmas
-
-num_sigs <- length(dim(est_mle$mu))
-
-p_vals <- rep(0, num_sigs)
-
-for(d in 1:num_sigs) {
-  curr_sig <- est_sig[[d]]
-  rho <- dim(curr_sig)[[1]]
-  f <- 1/2 * (rho - 1) * (rho + 2)
-  
-  Vn <- det(curr_sig) * (sum(diag(curr_sig))/rho)^(-rho)
-  
-  test_stat <- -(n - 1) * 2 * log(Vn)
-
-  p_vals[d] <- pchisq(q = test_stat, df = f, lower.tail = FALSE)
-}
-
-p_vals
+test_sigmas(est_mle$sigmas)
 ```
 
 
 Test with sigma 2 being diagonal with some error
-
 ```{r}
 s1 <- diag(2); s2 <- diag(3); s3 <- diag(4)
 s1 <- 4 * s1
 s2 <- 2 * s2 + rnorm(9, mean = 0.4, sd = 0.2)
 s3 <- 8 * s3
 rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
-rtnorm_draws <- rtnorm(n = 1e3, mu = rand_mu, 
+rtnorm_draws <- rtnorm(n = n, mu = rand_mu, 
                        sigmas = list(s1, s2, s3))
 
 est_mle <- mle_est(rtnorm_draws)
+test_sigmas(est_mle$sigmas)
+```
 
-est_sig <- est_mle$sigmas
+Test with sigma 1 and sigma 3 being diagonal
+```{r}
+s1 <- diag(2); s2 <- diag(3); s3 <- 3 * diag(4)
+s1 <- 4 * s1
+s2 <- 2 * s2 + rnorm(9, mean = 0.4, sd = 0.2)
+s3 <- 8 * s3
+rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
+rtnorm_draws <- rtnorm(n = n, mu = rand_mu, 
+                       sigmas = list(s1, s2, s3))
 
-num_sigs <- length(dim(est_mle$mu))
+est_mle <- mle_est(rtnorm_draws)
+test_sigmas(est_mle$sigmas)
+```
 
-p_vals <- rep(0, num_sigs)
+Test the power when sigma 1 and sigma 3 are diagonal
 
-for(d in 1:num_sigs) {
-  curr_sig <- est_sig[[d]]
-  rho <- dim(curr_sig)[[1]]
-  f <- 1/2 * (rho - 1) * (rho + 2)
+```{r}
+rt_power <- tibble("p1" = rep(0, 1000), "p2" = rep(0, 1000), "p3" = rep(0, 1000))
+
+for(i in 1:100) {
+  rtnorm_draws <- rtnorm(n = n, mu = rand_mu, 
+                         sigmas = list(s1, s2, s3))
   
-  Vn <- det(curr_sig) * (sum(diag(curr_sig))/rho)^(-rho)
+  est_mle <- mle_est(rtnorm_draws)
   
-  test_stat <- -(n - 1) * 2 * log(Vn)
-
-  p_vals[d] <- pchisq(q = test_stat, df = f, lower.tail = FALSE)
+  list_mles[[i]] <- est_mle$sigmas
+  
+  curr_test <- test_sigmas(est_mle$sigmas)
+  
+  rt_power[i, "p1"] <- curr_test[1]
+  rt_power[i, "p2"] <- curr_test[2]
+  rt_power[i, "p3"] <- curr_test[3]
 }
 
-p_vals
+rt_power$p2[1:100] |> 
+  as_tibble() |> 
+  ggplot() +
+  geom_histogram(aes(x = value))
+```
+
+
+
+```{r}
+est_mle <- mle_est(rtnorm_draws)
+
+est_mle$sigmas
 ```
 
 

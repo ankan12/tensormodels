@@ -5,7 +5,7 @@
 #'   covariance matrices, lambda, and omega.
 #'
 #' @noRd
-em_est <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
+em_est_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
 
   # get dim of input
   dims <- dim(draws)[-1]

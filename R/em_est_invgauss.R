@@ -1,11 +1,11 @@
-#' em_est_invgamma
+#' em_est_invgauss
 #'
 #' Computes the EM estimation algorithm for the invgamma distribution.
 #' @return A list containing the estimated mean array, skew array, list of
 #'   covariance matrices, and kappa,
 #'
 #' @noRd
-em_est_invgamma <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
+em_est_invgauss <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
 
   # get dim of input
   dims <- dim(draws)[-1]
