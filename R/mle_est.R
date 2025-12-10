@@ -18,7 +18,7 @@
 #' fourth_scaled <- lapply(fourth_sigma, function(S) S * (nrow(S) / sum(diag(S))))
 #' (mse_each <- mapply(function(est, true) mean((est - true)^2), est_fourth$sigmas, fourth_scaled))
 #' @export
-mle_est <- function(data, max_iter = 1000, tol = 1e-6) {
+mle_est <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
   #get dim of input
   all_dims <- dim(data)[-1]
   num_dim  <- length(all_dims)
@@ -78,10 +78,17 @@ mle_est <- function(data, max_iter = 1000, tol = 1e-6) {
       est_sigmas, old_sigmas)
 
     max_change <- max(rel_changes)
-    cat(sprintf("Iteration %d: max relative change = %.3e\n", t, max_change))
+
+    if (t %% 50 == 0 & !quiet) {
+      cat(sprintf(
+        "Iteration %d: mean relative change = %.3e\n",
+        t,
+        mean_change
+      ))
+    }
 
     if (max_change < tol) {
-      message("Converged at iteration ", t)
+      if(!quiet) message("Converged at iteration ", t)
       break
     }
   }

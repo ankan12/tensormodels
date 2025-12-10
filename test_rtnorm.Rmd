@@ -3,6 +3,14 @@ title: 'test_rtnorm'
 output: pdf_document
 ---
 
+```{r, include = FALSE}
+library(tensormodels)
+library(tidyverse)
+library(MVN)
+library(MASS)
+```
+
+
 # Multivariate Normal Tests
 
 ## Mardia's test
@@ -19,53 +27,158 @@ Under $H_0: X \sim N_{p}(\mu, \sigma), A \sim \chi^2_{1/6 k (k+1) (k+2)}$ and $B
 
 ```{r}
 MVN::mardia(iris[1:50, 1:4])
-
-multivariate_diagnostic_plot(iris[1:50, 1:4])
 ```
 
 
+## Malahanobis Distance QQ Plot
+
+The variable $d^{2} = (\boldsymbol{x} - \boldsymbol{\mu})^{T} \boldsymbol{\Sigma}^{-1} (\boldsymbol{x} - \boldsymbol{\mu}) \sim \chi^2_{p}$. We can plot the ordered Malahanobis distances versus the esimated quantiles on a QQ plot. 
+
+```{r}
+MVN::multivariate_diagnostic_plot(iris[1:50, 1:4])
+```
+
+## Eigenvalue 
+
+Assume we observe $n$ samples of $X_{1}, X_{2}, \dots, X_{n}$ and that the eigenvalues of $\Sigma$ are distinct and positive such that $\lambda_{1} > \lambda_{2} > \dots > \lambda_{p} > 0$. Denote the vector of eigenvalues as $\mathbf{\lambda}$ and the corresponding eigenvectors as $\hat{\mathbf{e}}_{1}, \dots \hat{\mathbf{e}}_{1}$.
+
+Let $\mathbf{\Lambda}$ is a diagonal matrix of the eigenvalues. Then $\sqrt{n}(\hat{\mathbf{\lambda}} - \mathbf{\lambda}) \simeq N_{p}(0, 2 \mathbf{\Lambda}^2)$ 
+
+Let $$E_{i} = \lambda_{i} \sum_{k=1, k \neq i}^{p} \frac{\lambda_{k}}{(\lambda_{k} - \lambda_{i})^2} \mathbf{e}_{k} \mathbf{e}_{k}^{T}$$. Then $\sqrt{n}(\hat{\mathbf{e_{i}}} - \mathbf{e_{i}}) \simeq N_{p}(0, E_{i})$.
+
+Each $\hat{\lambda}_{i}$ is distributed independently of elements of associated $\hat{\mathbf{e}_{i}}.$
+
+However, in practice, this large sample approximation converges very slowly. The asymptitc distributions depend on the true eigenstructure of $\Sigma$ too. 
 
 # Matrix Variate Normal Tests
 
-## Malahanobis Distance
+## Malahanobis Distance QQ Plot
+
+We can calculate the Malahanobis Distance for a multivariate normal model as $$D(\boldsymbol{X}_{i}, \hat{\boldsymbol{\mu}}, \hat{\boldsymbol{\Sigma}}) = (\text{vec}(\boldsymbol{X}_{i}) - \boldsymbol{\mu})^{T} \boldsymbol{\Sigma}^{-1} (\text{vec}(\boldsymbol{X}_{i}) - \boldsymbol{\mu})$$. 
+
+
+If a Kronecker product structure exists for $\Sigma$, then $$D(\boldsymbol{X}_{i}, \hat{\boldsymbol{\mu}}, \hat{\boldsymbol{\Sigma}}) = D_{M}(\boldsymbol{X}_{i}, \boldsymbol{M}, \boldsymbol{V}, \boldsymbol{U})$$.
+
+I was wondering how this would be generalizable for the tensor variate normal. For example, if each $X_{i}$ draw is a $2 \times 3 \times 4$. Then we would have three covariance estimates: $\boldsymbol{\Sigma}_{1}, \boldsymbol{\Sigma}_{2}, \boldsymbol{\Sigma}_{3}$ Instead of using the matrix product, we would use the $n$-mode product between the draws and the covariance matrices.
+
+Since we take the trace of the matrix product, we only care about the diagonals of the resulting object. I am unsure what the generalization of that in the tensor case would be. The structure reminds me of the hyperdiagonal tensor used in the PARAFAC decomposition though. 
+
+Would we calculate the Malahanobis Distance for a tensor variate normal model as something like the following? $$D_{T}(\mathcal{X}_{i}, \mathcal{M}, \boldsymbol{V}, \boldsymbol{U}) = \text{tr}\{(\mathcal{X}_{i} - \mathcal{M}) \times_{1} \boldsymbol{\Sigma}_{1}^{-1} \times_{2} \boldsymbol{\Sigma}_{2}^{-2} \times_{3} \boldsymbol{\Sigma}_{3}^{-1} (\mathcal{X}_{i} - \mathcal{M})^{T}\}.$$
 
 ```{r}
-s1 <- diag(2); s2 <- matrix(rnorm(9), nrow = 3); s3 <- matrix(rnorm(16), nrow = 4)
-s1 <- 4 * s1
-s2 <- crossprod(s2, s2); s3 <- crossprod(s3, s3)
-list_sigmas <- list(s1, s2, s3)
-rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
-rtnorm_draws <- rtnorm(n = 1e3, mu = rand_mu, sigmas = list(s1, s2, s3))
+n <- 1e3
 
-flat_dim <- prod(dim(rtnorm_draws)[-1])
+s1 <- matrix(rnorm(4), nrow = 2); s2 <- matrix(rnorm(9), nrow = 3); 
+s1 <- crossprod(s1, s1); 
+s2 <- crossprod(s2, s2); 
+list_sigmas <- list(s1, s2)
+rand_mu <- array(rnorm(6, mean = 10), dim = c(2, 3))
+rtnorm_draws <- rtnorm(n = n, mu = rand_mu, sigmas = list(s1, s2))
 
-draws_vec <- 
-  matrix(rtnorm_draws, 
-         nrow = dim(rtnorm_draws)[1],
-         ncol = flat_dim)
+draws <- matrix(0, nrow = n, ncol = 6)
 
-mu_vec <- apply(draws_vec, MARGIN = 2, FUN = mean)
-
-sig_mat <- matrix(0, nrow = flat_dim, ncol = flat_dim)
-
-for(i in 1:flat_dim) {
-  sig_mat[i, i] <- sum((draws_vec[i, ] - mu_vec) %*% t(draws_vec[i, ] - mu_vec))
+for(i in 1:n) {
+  draws[i, ] <- c(rtnorm_draws[i, , ])
 }
 
-sig_mat <- sig_mat * 1/(n-1)
+mu_vec <- apply(draws, MARGIN = 2, FUN = mean)
 
+vec_dist <- mahalanobis(draws, center = mu_vec, cov = cov(draws))
 
+est_norm <- mle_est(rtnorm_draws)
+
+mean_mat <- est_norm$mu
+
+U <- est_norm$sigmas[[1]]
+V <- est_norm$sigmas[[2]]
+
+mat_dist <- rep(0, 1000)
+
+c_hat <- sum(diag(cov(draws)))/sum(diag(kronecker(U, V)))
+ 
+for(i in 1:1000) {
+  Xi <- rtnorm_draws[i, , ] - mean_mat
+  mat_dist[i] <- sum(diag(solve(U) %*% Xi %*% solve(V) %*% t(Xi)))
+}
+
+mat_dist <- mat_dist / c_hat
+
+tibble("vec" = (vec_dist),
+       "mat" = (mat_dist)) |> 
+  ggplot() +
+  geom_point(aes(x = vec, y = mat)) +
+  geom_abline(slope = 1, color = "red") +
+  labs(x = "Multivariate", y = "Matrix Variate", 
+       title = "Matrix Variate") +
+  theme_minimal()
 ```
 
 
 ```{r}
-dim(sig_mat)
+Sigma <- matrix(c(
+  2, 1, 0.5, 0.1, 0,   0.5,
+  1, 3, 1,   0.3, 0.2, 0.4,
+  0.5, 1, 4, 0.5, 0.1, 0.7,
+  0.1, 0.3, 0.5, 2,   0.8, 0.2,
+  0,   0.2, 0.1, 0.8, 3,   1.2,
+  0.5, 0.4, 0.7, 0.2, 1.2, 5
+), nrow = 6, byrow = TRUE)
 
-#24 x 1000
+# mean for vec form
+mu_vec <- rep(0, 6)
 
-all <- (draws_vec - mu_vec) %*% chol(sig_mat) %*% t(draws_vec - mu_vec)
+# generate vectorized matrices
+n <- 1000
+X_vec <- mvrnorm(n, mu = mu_vec, Sigma = Sigma)
 
-all
+# reshape into 2x3 matrices
+X_array <- array(0, dim = c(n, 2, 3))
+for(i in 1:n) {
+  X_array[i,,] <- matrix(X_vec[i,], nrow = 2)
+}
+
+rtnorm_draws <- X_array
+
+draws <- matrix(0, nrow = n, ncol = 6)
+
+for(i in 1:n) {
+  draws[i, ] <- c(rtnorm_draws[i, , ])
+}
+
+mu_vec <- apply(draws, MARGIN = 2, FUN = mean)
+
+vec_dist <- mahalanobis(draws, center = mu_vec, cov = cov(draws))
+
+est_norm <- mle_est(rtnorm_draws)
+
+mean_mat <- est_norm$mu
+
+U <- est_norm$sigmas[[1]]
+V <- est_norm$sigmas[[2]]
+
+mat_dist <- rep(0, 1000)
+
+c_hat <- sum(diag(cov(draws)))/sum(diag(kronecker(U, V)))
+ 
+for(i in 1:1000) {
+  Xi <- rtnorm_draws[i, , ] - mean_mat
+  mat_dist[i] <- sum(diag(solve(U) %*% Xi %*% solve(V) %*% t(Xi)))
+}
+
+mat_dist <- mat_dist / c_hat
+
+tibble("vec" = (vec_dist),
+       "mat" = (mat_dist)) |> 
+  ggplot() +
+  geom_point(aes(x = vec, y = mat)) +
+  geom_abline(slope = 1, color = "red") +
+  labs(x = "Multivariate", y = "Matrix Variate", title = "Not Matrix Variate") +
+  theme_minimal()
+```
+
+
+```{r}
+
 ```
 
 
@@ -177,6 +290,8 @@ Test the power when sigma 1 and sigma 3 are diagonal
 ```{r}
 rt_power <- tibble("p1" = rep(0, 1000), "p2" = rep(0, 1000), "p3" = rep(0, 1000))
 
+list_mles <- vector("list", 3)
+
 for(i in 1:100) {
   rtnorm_draws <- rtnorm(n = n, mu = rand_mu, 
                          sigmas = list(s1, s2, s3))
@@ -200,17 +315,15 @@ rt_power$p2[1:100] |>
 
 
 
-```{r}
+```{r, eval = FALSE, include = FALSE}
 est_mle <- mle_est(rtnorm_draws)
 
 est_mle$sigmas
 ```
 
 
-```{r}
+```{r, eval = FALSE, include = FALSE}
 sig1_mle <- est_mle$sigmas[[2]]
-
-n <- 1e3
 
 rho <- dim(sig1_mle)[[1]]
 
@@ -242,7 +355,7 @@ tot_sum/sum(diag(tot_sum))
 
 
 
-```{r}
+```{r, eval = FALSE, include = FALSE}
 rand_skew <- array(rnorm(24, mean = 2), dim = c(2, 3, 4))
 
 full_covar <- kronecker(s3, s2) |> kronecker(s1)
@@ -271,7 +384,7 @@ ggplot() +
 ```
 
 
-```{r}
+```{r, eval = FALSE, include = FALSE}
 #rtskewt_draws <- rtskewt(n = 1e3, mu = rand_mu, sigmas = list(s1, s2, s3),
                          #skew = rand_skew, nu = 4)
 

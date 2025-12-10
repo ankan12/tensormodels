@@ -193,7 +193,7 @@ em_est_vargamma <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
     }
 
     if (mean_change < tol) {
-      message("Converged at iteration ", t)
+      if(!quiet) message("Converged at iteration ", t)
       break
     }
     # update all parameters
