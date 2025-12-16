@@ -11,6 +11,418 @@ library(MASS)
 ```
 
 
+```{r}
+tensor_mahalanobis_plot <- function(draws) {
+  
+  dim_draws <- dim(draws)
+  
+  num_elem <- prod(dim_draws[-1])
+  
+  # compute tensor Mahalanobis first
+
+  sample_stats <- mle_est(draws) # compute MLE estimates  
+  
+  sample_mean <- sample_stats$mu
+  
+  tensor_dist <- rep(0, n)
+  
+  centered <- sweep(draws, MARGIN = 2:length(dim_draws), 
+                    STATS = sample_mean, FUN = "-")
+
+  centered_flatten <- (aperm(centered, perm = c(2:length(dim_draws), 1)) |> c())
+  
+  for(i in 1:n) {
+    centered_curr <- 
+      centered_flatten[(num_elem * (i-1) + 1):
+                       (num_elem * (i-1) + num_elem + 1)] |> 
+      array(dim = dim_draws[-1]) # pull out current draw
+    
+    centered_multiply <- centered_curr 
+    
+    for(j in 1:(length(dim_draws)-1)) { # standardize with sigma estimates
+      centered_multiply <- n_prod(centered_multiply, 
+                                  solve(sample_stats$sigmas[[j]]), j)
+    }
+    
+    tensor_dist[i] <- c(centered_curr) %*% c(centered_multiply)
+  }
+  
+  # compute vector Mahalanobis
+  
+  vec_draws <- matrix(data = draws, nrow = n, ncol = num_elem)
+  
+  mu_vec <- apply(vec_draws, MARGIN = 2, FUN = mean)
+  
+  vec_dist <- mahalanobis(vec_draws, center = mu_vec, cov = cov(vec_draws))
+  
+  # scaling factor is divide by number of elements in a draw
+  c_hat <- sum(diag(cov(vec_draws)))/num_elem
+  
+  tensor_dist <- tensor_dist / c_hat
+  
+  # plot the distances against each other
+  plot <-
+    tibble("vec" = (vec_dist),
+         "mat" = (tensor_dist)) |> 
+    ggplot() +
+    geom_point(aes(x = vec, y = mat)) +
+    geom_abline(slope = 1, color = "red") +
+    labs(x = "Multivariate", y = "Tensor Variate") +
+    theme_minimal()
+  
+  plot
+}
+```
+
+
+```{r}
+n <- 1e3
+
+# tensor variate random normal draws
+s1 <- matrix(rnorm(4), nrow = 2); s2 <- matrix(rnorm(9), nrow = 3); s3 <- matrix(rnorm(16), nrow = 4)
+s1 <- crossprod(s1, s1); s2 <- crossprod(s2, s2); s3 <- crossprod(s3, s3)
+rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
+
+rtnorm_draws <- rtnorm(n = n, mu = rand_mu, sigmas = list(s1, s2, s3))
+
+# univariate random normal draws
+
+univar_draws <- rnorm(n = 1e3 * 2 * 3 * 4) |> array(dim = c(1e3, 2, 3, 4))
+
+# multivariate normal draws
+Sigma <- matrix(c(rnorm(24*24)), nrow = 24, ncol = 24)
+Sigma[lower.tri(Sigma)] = t(Sigma)[lower.tri(Sigma)]
+Sigma <- crossprod(Sigma, Sigma)
+
+mu_vec <- rnorm(24, mean = 10, sd = 2)
+
+X_vec <- mvrnorm(n, mu = mu_vec, Sigma = Sigma)
+
+# reshape into 2x3x4 matrices
+multivar_draws <- array(0, dim = c(n, 2, 3, 4))
+
+for(i in 1:n) {
+  multivar_draws[i, , ,] <- array(data = X_vec[i, ], dim = c(2, 3, 4))
+}
+
+(tensor_mahalanobis_plot(rtnorm_draws) + labs(title = "Tensor")) +
+(tensor_mahalanobis_plot(univar_draws) + labs(title = "Univar")) +
+(tensor_mahalanobis_plot(multivar_draws) + labs(title = "Multivariate"))
+```
+
+
+$H_0: \Sigma_{ij} = 0$ for all $1 \le i < j \le k$
+$H_a: H_0$ is not true
+```{r}
+test_stat <- rep(0, 100)
+
+n_minus <- n - 1
+
+for(iter in 1:100) {
+  univar_draws <- rnorm(n = 1e3 * 2 * 3 * 4) |> array(dim = c(1e3, 2, 3, 4))
+  
+  univar_mle_est <- mle_est(univar_draws)
+   
+  corr_1 <- cov2cor(univar_mle_est$sigmas[[1]])
+  
+  m <- nrow(corr_1)
+    
+  sum_r <- sum(corr_1[lower.tri(corr_1)]^2)
+  # 
+  # for(i in 2:m) {
+  #   for(j in 1:(i-1)) {
+  #     sum_r <- sum_r + corr_1[i, j]^2
+  #   }
+  # }
+  
+  t_test <- sum_r - ((m * (m-1))/(2*n_minus))
+  
+  sigma_sq <- (m * (m-1) * (n_minus-1))/(n_minus^2 * (n_minus+2))
+  
+  z_test <- t_test/sqrt(sigma_sq)
+  
+  test_stat[iter] <- z_test
+  
+  if(iter %% 20 == 0) {
+    print(iter)
+  }
+}
+
+test_stat |> 
+  as_tibble() |> 
+  ggplot() +
+  geom_histogram(aes(x = value), bins = 30, color = "black", fill = "pink") +
+  theme_minimal()
+```
+
+
+```{r}
+if (z_test < 0) {
+  2 * pnorm(q = z_test)
+} else {
+  2 * pnorm(q = z_test, lower.tail = FALSE)
+}
+```
+
+
+```{r}
+pnorm(q = abs(z_test))
+
+if(z_test < 0) {
+  2 * pnorm(q = z_test)
+}
+
+
+z_test
+
+univar_mle_est$sigmas[[1]]
+
+univar_mle_est$sigmas[[2]]
+univar_mle_est$sigmas[[3]]
+
+sig_1 <- univar_mle_est$sigmas[[1]]
+
+W_n <- det(sig_1)^((n+1)/2)/(prod(diag(sig_1))^((n+1)/2)) 
+
+lambda_n <- (n+1)/2 * log(W_n)
+
+rho <- 1 - (2 * (2^3 - 2^3 + 2^3) + 9 * (2^3 - 2^2 + 2^2))/(6 * (n+1) * (2^2 - 2 + 2))
+
+f <- 1/2 * (2^2 - 2^2 + 2^2)
+
+1 - pchisq(-2 * rho * lambda_n, df = f)
+```
+
+
+```{r}
+
+tensor_mahalanobis_plot(X_array)
+tensor_mahalanobis_plot(rtnorm_draws_diag)
+tensor_mahalanobis_plot(flatten_draws)
+
+test_draws <- rtnorm(1e3, mu = rand_mu, sigmas = list(s1, s2))
+
+test_draws |> dim()
+```
+
+
+```{r}
+
+
+
+
+# tensor variate random normal draws
+s1 <- matrix(rnorm(4), nrow = 2); s2 <- diag(3); s3 <- matrix(rnorm(16), nrow = 4)
+s1 <- crossprod(s1, s1); s3 <- crossprod(s3, s3)
+rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
+
+rtnorm_draws <- rtnorm(n = n, mu = rand_mu, sigmas = list(s1, s2, s3))
+
+flatten_draws <- rtnorm_draws_diag |> array(dim = c(1000, 6, 4))
+
+(tensor_mahalanobis_plot(rtnorm_draws) + labs(title = "Tensor")) +
+(tensor_mahalanobis_plot(rtnorm_draws_diag) + labs(title = "Matrix")) +
+(tensor_mahalanobis_plot(X_array) + labs(title = "Multivar")) +
+theme_minimal()
+
+
+tensor_mahalanobis_plot(flatten_draws) 
+
+rtnorm_draws_diag
+
+tensor_mahalanobis_plot(rtnorm_draws_diag)
+```
+
+
+```{r}
+n <- 1e3
+
+s1 <- matrix(rnorm(4), nrow = 2); s2 <- matrix(rnorm(9), nrow = 3); s3 <- matrix(rnorm(16), nrow = 4)
+s1 <- crossprod(s1, s1); s2 <- crossprod(s2, s2); s3 <- crossprod(s3, s3)
+rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
+
+# random normal draws
+rtnorm_draws <- rtnorm(n = n, mu = rand_mu, sigmas = list(s1, s2, s3))
+```
+
+
+```{r}
+sample_mean <- apply(rtnorm_draws, 2:4, mean)
+
+dims <- dim(sample_mean)
+
+sample_stats <- mle_est(rtnorm_draws)
+
+sample_s1 <- sample_stats$sigmas[[1]]
+sample_s2 <- sample_stats$sigmas[[2]]
+sample_s3 <- sample_stats$sigmas[[3]]
+
+all_dist <- rep(0, n)
+
+for(i in 1:n) {
+  centered <- rtnorm_draws[i, , , ] - sample_mean # center data
+  
+  centered_multiply <- centered
+  
+  for(j in 1:length(dims)) { # standardize with sigma estimates
+    centered_multiply <- n_prod(centered_multiply, 
+                                solve(sample_stats$sigmas[[j]]), j)
+  }
+  
+  all_dist[i] <- c(centered) %*% c(centered_multiply)
+}
+
+draws <- matrix(0, nrow = n, ncol = 24)
+
+for(i in 1:n) {
+  draws[i, ] <- c(rtnorm_draws[i, , ,]) # vectorize data
+}
+
+mu_vec <- apply(draws, MARGIN = 2, FUN = mean)
+
+vec_dist <- mahalanobis(draws, center = mu_vec, cov = cov(draws))
+
+c_hat <- sum(diag(cov(draws)))/24
+
+all_dist <- all_dist / c_hat
+
+tibble("vec" = (vec_dist),
+       "mat" = (all_dist)) |> 
+  ggplot() +
+  geom_point(aes(x = vec, y = mat)) +
+  geom_abline(slope = 1, color = "red") +
+  labs(x = "Multivariate", y = "Tensor Variate", 
+       title = "Tensor Variate Data") +
+  theme_minimal()
+```
+
+
+```{r}
+# multivariate normal draws
+Sigma <- matrix(c(rnorm(24*24)), nrow = 24, ncol = 24)
+
+Sigma[lower.tri(Sigma)] = t(Sigma)[lower.tri(Sigma)]
+
+Sigma <- crossprod(Sigma, Sigma)
+
+mu_vec <- rnorm(24, mean = 10, sd = 2)
+
+X_vec <- mvrnorm(n, mu = mu_vec, Sigma = Sigma)
+
+# reshape into 2x3x4 matrices
+X_array <- array(0, dim = c(n, 2, 3, 4))
+
+for(i in 1:n) {
+  X_array[i, , ,] <- array(data = X_vec[i, ], dim = c(2, 3, 4))
+}
+
+#rtnorm_draws <- X_array
+```
+
+
+
+```{r}
+# generate vectorized matrices
+n <- 1000
+X_vec <- mvrnorm(n, mu = mu_vec, Sigma = Sigma)
+
+# reshape into 2x3 matrices
+X_array <- array(0, dim = c(n, 2, 3, 4))
+for(i in 1:n) {
+  X_array[i,,] <- array(X_vec[i,], dim = c(2, 3, 4))
+}
+
+rtnorm_draws <- X_array
+
+draws <- matrix(0, nrow = n, ncol = 6)
+
+for(i in 1:n) {
+  draws[i, ] <- c(rtnorm_draws[i, , ])
+}
+
+mu_vec <- apply(draws, MARGIN = 2, FUN = mean)
+
+vec_dist <- mahalanobis(draws, center = mu_vec, cov = cov(draws))
+
+est_norm <- mle_est(rtnorm_draws)
+
+mean_mat <- est_norm$mu
+
+U <- est_norm$sigmas[[1]]
+V <- est_norm$sigmas[[2]]
+
+mat_dist <- rep(0, 1000)
+
+c_hat <- sum(diag(cov(draws)))/sum(diag(kronecker(U, V)))
+ 
+for(i in 1:1000) {
+  Xi <- rtnorm_draws[i, , ] - mean_mat
+  mat_dist[i] <- sum(diag(solve(U) %*% Xi %*% solve(V) %*% t(Xi)))
+}
+
+mat_dist <- mat_dist / c_hat
+
+tibble("vec" = (vec_dist),
+       "mat" = (mat_dist)) |> 
+  ggplot() +
+  geom_point(aes(x = vec, y = mat)) +
+  geom_abline(slope = 1, color = "red") +
+  labs(x = "Multivariate", y = "Matrix Variate", title = "Not Matrix Variate") +
+  theme_minimal()
+```
+
+
+```{r}
+ggplot() + 
+  geom_histogram(aes(x = all_dist,
+                     y = after_stat(density)),
+                 fill = "pink", color = "black", bins = 60) +
+  geom_function(fun = dchisq, args = list(df = 2), color = "red") +
+  labs(x = "Distances", y = "Count") + 
+  theme_minimal()
+```
+
+
+```{r}
+draws <- matrix(0, nrow = n, ncol = 6)
+
+for(i in 1:n) {
+  draws[i, ] <- c(rtnorm_draws[i, , ])
+}
+
+mu_vec <- apply(draws, MARGIN = 2, FUN = mean)
+
+vec_dist <- mahalanobis(draws, center = mu_vec, cov = cov(draws))
+
+est_norm <- mle_est(rtnorm_draws)
+
+mean_mat <- est_norm$mu
+
+U <- est_norm$sigmas[[1]]
+V <- est_norm$sigmas[[2]]
+
+mat_dist <- rep(0, 1000)
+
+c_hat <- sum(diag(cov(draws)))/sum(diag(kronecker(U, V)))
+ 
+for(i in 1:1000) {
+  Xi <- rtnorm_draws[i, , ] - mean_mat
+  mat_dist[i] <- sum(diag(solve(U) %*% Xi %*% solve(V) %*% t(Xi)))
+}
+
+mat_dist <- mat_dist / c_hat
+
+tibble("vec" = (vec_dist),
+       "mat" = (mat_dist)) |> 
+  ggplot() +
+  geom_point(aes(x = vec, y = mat)) +
+  geom_abline(slope = 1, color = "red") +
+  labs(x = "Multivariate", y = "Matrix Variate", 
+       title = "Matrix Variate") +
+  theme_minimal()
+```
+
+
 # Multivariate Normal Tests
 
 ## Mardia's test
