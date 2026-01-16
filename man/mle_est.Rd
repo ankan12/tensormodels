@@ -4,7 +4,7 @@
 \alias{mle_est}
 \title{mle_est}
 \usage{
-mle_est(data, max_iter = 1000, tol = 1e-06)
+mle_est(data, max_iter = 1000, tol = 1e-06, quiet = TRUE)
 }
 \arguments{
 \item{data}{An array containing the draws, where the first mode represents each draw.}

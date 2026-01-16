@@ -232,5 +232,6 @@ em_est_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
     omega <- new_omega
   }
 
-  list(mu = mu, skew = skew, sigmas = sigmas, lambda = lambda, omega = omega)
+  list(mu = mu, skew = skew, sigmas = sigmas, lambda = lambda, omega = omega,
+       Ew = a, Einvw = b, Elogw = c)
 }

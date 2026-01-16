@@ -204,5 +204,6 @@ em_est_vargamma <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
     gamma <- new_gamma
   }
 
-  list(mu = mu, skew = skew, sigmas = sigmas, gamma = gamma)
+  list(mu = mu, skew = skew, sigmas = sigmas, gamma = gamma,
+       Ew = a, Einvw = b, Elogw = c)
 }

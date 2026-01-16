@@ -204,6 +204,8 @@ em_est_skewt <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
 
     nu <- new_nu
   }
+  message("Reached max iter ", max_iter)
 
-  list(mu = mu, skew = skew, sigmas = sigmas, nu = nu)
+  list(mu = mu, skew = skew, sigmas = sigmas, nu = nu,
+       Ew = a, Einvw = b, Elogw = c)
 }

@@ -202,5 +202,6 @@ em_est_invgauss <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
     kappa <- new_kappa
   }
 
-  list(mu = mu, skew = skew, sigmas = sigmas, kappa = kappa)
+  list(mu = mu, skew = skew, sigmas = sigmas, kappa = kappa,
+       Ew = a, Einvw = b, Elogw = c)
 }

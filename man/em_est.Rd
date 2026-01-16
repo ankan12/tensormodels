@@ -4,7 +4,7 @@
 \alias{em_est}
 \title{em_est}
 \usage{
-em_est(draws, max_iter = 1000, tol = 1e-06, quiet = TRUE)
+em_est(draws, max_iter = 1000, tol = 1e-06, quiet = TRUE, model)
 }
 \arguments{
 \item{draws}{An array containing the draws, where the first mode represents
@@ -14,6 +14,9 @@ each draw.}
 that converge.}
 
 \item{tol}{A tolerance level to define the convergence of matrices.}
+
+\item{method}{Specify the distribution of draws. Must be one of skewt,
+vargamma, invgauss, or gen hyper}
 }
 \value{
 A list containing the estimated mean array and the list of covariance

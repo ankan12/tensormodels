@@ -6,6 +6,7 @@ output: pdf_document
 ```{r, include = FALSE}
 library(tensormodels)
 library(tidyverse)
+library(patchwork)
 library(MVN)
 library(MASS)
 ```
@@ -34,7 +35,7 @@ tensor_mahalanobis_plot <- function(draws) {
   for(i in 1:n) {
     centered_curr <- 
       centered_flatten[(num_elem * (i-1) + 1):
-                       (num_elem * (i-1) + num_elem + 1)] |> 
+                       (num_elem * (i-1) + num_elem)] |> 
       array(dim = dim_draws[-1]) # pull out current draw
     
     centered_multiply <- centered_curr 
@@ -111,8 +112,133 @@ for(i in 1:n) {
 ```
 
 
+# Test rtskewt draws
+```{r}
+rtskewt_draws <- rtskewt(n = n, mu = rand_mu, sigmas = list(s1, s2, s3))
+
+draws <- rtskewt_draws
+
+dim_draws <- dim(draws)
+
+num_elem <- prod(dim_draws[-1])
+
+mles <- em_est(draws, model = "skewt", quiet = FALSE,
+               max_iter = 10000)
+
+centered <- draws
+
+for(i in 1:n) {
+  centered[i, , ,] <- #with(mles, (draws[i, , ,] - mu - Ew[i] * skew)/sqrt(Ew[i]))
+    (draws[i, , ,] - mles$mu - mles$Ew[i] * mles$skew)/
+     sqrt(mles$Ew[i]) 
+}
+
+tensor_mahalanobis_plot(centered)
+```
+
+
+```{r}
+#mles_invgauss <- em_est(draws, model = "invgauss", quiet = FALSE,
+                 #max_iter = 1000)
+
+centered_invgauss <- draws
+
+for(i in 1:n) {
+  centered_invgauss[i, , ,] <- 
+   # with(mles_invgauss, (draws[i, , ,] - mu - Ew[i] * skew)/sqrt(Ew[i]))
+    (draws[i, , ,] - mles_invgauss$mu - mles_invgauss$Ew[i] * mles_invgauss$skew)/
+     sqrt(mles_invgauss$Ew[i]) 
+}
+
+tensor_mahalanobis_plot(centered) +
+  labs(title = "rtskewt") +
+tensor_mahalanobis_plot(centered_invgauss) +
+  labs(title = "invgauss")
+```
+
+
+```{r}
+ggplot() +
+  geom_histogram(aes(x = centered), fill = "pink", color = "black") +
+  theme_minimal()
+
+centered_flatten <- (aperm(centered, perm = c(2:length(dim_draws), 1)) |> c())
+
+for(i in 1:n) {
+  centered_curr <- 
+    centered_flatten[(num_elem * (i-1) + 1):
+                     (num_elem * (i-1) + num_elem)] |> 
+    array(dim = dim_draws[-1]) # pull out current draw
+  
+  centered_multiply <- centered_curr 
+  
+  for(j in 1:(length(dim_draws)-1)) { # standardize with sigma estimates
+    centered_multiply <- n_prod(centered_multiply, 
+                                solve(mles$sigmas[[j]]), j)
+  }
+  
+  tensor_dist[i] <- c(centered_curr) %*% c(centered_multiply)
+}
+
+ggplot() +
+  geom_histogram(aes(x = tensor_dist), color = "black", fill = "pink") +
+  xlim(0, 1e6) +
+  theme_minimal()
+
+# compute vector Mahalanobis
+vec_draws <- matrix(data = centered, nrow = n, ncol = num_elem)
+
+mu_vec <- apply(vec_draws, MARGIN = 2, FUN = mean)
+
+vec_dist <- mahalanobis(vec_draws, center = mu_vec, cov = cov(vec_draws))
+
+# scaling factor is divide by number of elements in a draw
+c_hat <- sum(diag(cov(vec_draws)))/num_elem
+
+tensor_dist <- tensor_dist / c_hat
+
+# plot the distances against each other
+tibble("vec" = (vec_dist),
+       "mat" = (tensor_dist)) |> 
+  ggplot() +
+  geom_point(aes(x = vec, y = mat)) +
+  geom_abline(slope = 1, color = "red") +
+  labs(x = "Multivariate", y = "Tensor Variate") +
+  theme_minimal()
+```
+
+
+
 $H_0: \Sigma_{ij} = 0$ for all $1 \le i < j \le k$
 $H_a: H_0$ is not true
+```{r}
+bartlett_diagonal_test <- function(X) {
+  X <- as.matrix(X)
+  n <- nrow(X); p <- ncol(X)
+  #if (n <= p) stop("Need n > p (and MVN assumptions) for the classic Bartlett/LRT to behave well.")
+
+  R <- cor(X, use = "pairwise.complete.obs")
+  detR <- det(R)
+
+  # Bartlett-corrected LR chi-square
+  cfac <- (n - 1) - (2*p + 5)/6
+  stat <- -cfac * log(detR)
+  df <- p*(p - 1)/2
+  pval <- 1 - pchisq(stat, df)
+
+  list(statistic = stat, df = df, p.value = pval, detR = detR)
+}
+
+rtnorm_draws_mle <- mle_est(rtnorm_draws)
+
+
+bartlett_diagonal_test(rtnorm_draws_mle$sigmas[[1]])
+
+
+bartlett_diagonal_test(univar_mle_est$sigmas[[1]])
+```
+
+
 ```{r}
 test_stat <- rep(0, 100)
 
@@ -151,7 +277,8 @@ for(iter in 1:100) {
 test_stat |> 
   as_tibble() |> 
   ggplot() +
-  geom_histogram(aes(x = value), bins = 30, color = "black", fill = "pink") +
+  geom_histogram(aes(x = value), bins = 30, 
+                 color = "black", fill = "pink") +
   theme_minimal()
 ```
 
