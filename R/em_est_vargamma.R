@@ -19,6 +19,8 @@ em_est_vargamma <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
   skew <- array(rnorm(prod(dims)), dim = dims)
   sigmas <- lapply(dims, diag)
 
+  logliks <- rep(0, max_iter)
+
   # different params based on model
   gamma <- 6
 
@@ -177,31 +179,33 @@ em_est_vargamma <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
 
     # Step 5: Check convergence
 
-    "vargamma" = mean_change <- mean_rel_change(
-      new_mu, mu,
-      new_skew, skew,
-      new_sigmas, sigmas,
-      new_gamma, gamma
-      )
+    logliks[t] <- loglik_vargamma_observed(draws, mu, skew, sigmas, gamma)
 
-    if (t %% 50 == 0 & !quiet) {
-      cat(sprintf(
-        "Iteration %d: mean relative change = %.3e\n",
-        t,
-        mean_change
-      ))
+    if(t >= 3) {
+
+      lt_after <- logliks[t]
+      lt <- logliks[t - 1]
+      lt_before <- logliks[t - 2]
+
+      aitken <- (lt_after - lt)/(lt - lt_before)
+
+      linf <- lt + 1/(1 - aitken) * (lt_after - lt)
+
+      converge <- abs(linf - lt_after)
+
+      if(converge < tol) {
+        if(!quiet) message("Converged at iteration ", t)
+        break
+      }
+
+      if (t %% 50 == 0 & !quiet) {
+        cat(sprintf(
+          "Iteration %d: mean relative change = %.3e\n",
+          t,
+          converge
+        ))
+      }
     }
-
-    if (mean_change < tol) {
-      if(!quiet) message("Converged at iteration ", t)
-      break
-    }
-    # update all parameters
-    mu <- new_mu
-    skew <- new_skew
-    sigmas <- new_sigmas
-
-    gamma <- new_gamma
   }
 
   list(mu = mu, skew = skew, sigmas = sigmas, gamma = gamma,

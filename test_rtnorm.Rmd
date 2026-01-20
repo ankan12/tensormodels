@@ -57,9 +57,10 @@ tensor_mahalanobis_plot <- function(draws) {
   vec_dist <- mahalanobis(vec_draws, center = mu_vec, cov = cov(vec_draws))
   
   # scaling factor is divide by number of elements in a draw
-  c_hat <- sum(diag(cov(vec_draws)))/num_elem
+  tensor_dist <- tensor_dist * mean(vec_dist) / mean(tensor_dist)
+  #c_hat <- sum(diag(cov(vec_draws)))/num_elem
   
-  tensor_dist <- tensor_dist / c_hat
+  #tensor_dist <- tensor_dist / c_hat
   
   # plot the distances against each other
   plot <-
@@ -114,46 +115,94 @@ for(i in 1:n) {
 
 # Test rtskewt draws
 ```{r}
+n <- 1e3
+
 rtskewt_draws <- rtskewt(n = n, mu = rand_mu, sigmas = list(s1, s2, s3))
 
-draws <- rtskewt_draws
+mles <- em_est(rtskewt_draws, quiet = FALSE, 
+               max_iter = 5000, model = "skewt")
 
-dim_draws <- dim(draws)
-
-num_elem <- prod(dim_draws[-1])
-
-mles <- em_est(draws, model = "skewt", quiet = FALSE,
-               max_iter = 10000)
-
-centered <- draws
+centered <- rtskewt_draws
 
 for(i in 1:n) {
-  centered[i, , ,] <- #with(mles, (draws[i, , ,] - mu - Ew[i] * skew)/sqrt(Ew[i]))
-    (draws[i, , ,] - mles$mu - mles$Ew[i] * mles$skew)/
-     sqrt(mles$Ew[i]) 
+  centered[i, , ,] <- 
+    (rtskewt_draws[i, , ,] - mles$mu - mles$Ew[i] * mles$skew)/sqrt(mles$Ew[i]) 
 }
 
-tensor_mahalanobis_plot(centered)
+mles_invgauss <- em_est(rtskewt_draws, model = "invgauss", 
+                        quiet = FALSE, max_iter = 5000)
+
+centered_invgauss <- rtskewt_draws
+
+for(i in 1:n) {
+  centered_invgauss[i, , ,] <- 
+    (rtskewt_draws[i, , ,] - mles_invgauss$mu - 
+       mles_invgauss$Ew[i] * mles_invgauss$skew)/sqrt(mles_invgauss$Ew[i]) 
+}
+
+for(i in 1:n) {
+  centered[i, , ,] <- 
+    (rtskewt_draws[i, , ,] - mles$mu - mles$Ew[i] * mles$skew)/sqrt(mles$Ew[i]) 
+}
+
+mles_genhyper <- em_est(rtskewt_draws, model = "genhyper", 
+                        quiet = FALSE, max_iter = 5000)
+
+centered_genhyper <- rtskewt_draws
+
+for(i in 1:n) {
+  centered_genhyper[i, , ,] <- 
+    (rtskewt_draws[i, , ,] - mles_genhyper$mu - 
+       mles_genhyper$Ew[i] * mles_genhyper$skew)/sqrt(mles_genhyper$Ew[i]) 
+}
+
+mles_vargamma <- em_est(rtskewt_draws, model = "vargamma", 
+                        quiet = FALSE, max_iter = 5000)
+
+centered_vargamma <- rtskewt_draws
+
+for(i in 1:n) {
+  centered_vargamma[i, , ,] <- 
+    (rtskewt_draws[i, , ,] - mles_vargamma$mu - 
+       mles_vargamma$Ew[i] * mles_vargamma$skew)/sqrt(mles_vargamma$Ew[i]) 
+}
 ```
 
 
 ```{r}
-#mles_invgauss <- em_est(draws, model = "invgauss", quiet = FALSE,
-                 #max_iter = 1000)
-
-centered_invgauss <- draws
-
-for(i in 1:n) {
-  centered_invgauss[i, , ,] <- 
-   # with(mles_invgauss, (draws[i, , ,] - mu - Ew[i] * skew)/sqrt(Ew[i]))
-    (draws[i, , ,] - mles_invgauss$mu - mles_invgauss$Ew[i] * mles_invgauss$skew)/
-     sqrt(mles_invgauss$Ew[i]) 
-}
-
 tensor_mahalanobis_plot(centered) +
   labs(title = "rtskewt") +
 tensor_mahalanobis_plot(centered_invgauss) +
-  labs(title = "invgauss")
+  labs(title = "invgauss") +
+tensor_mahalanobis_plot(centered_genhyper) +
+  labs(title = "genhyper") +
+tensor_mahalanobis_plot(centered_vargamma) +
+  labs(title = "vargamma") 
+```
+
+
+```{r}
+
+# mle_covar <- kronecker(mles$sigmas[[3]], mles$sigmas[[2]]) |> kronecker(mles$sigmas[[1]])
+# 
+# real_covar <- kronecker(s3, s2) |> kronecker(s1)
+# 
+# mle_covar[1, ]
+# real_covar[1, ]
+
+# tot_sum <- 0
+# 
+# for(i in 1:1000) {
+#   curr_unfold <- k_unfold(as.tensor(rtskewt_draws[i, , ,]), 1)@data
+#   
+#   tot_sum <- tot_sum + (curr_unfold %*% t(curr_unfold))
+# }
+# 
+# tot_sum/(1000*12)
+# 
+# k_unfold(as.tensor(rtskewt_draws), 2)
+
+#mu <- apply(X = rtskewt_draws, MARGIN = 2:(num_dim + 1), FUN = mean)
 ```
 
 

@@ -4,7 +4,7 @@
 \alias{em_est}
 \title{em_est}
 \usage{
-em_est(draws, max_iter = 1000, tol = 1e-06, quiet = TRUE, model)
+em_est(draws, max_iter = 1000, tol = 0.01, quiet = TRUE, model)
 }
 \arguments{
 \item{draws}{An array containing the draws, where the first mode represents

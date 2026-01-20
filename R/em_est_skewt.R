@@ -5,7 +5,7 @@
 #'   covariance matrices, and nu.
 #'
 #' @noRd
-em_est_skewt <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
+em_est_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
 
   # get dim of input
   dims <- dim(draws)[-1]
@@ -17,7 +17,26 @@ em_est_skewt <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
   mu <- apply(X = draws, MARGIN = 2:(num_dim + 1), FUN = mean)
 
   skew <- array(rnorm(prod(dims)), dim = dims)
-  sigmas <- lapply(dims, diag)
+
+  logliks <- rep(0, max_iter)
+
+  sigmas <- vector(mode = "list", length = num_dim)
+
+  for(k in 1:num_dim) {
+    tot_sum <- 0
+    for(i in 1:n) {
+        curr_unfold <- k_unfold(as.tensor(draws[i, , ,] - mu), k)@data
+
+        tot_sum <- tot_sum + (curr_unfold %*% t(curr_unfold))
+    }
+    tot_sum <- tot_sum/(n * prod(dims[-k]))
+
+    tot_sum <- tot_sum/sum(diag(tot_sum))
+
+    sigmas[[k]] <- tot_sum
+  }
+
+  #sigmas <- lapply(dims, diag)
 
   # different params based on model
   nu <- 10
@@ -178,25 +197,34 @@ em_est_skewt <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
 
     # Step 5: Check convergence
 
-   mean_change <- mean_rel_change(
-       new_mu, mu,
-       new_skew, skew,
-       new_sigmas, sigmas,
-       new_nu, nu
-       )
+    logliks[t] <- loglik_skewt_observed(draws, mu, skew, sigmas, nu)
+
+    if(t >= 3) {
+
+      lt_after <- logliks[t]
+      lt <- logliks[t - 1]
+      lt_before <- logliks[t - 2]
+
+      aitken <- (lt_after - lt)/(lt - lt_before)
+
+      linf <- lt + 1/(1 - aitken) * (lt_after - lt)
+
+      converge <- abs(linf - lt_after)
+
+      if(converge < tol) {
+        if(!quiet) message("Converged at iteration ", t)
+        break
+      }
 
     if (t %% 50 == 0 & !quiet) {
       cat(sprintf(
         "Iteration %d: mean relative change = %.3e\n",
         t,
-        mean_change
+        converge
       ))
     }
+  }
 
-    if (mean_change < tol) {
-      if(!quiet) message("Converged at iteration ", t)
-      break
-    }
     # update all parameters
     mu <- new_mu
     skew <- new_skew
@@ -204,7 +232,8 @@ em_est_skewt <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
 
     nu <- new_nu
   }
-  message("Reached max iter ", max_iter)
+
+  if(t == max_iter) message("Reached max iter ", max_iter)
 
   list(mu = mu, skew = skew, sigmas = sigmas, nu = nu,
        Ew = a, Einvw = b, Elogw = c)

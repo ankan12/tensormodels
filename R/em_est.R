@@ -14,7 +14,7 @@
 #'   matrices.
 #'
 #' @export
-em_est <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE, model) {
+em_est <- function(draws, max_iter = 1000, tol = 1e-2, quiet = TRUE, model) {
   if (!model %in% c("skewt", "vargamma", "invgauss", "genhyper")) {
     stop("Not a valid model. Must be skewt, vargamma, invgauss, or genhyper")
   }
