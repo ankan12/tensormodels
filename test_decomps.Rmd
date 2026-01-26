@@ -1,0 +1,118 @@
+---
+title: "test_decomps"
+output: pdf_document
+date: "2026-01-24"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+#mode sizes n_k
+
+
+
+TT_SVD_reconstruct <- function(list_cores) {
+  dims <- length(list_cores)
+  
+  reconstruct <- with(list_cores, nm_prod)
+  
+  reconstruct <- nm_prod(list_cores[[1]], list_cores[[2]], 2, 1)
+  
+  for(i in 3:dims) {
+    reconstruct <- nm_prod(reconstruct, list_cores[[i]], i, 1)
+  }
+  reconstruct
+}
+
+A <- array(1:6000, dim = c(10, 20, 30))
+
+res <- TT_SVD(A, ranks = c(1, 2, 2, 2, 1))
+
+res_acc <- TT_SVD(A, epsilon = 1e-3)
+
+store <- TT_SVD_reconstruct(res_acc)
+
+TTSVD(A_tensor, accuracy = 1e-2) |> TT_SVD_reconstruct()
+
+TT_SVD_reconstruct(TTSVD(A_tensor, accuracy = 1e-1))
+
+nm_prod(res[[1]], res[[2]], 2, 1) |> 
+  nm_prod(res[[3]], 3, 1) |> 
+  nm_prod(res[[4]], 4, 1)
+  
+  
+nm_prod(res_acc[[1]], res_acc[[2]], 2, 1) |> 
+  nm_prod(res_acc[[3]], 3, 1) |> 
+  nm_prod(res[[4]], 4, 1)
+  
+
+C <- A
+
+r <- c(1, 2, 2, 1)
+
+
+
+
+
+
+A_reconstruct <- 
+  nm_prod(list_cores[[1]], list_cores[[2]], 2, 1) |> 
+  nm_prod(list_cores[[3]], 3, 1)
+
+A_reconstruct
+
+(A - A_reconstruct)
+```
+
+
+```{r}
+nm_prod(out.TTSVD$`I-p`, out.TTSVD$`p-J-q`, 2, 1) |> 
+  nm_prod(out.TTSVD$`q-K`, 3, 1)
+```
+
+
+```{r}
+out.TTSVD$`I-p` 
+out.TTSVD$`p-J-q` 
+out.TTSVD$`q-K` 
+```
+
+
+```{r}
+library("rTensor")
+# Tensor data
+dimnames(A) <- list(
+    I=paste0("i", 1:4),
+    J=paste0("j", 1:5),
+    K=paste0("k", 1:6))
+
+A_tensor <- as.tensor(A)
+# TT-ranks
+Ranks <- c(p=2, q=2, r=2)
+# TTSVD
+out.TTSVD <- TTSVD(A_tensor, Ranks)
+
+out.TTSVD$`I-p` |> dim() #2 x 2
+out.TTSVD$`p-J-q` |> dim() #2 x 3 x2
+out.TTSVD$`q-K` |> dim() #2 x 4
+#row x col
+
+
+
+
+nm_prod(out.TTSVD$`I-p`, out.TTSVD$`p-J-q`, 1, 1) |> 
+  nm_prod(out.TTSVD$`q-K`, 1, 1)
+
+
+ttm(out.TTSVD$`I-p` |> matrix(nrow = 2), out.TTSVD$`p-J-q`, 1)
+
+ttm(as.tensor(out.TTSVD$`p-J-q`), out.TTSVD$`I-p`, m = 1) |> 
+  ttm(out.TTSVD$`q-K`, m = 3)
+
+out.TTSVD$`p-J-q`
+
+rTensor::ttm(out.TTSVD$`I-p`, out.TTSVD$`p-J-q`, 1)
+```

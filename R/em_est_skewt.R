@@ -20,18 +20,23 @@ em_est_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
 
   logliks <- rep(0, max_iter)
 
+  # s1 <- matrix(rnorm(4), nrow = 2); s2 <- diag(3); s3 <- matrix(rnorm(16), nrow = 4)
+  # s1 <- crossprod(s1, s1); s3 <- crossprod(s3, s3)
+  #
   sigmas <- vector(mode = "list", length = num_dim)
 
   for(k in 1:num_dim) {
     tot_sum <- 0
+
     for(i in 1:n) {
-        curr_unfold <- k_unfold(as.tensor(draws[i, , ,] - mu), k)@data
+        curr_unfold <- matricization(draws[i, , ,] - mu, k)
 
         tot_sum <- tot_sum + (curr_unfold %*% t(curr_unfold))
     }
-    tot_sum <- tot_sum/(n * prod(dims[-k]))
 
-    tot_sum <- tot_sum/sum(diag(tot_sum))
+    tot_sum <- tot_sum * dims[k]/(n * n_star)
+
+    tot_sum <- tot_sum/(sum(diag(tot_sum))) * dims[k]
 
     sigmas[[k]] <- tot_sum
   }
@@ -39,7 +44,7 @@ em_est_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
   #sigmas <- lapply(dims, diag)
 
   # different params based on model
-  nu <- 10
+  nu <- 4
 
   for (t in 1:max_iter) {
     # Step 2: Update a, b, c depending on expected values
@@ -109,9 +114,9 @@ em_est_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
 
     c <- 1/2 * log(delta_vals / rho) + (log(K_plus) - log(K_minus)) / (2*eps)
 
-    # replace NaN or Inf values
-    b[!is.finite(b)] <- 0
-    c[!is.finite(c)] <- 0
+    #replace NaN or Inf values
+    # b[!is.finite(b)] <- 0
+    # c[!is.finite(c)] <- 0
 
     # Step 3: Update mu, skew, params
     weight_mean <- mean(a) * b - 1
@@ -138,9 +143,6 @@ em_est_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
     update_nu <- function(nu, b, c, n) {
       log(nu / 2) + 1 - digamma(nu / 2) - 1 / n * sum(b + c)
     }
-    update_gamma <- function(gamma, a, c) {
-      log(gamma) + 1 - digamma(gamma) + mean(c) - mean(a)
-    }
 
     new_nu <- uniroot(
       update_nu,
@@ -148,6 +150,8 @@ em_est_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
       b = b,
       c = c,
       n = n)$root
+
+    if(new_nu < 2) new_nu <- 2
 
     scale_prod <- 1
 
@@ -169,7 +173,7 @@ em_est_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
       inv_others <- diag(1)
 
       for (d in rev(other_modes)) {
-        inv_others <- kronecker(inv_others, chol2inv(chol(sigmas[[d]])))
+        inv_others <- kronecker(inv_others, chol2inv(chol(new_sigmas[[d]])))
       }
 
       A_i <- matricization(new_skew, j)
@@ -186,14 +190,30 @@ em_est_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
         fourth <- fourth + a[i] * A_i %*% inv_others %*% t(A_i)
       }
 
-      sigma_j <- n_d / (n * n_star) * (first - second - third + fourth)
+      sigma_j <- n_d/(n * n_star) * (first - second - third + fourth)
 
-      if (j < num_dim) {
+      if (j < num_dim) { # add a bit of error to avoid singularity
         sigma_j <- sigma_j / (sum(diag(sigma_j))) * n_d
+
+        sigma_j <- sigma_j + diag(1e-3, nrow(sigma_j))
       }
 
       new_sigmas[[j]] <- sigma_j
     }
+
+    diff_mu <- max(abs(mu - new_mu))
+    diff_nu <- abs(nu - new_nu)
+    eig1 <- min(eigen(new_sigmas[[1]])$values)
+    eig2 <- min(eigen(new_sigmas[[2]])$values)
+    eig3 <- min(eigen(new_sigmas[[3]])$values)
+
+    #cat("diff_mu =", diff_mu, "  diff_nu =", diff_nu, "\n eigs = ", eig1, " ", eig2, " ", eig3)
+
+    # update all parameters
+    mu <- new_mu
+    skew <- new_skew
+    sigmas <- new_sigmas
+    nu <- new_nu
 
     # Step 5: Check convergence
 
@@ -209,32 +229,37 @@ em_est_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
 
       linf <- lt + 1/(1 - aitken) * (lt_after - lt)
 
-      converge <- abs(linf - lt_after)
+      converge <- abs(linf - lt)
+
+      dlt <- logliks[t] - logliks[t-1]
+
+      #cat("converge = ", converge, "\n")
+
+      #converge_cond <- abs(linf - lt)/n < tol
+
+      #converge_cond2 <- if((lt_after - lt)/n < 1e-6 & diff_mu < 1e-4 & diff_nu < 1e-4)
+      #inc <- lt_after - lt
+
+      #cat("\n Δℓ =", inc, "  Aitken =", converge, "\n")
+
+      converge <- logliks[t] - logliks[t-1]
 
       if(converge < tol) {
         if(!quiet) message("Converged at iteration ", t)
         break
       }
-
-    if (t %% 50 == 0 & !quiet) {
-      cat(sprintf(
-        "Iteration %d: mean relative change = %.3e\n",
-        t,
-        converge
-      ))
     }
-  }
-
-    # update all parameters
-    mu <- new_mu
-    skew <- new_skew
-    sigmas <- new_sigmas
-
-    nu <- new_nu
+    if (t %% 50 == 0 & !quiet) {
+      cat("t=",t," loglik=",logliks[t]," dlt=",dlt,"\n")
+      cat(sprintf("Iteration %d: criterion based on Aitken = %.3e\n", t, converge))
+    }
   }
 
   if(t == max_iter) message("Reached max iter ", max_iter)
 
+  k <- n_star + sum((dims * (dims+1))/2) - (num_dim - 1) + 1
+
   list(mu = mu, skew = skew, sigmas = sigmas, nu = nu,
-       Ew = a, Einvw = b, Elogw = c)
+       Ew = a, Einvw = b, Elogw = c,
+       loglik = logliks[t], BIC = k * log(n) - 2 * logliks[t])
 }

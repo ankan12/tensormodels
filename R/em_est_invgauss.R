@@ -17,12 +17,28 @@ em_est_invgauss <- function(draws, max_iter, tol, quiet = TRUE) {
   mu <- apply(X = draws, MARGIN = 2:(num_dim + 1), FUN = mean)
 
   skew <- array(rnorm(prod(dims)), dim = dims)
-  sigmas <- lapply(dims, diag)
 
   logliks <- rep(0, max_iter)
 
+  sigmas <- vector(mode = "list", length = num_dim)
+
+  for(k in 1:num_dim) {
+    tot_sum <- 0
+    for(i in 1:n) {
+      curr_unfold <- matricization(draws[i, , ,] - mu, k)
+
+      tot_sum <- tot_sum + (curr_unfold %*% t(curr_unfold))
+    }
+
+    tot_sum <- tot_sum * dims[k]/(n * n_star)
+
+    tot_sum <- tot_sum/(sum(diag(tot_sum))) * dims[k]
+
+    sigmas[[k]] <- tot_sum
+  }
+
   # different params based on model
-  kappa <- 10
+  kappa <- 2
 
   for (t in 1:max_iter) {
     # Step 2: Update a, b, c depending on expected values
@@ -148,7 +164,7 @@ em_est_invgauss <- function(draws, max_iter, tol, quiet = TRUE) {
       inv_others <- diag(1)
 
       for (d in rev(other_modes)) {
-        inv_others <- kronecker(inv_others, chol2inv(chol(sigmas[[d]])))
+        inv_others <- kronecker(inv_others, chol2inv(chol(new_sigmas[[d]])))
       }
 
       A_i <- matricization(new_skew, j)
@@ -174,6 +190,14 @@ em_est_invgauss <- function(draws, max_iter, tol, quiet = TRUE) {
       new_sigmas[[j]] <- sigma_j
     }
 
+
+    # update all parameters
+    mu <- new_mu
+    skew <- new_skew
+    sigmas <- new_sigmas
+
+    kappa <- new_kappa
+
     # Step 5: Check convergence
 
     logliks[t] <- loglik_invgauss_observed(draws, mu, skew, sigmas, kappa)
@@ -184,11 +208,17 @@ em_est_invgauss <- function(draws, max_iter, tol, quiet = TRUE) {
       lt <- logliks[t - 1]
       lt_before <- logliks[t - 2]
 
-      aitken <- (lt_after - lt)/(lt - lt_before)
+      #aitken <- (lt_after - lt)/(lt - lt_before)
 
-      linf <- lt + 1/(1 - aitken) * (lt_after - lt)
+      #linf <- lt + 1/(1 - aitken) * (lt_after - lt)
 
-      converge <- abs(linf - lt_after)
+      #converge <- linf - lt
+
+      #converge <- (lt_after - lt) / n
+
+      #print(converge)
+
+      converge <- logliks[t] - logliks[t-1]
 
       if(converge < tol) {
         if(!quiet) message("Converged at iteration ", t)
@@ -197,21 +227,18 @@ em_est_invgauss <- function(draws, max_iter, tol, quiet = TRUE) {
 
       if (t %% 50 == 0 & !quiet) {
         cat(sprintf(
-          "Iteration %d: mean relative change = %.3e\n",
+          "Iteration %d: criterion based on Aitken = %.3e\n",
           t,
           converge
         ))
       }
     }
-
-    # update all parameters
-    mu <- new_mu
-    skew <- new_skew
-    sigmas <- new_sigmas
-
-    kappa <- new_kappa
   }
 
+  k <- n_star + sum((dims * (dims+1))/2) - (num_dim - 1) + 1
+
+
   list(mu = mu, skew = skew, sigmas = sigmas, kappa = kappa,
-       Ew = a, Einvw = b, Elogw = c)
+       Ew = a, Einvw = b, Elogw = c,
+       loglik = logliks[t], BIC = k * log(n) - 2 * logliks[t])
 }

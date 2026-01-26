@@ -27,10 +27,13 @@ loglik_invgauss_observed <- function(draws, mu, skew, sigmas, kappa) {
 
   for(d in length(sigmas):1) {
     kroneck_sigmas <- kronecker(kroneck_sigmas, chol2inv(chol(sigmas[[d]])))
-    all_det <- all_det + (n_star/(2 * nrow(sigmas[[d]]))) * log(det(sigmas[[d]]))
+    all_det <- all_det + (n_star/(2 * nrow(sigmas[[d]]))) *
+               determinant(sigmas[[d]], logarithm = TRUE)$modulus[1]
   }
 
   ve_skew <- matrix(c(skew), nrow = n_star)
+
+  rho <- t(ve_skew) %*% kroneck_sigmas %*% ve_skew
 
   loglik <- 0
 
@@ -38,13 +41,13 @@ loglik_invgauss_observed <- function(draws, mu, skew, sigmas, kappa) {
     ve_xm <- matrix(c(centered[i, , ,]), nrow = n_star)
 
     xm_skew <- t(ve_xm) %*% kroneck_sigmas %*% ve_skew
-    rho <- t(ve_skew) %*% kroneck_sigmas %*% ve_skew
     delta <- t(ve_xm) %*% kroneck_sigmas %*% ve_xm
+
+    x <- sqrt((rho + kappa^2) * (delta + 1))
 
     loglik <- loglik + log(2) - (n_star + 1)/2 * log(2 * pi) - all_det +
                 xm_skew + kappa - (1 + n_star)/4 * log((delta + 1)/(rho + kappa^2)) +
-      log(besselK(sqrt((rho + kappa^2) * (delta + 1)), nu = -(1 + n_star)/2,
-                  expon.scaled = TRUE)) - sqrt((rho + kappa^2) * (delta + 1))
+                log(besselK(x, nu = -(1 + n_star)/2, expon.scaled = TRUE)) - x
   }
   loglik
 }

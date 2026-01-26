@@ -30,6 +30,68 @@ tensor_mahalanobis_plot <- function(draws) {
   centered <- sweep(draws, MARGIN = 2:length(dim_draws), 
                     STATS = sample_mean, FUN = "-")
 
+  centered_flatten <- aperm(centered, perm = c(2:length(dim_draws), 1)) |> as.vector()
+  
+  for(i in 1:n) {
+    centered_curr <- 
+      centered_flatten[(num_elem * (i-1) + 1):
+                       (num_elem * (i-1) + num_elem)] |> 
+      array(dim = dim_draws[-1]) # pull out current draw
+    
+    centered_multiply <- centered_curr 
+    
+    for(j in 1:(length(dim_draws)-1)) { # standardize with sigma estimates
+      centered_multiply <- n_prod(centered_multiply, 
+                                  solve(sample_stats$sigmas[[j]]), j)
+    }
+    
+    tensor_dist[i] <- c(centered_curr) %*% c(centered_multiply)
+  }
+  
+  # compute vector Mahalanobis
+  
+  vec_draws <- matrix(data = draws, nrow = n, ncol = num_elem)
+  
+  mu_vec <- apply(vec_draws, MARGIN = 2, FUN = mean)
+  
+  vec_dist <- mahalanobis(vec_draws, center = mu_vec, cov = cov(vec_draws))
+  
+  # scaling factor is divide by number of elements in a draw
+  tensor_dist <- tensor_dist * mean(vec_dist) / mean(tensor_dist)
+  #c_hat <- sum(diag(cov(vec_draws)))/num_elem
+  
+  #tensor_dist <- tensor_dist / c_hat
+  
+  # plot the distances against each other
+  plot <-
+    tibble("vec" = (vec_dist),
+         "mat" = (tensor_dist)) |> 
+    ggplot() +
+    geom_point(aes(x = vec, y = mat)) +
+    geom_abline(slope = 1, color = "red") +
+    labs(x = "Multivariate", y = "Tensor Variate") +
+    theme_minimal()
+  
+  plot
+}
+
+tensor_mahalanobis_plot_normal <- function(draws) {
+  
+  dim_draws <- dim(draws)
+  
+  num_elem <- prod(dim_draws[-1])
+  
+  sample_stats <- list(mu = array(0, dim = dim_draws[-1]),
+                       sigmas = lapply(dims, diag))
+  
+  # compute tensor Mahalanobis first
+  sample_mean <- sample_stats$mu
+  
+  tensor_dist <- rep(0, n)
+  
+  centered <- sweep(draws, MARGIN = 2:length(dim_draws), 
+                    STATS = sample_mean, FUN = "-")
+
   centered_flatten <- (aperm(centered, perm = c(2:length(dim_draws), 1)) |> c())
   
   for(i in 1:n) {
@@ -81,8 +143,10 @@ tensor_mahalanobis_plot <- function(draws) {
 n <- 1e3
 
 # tensor variate random normal draws
-s1 <- matrix(rnorm(4), nrow = 2); s2 <- matrix(rnorm(9), nrow = 3); s3 <- matrix(rnorm(16), nrow = 4)
-s1 <- crossprod(s1, s1); s2 <- crossprod(s2, s2); s3 <- crossprod(s3, s3)
+s1 <- matrix(rnorm(4), nrow = 2) |> crossprod()
+s2 <- matrix(rnorm(9), nrow = 3) |> crossprod()
+s3 <- matrix(rnorm(16), nrow = 4) |> crossprod()
+
 rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
 
 rtnorm_draws <- rtnorm(n = n, mu = rand_mu, sigmas = list(s1, s2, s3))
@@ -110,27 +174,103 @@ for(i in 1:n) {
 (tensor_mahalanobis_plot(rtnorm_draws) + labs(title = "Tensor")) +
 (tensor_mahalanobis_plot(univar_draws) + labs(title = "Univar")) +
 (tensor_mahalanobis_plot(multivar_draws) + labs(title = "Multivariate"))
+
+# apply(univar_draws, 2:4, matricization) |> dim()
+# 
+# univar_draws |> matricization(2) |> dim()
+# 
+# 
+# rand_draws <- rnorm(n = 1e3 * 2 * 3 * 4) |> 
+#               matrix(nrow = 1e3 * 2, ncol = 3 * 4)
+#  
+# test <- mle_est(rand_draws)
+# 
+# tensor_mahalanobis_plot(rand_draws)
+# 
+#  |> array(dim = c(1e3, 2, 3, 4))
 ```
 
 
 # Test rtskewt draws
 ```{r}
 n <- 1e3
+nu <- 4
 
-rtskewt_draws <- rtskewt(n = n, mu = rand_mu, sigmas = list(s1, s2, s3))
+rand_skew <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
+
+rtskewt_draws <- rtskewt(n = n, mu = rand_mu, 
+                         skew = rand_skew, sigmas = list(s1, s2, s3),
+                         nu = nu)
 
 mles <- em_est(rtskewt_draws, quiet = FALSE, 
-               max_iter = 5000, model = "skewt")
+               max_iter = 5000, model = "skewt", tol = 0.1)
+
+sum(abs(mles$mu - rand_mu))
+sum(abs(mles$skew - rand_skew))
+
+
+orig_data <- 
+  kronecker(s3, s2) |> kronecker(s1) |> 
+  as_tibble() |> 
+  mutate(row = row_number()) |> 
+  pivot_longer(cols = V1:V24) |> 
+  mutate(col = as.numeric(str_remove(name, "V")),
+         origin = "Orig") 
+
+avg_orig <- orig_data$value |> mean()
+
+sim_data <- 
+  kronecker(mles$sigmas[[3]], mles$sigmas[[2]]) |> 
+  kronecker(mles$sigmas[[1]]) |> 
+  as_tibble() |> 
+  mutate(row = row_number()) |> 
+  pivot_longer(cols = V1:V24) |> 
+  mutate(col = as.numeric(str_remove(name, "V")),
+         origin = "Sim") |> 
+  rename(unscale_value =value)
+
+avg_sim <- sim_data$unscale_value |> mean()
+
+sim_data <- sim_data |> mutate(value = unscale_value * avg_orig/avg_sim)
+
+sim_data |> 
+  bind_rows(orig_data) |> 
+  ggplot() +
+  geom_tile(aes(row, col, fill = value), color = "black") +
+  facet_grid(~origin) +
+  scale_fill_viridis_c() +
+  theme_minimal() +
+  labs(x = "Row", y = "Col")
+
+# true_mean <- rand_mu + (nu)/(nu-2) * rand_skew
+# model_mean <- with(mles, mu + (nu)/(nu-2) * skew)
+# sample_mean <- apply(rtskewt_draws, 2:4, mean)
+```
+
+
+
+```{r}
+#mles$nu
+
+mles_invgauss <- em_est(rtskewt_draws, model = "invgauss", 
+                        quiet = FALSE, max_iter = 5000, tol = 0.1)
+
+mles$loglik
+mles_invgauss$loglik
+
+mles$BIC
+mles_invgauss$BIC
 
 centered <- rtskewt_draws
 
 for(i in 1:n) {
   centered[i, , ,] <- 
-    (rtskewt_draws[i, , ,] - mles$mu - mles$Ew[i] * mles$skew)/sqrt(mles$Ew[i]) 
+    (rtskewt_draws[i, , ,] - mles$mu - mles$Ew[i] * mles$skew)/sqrt(mles$Ew[i])
 }
 
-mles_invgauss <- em_est(rtskewt_draws, model = "invgauss", 
-                        quiet = FALSE, max_iter = 5000)
+
+
+mles_invgauss$BIC
 
 centered_invgauss <- rtskewt_draws
 
@@ -140,10 +280,142 @@ for(i in 1:n) {
        mles_invgauss$Ew[i] * mles_invgauss$skew)/sqrt(mles_invgauss$Ew[i]) 
 }
 
-for(i in 1:n) {
-  centered[i, , ,] <- 
-    (rtskewt_draws[i, , ,] - mles$mu - mles$Ew[i] * mles$skew)/sqrt(mles$Ew[i]) 
+rtinvgauss_draws <- rtinvgauss(n = n, mu = rand_mu, 
+                               skew = rand_skew, sigmas = list(s1, s2, s3))
+
+```
+
+
+```{r}
+compute_resids <- function(draws, fit) {
+  n <- dim(draws)[1]
+  dims <- dim(draws)[-1]
+  D <- length(dims)
+  
+  # Precompute Sigma^{-1/2} factors for each mode
+  inv_sqrt <- vector("list", D)
+  
+  for (d in 1:D) {
+    U <- chol(fit$sigmas[[d]])                 # upper, S = t(U) %*% U
+    inv_sqrt[[d]] <- forwardsolve(t(U), diag(nrow(U)))  # solve(t(U))
+  }
+  
+  Z_all <- array(NA_real_, dim = dim(draws))  # same shape as draws
+  
+  for (i in 1:n) {
+    Zi <- (draws[i, , , ] - fit$mu) - fit$Ew[i] * fit$skew
+    Zi <- Zi/sqrt(fit$Ew[i])
+  
+    for (d in 1:D) {
+      Zi <- n_prod(Zi, inv_sqrt[[d]], d)   # <- Sigma^{-1/2}, not Sigma^{-1}
+    }
+  
+    Z_all[i, , , ] <- Zi
+  }
+  
+  Z_all
 }
+
+
+val1 <- compute_resids(rtskewt_draws, mles) |> c()
+val2 <- compute_resids(rtskewt_draws, mles_invgauss) |> c()
+
+(sort(val1) - sort(val2)) |> 
+  as_tibble() |> 
+  ggplot() +
+    geom_histogram(aes(x = value), color = "black", fill = "pink") +
+    #geom_function(fun = dnorm, color = "red") +
+    #facet_wrap(~mod) +
+    theme_minimal()
+
+val1[1, , , ]
+val2[1, , ,]
+
+bind_rows(compute_resids(rtskewt_draws, mles) |> c() |> as_tibble() |> 
+            mutate(mod = "rtskewt"),
+          compute_resids(rtskewt_draws, mles_invgauss) |> c() |> as_tibble() |>
+            mutate(mod = "invgauss")) |> 
+    ggplot() +
+    geom_histogram(aes(x = value, y = after_stat(density)), color = "black", fill = "pink") +
+    geom_function(fun = dnorm, color = "red") +
+    facet_wrap(~mod) +
+    theme_minimal()
+  
+```
+
+
+```{r}
+Z <- rtskewt_draws
+  
+for(i in 1:n) {
+  Z[i, , ,] <- (rtskewt_draws[i, , , ] - mles$mu) - mles$Ew[i] * mles$skew
+  Z[i, , ,] <- Z[i]/sqrt(mles$Ew[i])
+  
+  for(d in 1:3) {
+    Z[i, , ,] <- n_prod(Z[i, , ,], chol2inv(chol(mles$sigmas[[d]])), d) 
+  }
+}
+
+
+
+mles$Ew |> 
+  as_tibble() |> 
+  ggplot() +
+  geom_histogram(aes(x = value, y = after_stat(density)), color = "black", fill = "pink") +
+  #geom_function(fun = dnorm, color = "red") +
+  theme_minimal()
+```
+
+
+```{r}
+whiten_residuals <- function(draws, fit) {
+  n <- dim(draws)[1]
+  D <- length(dim(draws)) - 1
+  
+  out <- draws
+  for (i in 1:n) {
+    V <- (draws[i,,,] - fit$mu - fit$Ew[i] * fit$skew) / sqrt(fit$Ew[i])
+
+    # whiten by Δ_d^{-1/2}
+    for (d in rev(1:D)) {
+      #R <- chol(fit$sigmas[[d]])          # Δ_d^{1/2}
+      V <- n_prod(V, chol2inv(chol(fit$sigmas[[d]])), d)  # multiply by Δ_d^{-1/2}
+    }
+    out[i,,,] <- V
+  }
+  out
+}
+
+Z_skewt <- whiten_residuals(rtskewt_draws, mles)
+Z_invgauss <- whiten_residuals(rtskewt_draws, mles_invgauss)
+
+Z_skewt |> 
+  c() |> 
+  as_tibble() |>   
+  #mutate(value_sq = value^2) |> 
+  ggplot() +
+  geom_histogram(aes(x = value, y = after_stat(density)), color = "black", fill = "pink") +
+  #geom_function(fun = dnorm, color = "red") +
+  theme_minimal()
+#BIC=−2ℓ(θ^)+klogn
+
+Z_invgauss |> 
+  c() |> 
+  as_tibble() |> 
+  ggplot() +
+  geom_histogram(aes(x = value), color = "black", fill = "pink") +
+  theme_minimal()
+
+
+tensor_mahalanobis_plot_normal(Z_skewt) +
+  labs(title = "rtskewt") +
+tensor_mahalanobis_plot_normal(Z_invgauss) +
+  labs(title = "invgauss") 
+
+# for(i in 1:n) {
+#   centered[i, , ,] <- 
+#     (rtskewt_draws[i, , ,] - mles$mu - mles$Ew[i] * mles$skew)/sqrt(mles$Ew[i]) 
+# }
 
 mles_genhyper <- em_est(rtskewt_draws, model = "genhyper", 
                         quiet = FALSE, max_iter = 5000)
@@ -170,10 +442,12 @@ for(i in 1:n) {
 
 
 ```{r}
-tensor_mahalanobis_plot(centered) +
+tensor_mahalanobis_plot_normal(centered) +
   labs(title = "rtskewt") +
-tensor_mahalanobis_plot(centered_invgauss) +
+tensor_mahalanobis_plot_normal(centered_invgauss) +
   labs(title = "invgauss") +
+  xlim(0, 300) +
+  ylim(0, 1000)
 tensor_mahalanobis_plot(centered_genhyper) +
   labs(title = "genhyper") +
 tensor_mahalanobis_plot(centered_vargamma) +
@@ -183,12 +457,12 @@ tensor_mahalanobis_plot(centered_vargamma) +
 
 ```{r}
 
-# mle_covar <- kronecker(mles$sigmas[[3]], mles$sigmas[[2]]) |> kronecker(mles$sigmas[[1]])
-# 
-# real_covar <- kronecker(s3, s2) |> kronecker(s1)
-# 
-# mle_covar[1, ]
-# real_covar[1, ]
+mle_covar <- kronecker(mles$sigmas[[3]], mles$sigmas[[2]]) |> kronecker(mles$sigmas[[1]])
+
+real_covar <- kronecker(s3, s2) |> kronecker(s1)
+
+mle_covar[1, ]
+real_covar[1, ] / 3
 
 # tot_sum <- 0
 # 
@@ -390,6 +664,7 @@ test_draws |> dim()
 # tensor variate random normal draws
 s1 <- matrix(rnorm(4), nrow = 2); s2 <- diag(3); s3 <- matrix(rnorm(16), nrow = 4)
 s1 <- crossprod(s1, s1); s3 <- crossprod(s3, s3)
+
 rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
 
 rtnorm_draws <- rtnorm(n = n, mu = rand_mu, sigmas = list(s1, s2, s3))
