@@ -9,7 +9,8 @@
 #' If ranks are not provided, will compute them based on \eqn{\delta}-truncation
 #'
 #' @return A list of the tensor-train cores used to reconstruct the array.
-#' @details See I. V. Oseledets, (2011). Tensor-Train Decomposition. SIAM J. SCI. COMPUT. for more details.
+#' @details See I. V. Oseledets, (2011). Tensor-Train Decomposition.
+#' SIAM J. SCI. COMPUT. for more details.
 #'
 #' @examples
 #' A <- array(1:24, dim = c(2, 3, 4))
@@ -31,7 +32,8 @@ tt_svd <- function(A, ranks = NULL, epsilon = NULL) {
   ranks <- c(1, ranks)
 
   if(!is.null(ranks)) {
-    if(length(ranks) != (order+1)) stop("Ranks should be of length order - 1.")
+    if(length(ranks) != (order+1)) stop("Ranks should be the same length as the
+                                        order of A subtracted by 1.")
     for(k in 1:(order-1)) {
       C <- matrix(as.vector(C), nrow = ranks[k] * dims[k])
 

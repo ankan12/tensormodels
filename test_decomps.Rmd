@@ -10,9 +10,211 @@ knitr::opts_chunk$set(echo = TRUE)
 
 
 ```{r}
-#mode sizes n_k
+A <- array(1:24, dim = c(2, 3, 4))
+
+ranks <- c(2, 2, 2)
+
+init <- hosvd(A, ranks)
+
+list_mats <- init$mats
+
+G1 <- t(list_mats[[1]]) %*% list_mats[[1]]
+G2 <- t(list_mats[[2]]) %*% list_mats[[2]]
+G3 <- t(list_mats[[3]]) %*% list_mats[[3]]
+
+G1 * G2 * G3
+
+G3 * G2 * G1
+
+#A is IxK
+#B is JxK
+
+#(IJ x K)
+
+C
+D
+I <- 3; J <- 3; K <- 3
+
+khatri_rao <- function(A, B) {
+  I <- nrow(A)
+  K <- ncol(A)
+  J <- nrow(B)
+  
+  if(ncol(A) != ncol(B)) stop("Columns of A and B must be same size.")
+  
+  res <- matrix(nrow = I*J, ncol = K)
+  
+  for(k in 1:K) {
+    res[, k] <- kronecker(C[, k], D[, k]) 
+  }
+  
+  res
+}
+
+khatri_rao(C, D)
+
+#3x3
+#3x3
 
 
+C <- matrix(1:9, nrow = 3, byrow = TRUE)
+D <- matrix(1:9, nrow = 3)
+
+kronecker(C, D) 
+#2x2
+#2x3
+#2x4
+```
+
+
+```{r}
+
+cp_als <- function(A) {
+  dims <- dim(A)
+  order <- length(dims)
+    
+  list_mats <- hosvd(A, ranks = c(2, 2, 2))$mats
+  
+  for(k in 1:order) {
+    dims_multiply <- setdiff(1:order, k)
+    dims_backward <- rev(dims_multiply)
+    
+    V <- t(list_mats[[dims_multiply[1]]]) %*% list_mats[[dims_multiply[1]]]
+    An <- list_mats[[dims_backward[1]]]
+    
+    for(k_inner in dims_multiply[2:length(dims_multiply)]) {
+       V <- V * (t(list_mats[[k_inner]]) %*% list_mats[[k_inner]])
+    }
+    
+    for(curr in dims_backward[-1]) {
+      An <- khatri_rao(An, list_mats[[curr]]) 
+    }
+    
+    Xn <- matricization(A, k)
+  
+    An <- Xn %*% An %*% MASS::ginv(V)  
+  
+    lambda <- sqrt(colSums(An^2))
+  
+    An <- sweep(An, 2, lambda, "/")
+    
+    list_mats[[k]] <- An
+  }
+  
+  A_hat <- array(0, dim = dims)
+  
+  for(r in 1:2) {
+    curr <- outer(list_mats[[1]][, r], list_mats[[2]][, r])
+    
+    for(k in 3:order) {
+      curr <- outer(curr, list_mats[[k]][, r])
+    }
+    
+    A_hat <- A_hat + lambda[r] * curr
+    
+    A_hat
+  }
+}
+
+A <- array(1:24, dim = c(2, 3, 4))
+
+
+```
+
+
+```{r}
+lambda[r] *
+  outer(list_mats[[1]][, r], list_mats[[2]][, r]) |> 
+  outer(list_mats[[3]][, r])
+
+n_prod(list_mats[[1]], list_mats[[2]], 2) |> 
+  n_prod(list_mats[[3]], 2)
+
+list_mats
+
+lambda
+
+lambda
+
+An
+```
+
+
+```{r}
+for(k in 1:order) {
+  V <- t(list_mats[[1]]) %*% list_mats[[1]]
+  An <- list_mats[[order]]
+  
+  for(k_inner in setdiff(2:order, k)) {
+    V <- V * (t(list_mats[[k_inner]]) %*% list_mats[[k_inner]])
+  }
+  
+  for(curr in setdiff((order-1):1, k)) {
+    An <- khatri_rao(An, list_mats[[curr]]) 
+  }
+  An <- An %*% MASS::ginv(V)  
+  Xn <- matricization(A, k)
+  
+  Mn <- Xn %*% An
+}
+#2x12
+
+#2x2
+#3x2
+#4x2
+
+#IJxK
+
+#6x2  4x2
+#24x2
+
+hosvd <- function(A, ranks = NULL) {
+  dims <- dim(A)
+  order <- length(dims)
+  
+  list_cores <- vector(mode = "list", length = order)
+  
+  for(k in 1:order) {
+    A_mat <- matricization(A, k)
+    
+    A_mat_svd <- svd(A_mat)
+    
+    list_cores[[k]] <- A_mat_svd$u[, 1:ranks[k], drop = FALSE]
+  }
+  
+  G_core <- 
+    n_prod(A, t(list_cores[[1]]), 1) |>
+    n_prod(t(list_cores[[2]]), 2) |> 
+    n_prod(t(list_cores[[3]]), 3)
+
+  list(G = G_core, mats = list_cores)
+}
+
+my_hosvd <- hosvd(A, ranks = c(2, 2, 2))
+rten_hosvd <- rTensor::hosvd(as.tensor(A), ranks = c(2, 2, 2))
+
+rten_hosvd$est
+
+hosvd_reconstruct(my_hosvd)
+
+my_hosvd$G
+rten_hosvd$Z
+
+my_hosvd$mats[[3]]
+rten_hosvd$U[[3]]
+
+A <- array(1:24, dim = c(2, 3, 4))
+
+res <- hosvd(A, ranks = c(2, 2, 2))
+
+hosvd_reconstruct(res)
+
+n_prod(list_cores[[1]], list_cores[[2]], 1) |> 
+  n_prod(list_cores[[1]], list_cores[[2]], 1)
+
+n_prod(G_core, list_cores[[1]], 1) |>
+  n_prod(list_cores[[2]], 2) |> 
+  n_prod(list_cores[[3]], 3)
 
 TT_SVD_reconstruct <- function(list_cores) {
   dims <- length(list_cores)

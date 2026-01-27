@@ -5,20 +5,19 @@
 #' @param list_cores A list of cores generated from [tt_svd()]
 #'
 #' @return The reconstructed tensor generated from the tensor-train decomposition.
-#' @details See I. V. Oseledets, (2011). Tensor-Train Decomposition. SIAM J. SCI. COMPUT. for more details.
+#' @details See I. V. Oseledets, (2011). Tensor-Train Decomposition.
+#' SIAM J. SCI. COMPUT. for more details.
 #'
 #' @examples
 #' A <- array(1:24, dim = c(2, 3, 4))
 #' res <- tt_svd(A, ranks = c(2, 2, 2))
 #' tt_svd_reconstruct(res)
 #'
-#' @seealso [tt_svd_reconstruct()] to reconstruct the tensor from the decomposed parts.
+#' @seealso [tt_svd()] to create the list of cores from the tensor-train decomposition.
 #'
 #' @export
 tt_svd_reconstruct <- function(list_cores) {
   dims <- length(list_cores)
-
-  reconstruct <- with(list_cores, nm_prod)
 
   reconstruct <- nm_prod(list_cores[[1]], list_cores[[2]], 2, 1)
 

@@ -22,7 +22,8 @@ A list of the tensor-train cores used to reconstruct the array.
 Computes the tensor-train decomposition of a tensor using the SVD.
 }
 \details{
-See I. V. Oseledets, (2011). Tensor-Train Decomposition. SIAM J. SCI. COMPUT. for more details.
+See I. V. Oseledets, (2011). Tensor-Train Decomposition.
+SIAM J. SCI. COMPUT. for more details.
 }
 \examples{
 A <- array(1:24, dim = c(2, 3, 4))

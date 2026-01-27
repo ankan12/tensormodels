@@ -16,7 +16,8 @@ The reconstructed tensor generated from the tensor-train decomposition.
 Computes the approximated tensor from a tensor-train decomposition.
 }
 \details{
-See I. V. Oseledets, (2011). Tensor-Train Decomposition. SIAM J. SCI. COMPUT. for more details.
+See I. V. Oseledets, (2011). Tensor-Train Decomposition.
+SIAM J. SCI. COMPUT. for more details.
 }
 \examples{
 A <- array(1:24, dim = c(2, 3, 4))
@@ -25,5 +26,5 @@ tt_svd_reconstruct(res)
 
 }
 \seealso{
-\code{\link[=tt_svd_reconstruct]{tt_svd_reconstruct()}} to reconstruct the tensor from the decomposed parts.
+\code{\link[=tt_svd]{tt_svd()}} to create the list of cores from the tensor-train decomposition.
 }
