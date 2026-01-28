@@ -38,10 +38,11 @@ hosvd <- function(A, ranks = NULL) {
     list_cores[[k]] <- A_mat_svd$u
   }
 
-  G_core <-
-    n_prod(A, t(list_cores[[1]]), 1) |>
-    n_prod(t(list_cores[[2]]), 2) |>
-    n_prod(t(list_cores[[3]]), 3)
+  G_core <- n_prod(A, t(list_cores[[1]]), 1)
+
+  for(k_mult in 2:order) {
+    G_core <- n_prod(G_core, t(list_cores[[k_mult]]), k_mult)
+  }
 
   list(G = G_core, mats = list_cores)
 }
