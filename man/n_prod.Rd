@@ -20,14 +20,14 @@ An array: the result of the n-mode product.
 Compute the n-mode product of a tensor with a matrix.
 }
 \details{
-The $n$-mode matrix product of a tensor
-$\tensor{A} \in \field{k}^{I_1 \times I_2 \times ... \times I_n}$
-with a matrix $\mat{U} \in \field{k}^{J \times I_n}$ is
-$$(\tensor{A} \times_n \mat{U}) \in
-\field{k}^{I_1 \times ... \times I_{n-1} \times J \times I_{n+1} \times ... \times I_N}$$
-with entries $$(\tensor{A} \times_n \mat{U})\emph{{i_1, ..., i}{n-1}, j, i_{n+1}, ... I_N} =
-\sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_N} u_{j, i_n}.$$
-The tensor and matrix share one mode in common, denoted here as $I_n$.
+The \eqn{n}-mode matrix product of a tensor
+\eqn{\tensor{A} \in \field{k}^{I_1 \times I_2 \times ... \times I_n}}
+with a matrix \eqn{\mat{U} \in \field{k}^{J \times I_n}} is
+\deqn{(\tensor{A} \times_n \mat{U}) \in
+         \field{k}^{I_1 \times ... \times I_{n-1} \times J \times I_{n+1} \times ... \times I_N}}
+with entries \deqn{(\tensor{A} \times_n \mat{U})_{i_1, ..., i_{n-1}, j, i_{n+1}, ... I_N} =
+         \sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_N} u_{j, i_n}.}
+The tensor and matrix share one mode in common, denoted here as \en{I_n}.
 This operation is also called the tensor times matrix product.
 }
 \examples{

@@ -22,11 +22,11 @@ hosvd_reconstruct <- function(hosvd_cores) {
 
   mats <- hosvd_cores$mats
 
-  dims <- length(mats)
+  order <- length(mats)
 
   reconstruct <- n_prod(G_core, mats[[1]], 1)
 
-  for(i in 2:dims) {
+  for(i in 2:order) {
     reconstruct <- n_prod(reconstruct, mats[[i]], i)
   }
   reconstruct

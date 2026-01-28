@@ -17,11 +17,11 @@
 #'
 #' @export
 tt_svd_reconstruct <- function(list_cores) {
-  dims <- length(list_cores)
+  order <- length(list_cores)
 
   reconstruct <- nm_prod(list_cores[[1]], list_cores[[2]], 2, 1)
 
-  for(i in 3:dims) {
+  for(i in 3:order) {
     reconstruct <- nm_prod(reconstruct, list_cores[[i]], i, 1)
   }
   reconstruct
