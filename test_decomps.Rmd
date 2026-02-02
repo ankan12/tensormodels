@@ -6,12 +6,117 @@ date: "2026-01-24"
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+conflicted::conflict_prefer_all("tensormodels", "rTensor")
+```
+
+
+```{r}
+library(bench)
+set.seed(123)
+
+dims <- c(30, 40, 20)   # adjust as needed
+R    <- 20
+
+A <- array(rnorm(prod(dims)), dim = dims)
+
+#A <- array(1:24, dim = c(2, 3, 4))
+
+invisible(cp(A, R = R, max_iter = 5))
+invisible(cp_c(A, R = R, max_iter = 5))
+```
+
+
+```{r}
+bm <- bench::mark(
+  cp_R = cp(
+    A,
+    R = R,
+    max_iter = 400,
+    tol = 1e-4
+  ),
+  cp_Cpp = cp_c(
+    A,
+    R = R,
+    max_iter = 400,
+    tol = 1e-4
+  ),
+  iterations = 5,
+  check = FALSE
+)
+
+bm
+
+rec_R  <- cp_reconstruct(cp(A, R = R, max_iter = 3000))
+rec_C  <- cp_reconstruct(cp_c(A, R = R, max_iter = 3000))
+
+rel_err <- function(X, Y) {
+  sqrt(sum((X - Y)^2)) / sqrt(sum(X^2))
+}
+
+rel_err(rec_R, rec_C)
+
+(rec_R - rec_C) |> 
+  c() |> 
+  as_tibble() |> 
+  ggplot() +
+  geom_histogram(aes(x = value), color = "black", fill = "pink", bins = 40) +
+  theme_minimal()
+
+
+(A - rec_C) |> 
+  c() |> 
+  as_tibble() |> 
+  ggplot() +
+  geom_histogram(aes(x = value), color = "black", fill = "pink", bins = 40) +
+  theme_minimal()
+
+(A - rec_R) |> 
+  c() |> 
+  as_tibble() |> 
+  ggplot() +
+  geom_histogram(aes(x = value), color = "black", fill = "pink", bins = 40) +
+  theme_minimal()
 ```
 
 
 ```{r}
 A <- array(1:24, dim = c(2, 3, 4))
 
+cp_res <- cp(A, R = 2, max_iter = 25, tol = 1e-5)
+cp_reconstruct(cp_res)
+
+exp <-
+  list(lambda = c(1, 2),
+     mats = list(diag(2), 
+                 matrix(c(1, 0, 1, 2, 1, 0), nrow = 3),
+                 matrix(c(1, 0, 1, 2, 0, 1, 1, 1), nrow = 4))) |> 
+  cp_reconstruct()
+
+cp(exp, R = 2, tol = 1e-5) 
+
+cp_res$lambda
+cp_res$mats[[1]]
+
+res <- rTensor::cp(as.tensor(A), num_components = 2)
+
+res$lambdas
+res$U[[1]]
+
+res$est
+
+hosvd_res <- hosvd(A, ranks = c(2, 2, 2))
+hosvd_reconstruct(hosvd_res)
+
+tt_res <- tt(A, ranks = c(2, 2, 2))
+tt_reconstruct(tt_res)
+
+tucker_res <- tucker(A, ranks = c(2, 2, 2))
+tucker_reconstruct(tucker_res)
+```
+
+
+```{r}
 ranks <- c(2, 2, 2)
 
 conflicted::conflict_prefer_all("tensormodels", "rTensor")

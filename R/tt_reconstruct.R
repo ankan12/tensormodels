@@ -1,8 +1,8 @@
-#' tt_svd_reconstruct
+#' tt_reconstruct
 #'
 #' Computes the approximated tensor from a tensor-train decomposition.
 #'
-#' @param list_cores A list of cores generated from [tt_svd()]
+#' @param list_cores A list of cores generated from [tt()]
 #'
 #' @return The reconstructed tensor generated from the tensor-train decomposition.
 #' @details See I. V. Oseledets, (2011). Tensor-Train Decomposition.
@@ -13,10 +13,10 @@
 #' res <- tt_svd(A, ranks = c(2, 2, 2))
 #' tt_svd_reconstruct(res)
 #'
-#' @seealso [tt_svd()] to create the list of cores from the tensor-train decomposition.
+#' @seealso [tt()] to create the list of cores from the tensor-train decomposition.
 #'
 #' @export
-tt_svd_reconstruct <- function(list_cores) {
+tt_reconstruct <- function(list_cores) {
   order <- length(list_cores)
 
   reconstruct <- nm_prod(list_cores[[1]], list_cores[[2]], 2, 1)

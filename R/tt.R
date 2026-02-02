@@ -1,4 +1,4 @@
-#' tt_svd
+#' tt
 #'
 #' Computes the tensor-train decomposition of a tensor using the SVD.
 #'
@@ -16,43 +16,40 @@
 #' A <- array(1:24, dim = c(2, 3, 4))
 #' res <- tt_svd(A, ranks = c(2, 2, 2))
 #'
-#' @seealso [tt_svd_reconstruct()] to reconstruct the tensor from the decomposed parts.
+#' @seealso [tt_reconstruct()] to reconstruct the tensor from the decomposed parts.
 #'
 #' @export
-tt_svd <- function(A, ranks = NULL, epsilon = NULL) {
-  if(is.null(ranks) & is.null(epsilon)) stop("Provide ranks or epsilon.")
+tt <- function(A, ranks, epsilon, method = "svd") {
+  if(missing(ranks) & missing(epsilon)) stop("Provide ranks or epsilon.")
 
   dims <- dim(A)
   order <- length(dims)
 
   list_cores <- vector(mode = "list", length = order)
-
   C <- A
 
-  ranks <- c(1, ranks)
+  if(!missing(ranks)) {
+    ranks <- c(1, ranks)
 
-  if(!is.null(ranks)) {
     if(length(ranks) != (order+1)) stop("Ranks should be the same length as the
                                         order of A subtracted by 1.")
     for(k in 1:(order-1)) {
       C <- matrix(as.vector(C), nrow = ranks[k] * dims[k])
 
-      C_svd <- svd(C)
+      C_svd <- svd(C, nu = ranks[k + 1], nv = ranks[k + 1])
 
-      U <- C_svd$u[, 1:ranks[k+1], drop = FALSE]
-      d <- C_svd$d[1:ranks[k+1]]
-      V <- C_svd$v[, 1:ranks[k+1], drop = FALSE]
+      U <- C_svd$u
+      d <- C_svd$d
+      V <- C_svd$v
 
-      list_cores[[k]] <- array(U, dim = c(ranks[k], dims[k], ranks[k+1]))
-
-      if(k == 1) list_cores[[k]] <- matrix(U, nrow = dims[k])
+      list_cores[[k]] <- drop(array(U, dim = c(ranks[k], dims[k], ranks[k+1])))
 
       C <- diag(d, nrow = ranks[k+1], ncol = ranks[k+1]) %*% t(V)
     }
   }
 
-  else if(!is.null(epsilon)) {
-    A_fnorm <- sqrt(sum(as.vector(A)^2))
+  else if(!missing(epsilon)) {
+    A_fnorm <- frob_norm(A)
 
     delta <- (epsilon)/(sqrt(order - 1)) * A_fnorm
 
@@ -74,9 +71,7 @@ tt_svd <- function(A, ranks = NULL, epsilon = NULL) {
       d <- C_svd$d[1:r_delta]
       V <- C_svd$v[, 1:r_delta, drop = FALSE]
 
-      list_cores[[k]] <- array(U, dim = c(r_delta_past, dims[k], r_delta))
-
-      if(k == 1) list_cores[[k]] <- matrix(U, nrow = dims[k])
+      list_cores[[k]] <- drop(array(U, dim = c(r_delta_past, dims[k], r_delta)))
 
       C <- diag(d, nrow = r_delta, ncol = r_delta) %*% t(V)
 
@@ -88,3 +83,4 @@ tt_svd <- function(A, ranks = NULL, epsilon = NULL) {
 
   list_cores
 }
+

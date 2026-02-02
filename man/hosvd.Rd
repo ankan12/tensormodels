@@ -4,7 +4,7 @@
 \alias{hosvd}
 \title{hosvd}
 \usage{
-hosvd(A, ranks = NULL)
+hosvd(A, ranks)
 }
 \arguments{
 \item{A}{An array containing the tensor to be decomposed.}

@@ -1,8 +1,8 @@
-#' cp_als_reconstruct
+#' cp_reconstruct
 #'
 #' Computes the approximated tensor from a canonical polyadic decomposition.
 #'
-#' @param list_cores A list of cores generated from [cp_als()]
+#' @param list_cores A list of cores generated from [cp()]
 #'
 #' @return The reconstructed tensor generated from the canonical polyadic decomposition.
 #' @details See T. Kolda, B. Bader, "Tensor decomposition and applications".
@@ -13,10 +13,10 @@
 #' res <- cp_als(A, R = 2)
 #' cp_als_reconstruct(res)
 #'
-#' @seealso [hosvd()] to create the list of cores from the higher-order SVD.
+#' @seealso [cp()] to create the list of cores from the higher-order SVD.
 #'
 #' @export
-cp_als_reconstruct <- function(cp_als_list) {
+cp_reconstruct <- function(cp_als_list) {
   lambda <- cp_als_list$lambda
 
   mats <- cp_als_list$mats

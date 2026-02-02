@@ -17,8 +17,8 @@
 #' @seealso [hosvd_reconstruct()] to reconstruct the tensor from the decomposed parts.
 #'
 #' @export
-hosvd <- function(A, ranks = NULL) {
-  if(is.null(ranks)) stop("Must provide a vector of ranks.")
+hosvd <- function(A, ranks) {
+  if(missing(ranks)) stop("Must provide a vector of ranks.")
 
   dims <- dim(A)
   order <- length(dims)

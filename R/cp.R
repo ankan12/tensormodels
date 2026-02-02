@@ -1,4 +1,4 @@
-#' cp_als
+#' cp
 #'
 #' Computes the canonical polyadic decomposition of a tensor using
 #' the alternate least squares algorithm.
@@ -18,10 +18,10 @@
 #' A <- array(1:24, dim = c(2, 3, 4))
 #' (res <- cp_als(A, ranks = c(2, 2, 2)))
 #'
-#' @seealso [cp_als_reconstruct()] to reconstruct the tensor from the decomposed parts.
+#' @seealso [cp_reconstruct()] to reconstruct the tensor from the decomposed parts.
 #'
 #' @export
-cp_als <- function(A, R = 2, max_iter = 2000, tol = 1e-3) {
+cp <- function(A, R = 2, max_iter = 2000, tol = 1e-3, method = "ALS") {
   dims <- dim(A)
   order <- length(dims)
 
@@ -55,7 +55,7 @@ cp_als <- function(A, R = 2, max_iter = 2000, tol = 1e-3) {
 
       list_mats[[k]] <- An
     }
-    recon_A <- cp_als_reconstruct(list(lambda = lambda, mats = list_mats))
+    recon_A <- cp_reconstruct(list(lambda = lambda, mats = list_mats))
 
     conv <- frob_norm(A - recon_A) / frob_norm(A)
 
