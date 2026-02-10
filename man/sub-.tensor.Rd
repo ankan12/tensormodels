@@ -19,3 +19,7 @@ A tensor that was subset.
 \description{
 Subset a tensor.
 }
+\examples{
+A <- tensor(1:24, dim = c(2, 3, 4))
+A[1, ]
+}

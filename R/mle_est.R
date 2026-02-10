@@ -24,11 +24,18 @@ mle_est <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
   num_dim  <- length(all_dims)
   n <- dim(data)[1]
 
-  if (num_dim == 1) { #univar case
-    n <- length(data)
+  if (num_dim == 1) { #vector case
+    mu <- apply(data, 2, mean)
+    sigma <- cov(data)
+    #mu <- mean(data)
+    #sigma <- var(data)
+    return(list(mu = mu, sigmas = list(matrix(sigma, ncol = 1))))
+  }
+
+  if(num_dim == 0) {
     mu <- mean(data)
     sigma <- var(data)
-    return(list(mu = mu, sigmas = list(matrix(sigma, 1, 1))))
+    return(list(mu = mu, sigmas = list(matrix(sigma, ncol = 1))))
   }
 
   #center input data

@@ -4,7 +4,7 @@
 \alias{tensor}
 \title{tensor}
 \usage{
-tensor(data, dims)
+tensor(data, dim = dim(data))
 }
 \arguments{
 \item{data}{A vector containing data for the tensor.}

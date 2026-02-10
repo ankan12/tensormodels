@@ -11,10 +11,9 @@
 #' (A <- tensor(1:24, dim = c(2, 3, 4)))
 #'
 #' @export
-tensor <- function(data, dims) {
-  curr_tensor <- array(data = data, dim = dims)
-
-  attr(curr_tensor, "class") <- "tensor"
-
-  curr_tensor
+tensor <- function(data, dim = dim(data)) {
+  structure(
+    array(data = data, dim = dim),
+    class = "tensor"
+  )
 }

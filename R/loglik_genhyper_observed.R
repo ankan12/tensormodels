@@ -1,4 +1,4 @@
-#' loglik_vargamma_observed
+#' loglik_genhyper_observed
 #'
 #' Computes the observed log likelihood for genhyper for convergence checks.
 #'
