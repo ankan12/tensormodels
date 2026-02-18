@@ -3,6 +3,7 @@ title: "test_em_est"
 output: pdf_document
 ---
 
+
 # rtskewt
 ```{r}
 s1 <- matrix(rnorm(4), nrow = 2); s2 <- matrix(rnorm(9), nrow = 3); s3 <- matrix(rnorm(16), nrow = 4)

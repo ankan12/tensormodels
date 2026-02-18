@@ -37,10 +37,10 @@ rtnorm <- function(n, mu = 0, sigmas = 1) {
   dims <- dim(mu)
 
   # mu was a scalar
-  if(is.null(dims)) dims <- 1
+  if(is.null(dims)) dims <- length(mu)
 
   # no sigmas provided, use identity
-  if (length(sigmas) == 1 && sigmas == 1) {
+  if (length(sigmas) == 1 && nrow(sigmas[[1]]) == 1 && sigmas[[1]] == 1) {
     sigmas <- lapply(dims, diag)
   }
 

@@ -1,27 +1,27 @@
-#' Subset a tensor.
+#' Assign a tensor.
 #'
 #' @param A A tensor object (S3 wrapper around an array).
 #' @param ... Indices.
-#' @param drop Logical; passed to base `[` (defaults to FALSE).
+#' @param value Tensor that will be assigned to A.
 #'
-#' @return A tensor that was subset.
+#' @return A tensor that was assigned.
 #'
 #' @examples
 #' A <- tensor(1:24, dim = c(2, 3, 4))
-#' A[1, ]
+#' A[1, ] <- array(1:12, dim = c(3, 4))
 #' @export
 #' @method [ tensor
-`[.tensor` <- function(x, ..., drop = TRUE) {
-  dims <- dim(x) #dimensions of input
+`[<-.tensor` <- function(x, ..., value) {
+  dims <- dim(unclass(x))
 
-  args <- as.list(substitute(list(...)))[-1] #args provided
+  args <- as.list(substitute(list(...)))[-1]
 
-  # fill missing with TRUE
+  # fill missing dimensions with TRUE
   if (length(args) < length(dims)) {
     args <- c(args, rep(list(TRUE), length(dims) - length(args)))
   }
 
-  # replace empty arguments (e.g., `A[1, ]`) with TRUE
+  # replace empty args with TRUE  (e.g., A[1, ])
   for (i in seq_along(args)) {
     if (length(args[[i]]) == 0) args[[i]] <- TRUE
   }
@@ -35,10 +35,9 @@
     else eval(a, caller)
   })
 
-  # subset the underlying array
-  result <- do.call(`[`, c(list(unclass(x)), eval_indices, list(drop = drop)))
+  arr <- unclass(x)
+  out <- do.call(`[<-`, c(list(arr), eval_indices, list(value = value)))
 
-  # return as tensor class
-  if (is.array(result)) class(result) <- "tensor"
-  result
+  class(out) <- class(x)
+  out
 }

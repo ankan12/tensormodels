@@ -1,0 +1,221 @@
+---
+title: "tensors_languages"
+format: pdf
+jupyter: python3
+---
+
+# pyttb
+```{R}
+#reticulate::py_install(c("numpy", "pyttb"))
+```
+
+
+```{python}
+from __future__ import annotations
+import sys
+import numpy as np
+import pyttb as ttb
+```
+
+
+# Dense Tensors
+
+## Tensor Types
+pyttb has five tensor types: dense, sparse, tucker, kruskal, and sum of structured tensors. Dense tensos are analogous to my tensor class, as they are a class that builds on Python's array. 
+```{python}
+M = np.ones((2, 4, 3))  # A 2x4x3 array.
+X = ttb.tensor(M)  # Convert to a tensor object
+X
+```
+
+## Reshape
+Similar to aperm, they have a function called reshape.
+
+```{python}
+X = X.reshape((4, 2, 3))
+X
+```
+
+
+permute specifically reorders the modes. 
+```{python}
+X = ttb.tensor(np.arange(1, 25), shape=(2, 3, 4))
+print(f"X is a {X}")
+
+X.permute(np.array((2, 1, 0)))  # Reverse the modes.
+```
+
+
+
+## Attributes
+You can obtain the original data using .data  
+```{python}
+X.data
+```
+
+You can obtain the number of dims with ndims and the number of modes using shape.
+```{python}
+X.ndims
+X.shape
+```
+
+
+It is possible to create an empty tensor.
+```{python}
+X = ttb.tensor()
+X
+```
+
+## Creating Tensors
+
+tenones produces a tensor containing only 1. 
+```{python}
+X = ttb.tenones((2, 3, 4))
+X
+```
+
+tenzeroes produces a tensor containing only 0. 
+```{python}
+X = ttb.tenzeros((2, 3, 4))
+X
+```
+
+tenrand produces a tensor with random elements.
+```{python}
+np.random.seed(0)
+X = ttb.tenrand((2, 3, 4))
+X
+```
+
+squeeze removes modes of size 1
+```{python}
+X = ttb.tenrand((2, 5, 4))
+Y = X.copy()
+
+# reshapes from 2 x 5 x 4 to 2 x 5 x 4 x 1
+Y[0, 0, 0, 0] = Y[0, 0, 0]
+
+# removes all modes of size 1
+Y.squeeze()
+```
+
+
+You can convert from tensor to array using double.
+```{python}
+X = ttb.tenrand((2, 5, 4)) # tensor
+X.double() # array
+```
+
+
+## Subsetting
+Subsetting uses the square brackets similar to R. Using the : keeps all elements from that mode.  
+```{python}
+X = ttb.tenrand((2, 3, 4, 1))
+X[0, 0, 0, 0]
+
+X[0, :, 0, :]
+```
+
+
+## Assignment
+For assignment, you can assign a single element, subtensor, or list of values for a tensor.
+```{python}
+X = ttb.tenrand((2, 3, 4))
+
+X[0, 0, 0] = 0
+X[0, 0:2, 0:2] = np.ones((2, 2))
+
+X[(0, 0, 0)], X[(1, 0, 0)] = [5, 7]
+```
+
+
+Assigning elements outside the original range expands the tensor.
+```{python}
+X.shape
+X[2, 1, 1] = 1
+X.shape
+```
+
+## Nonzero elements
+```{python}
+X = ttb.tensor(3 * np.random.rand(2, 2, 2))
+S, V = X.find()
+S # nonzero subscripts
+V # nonzero values
+```
+
+
+You can also supply a condition for elements you are looking for.
+```{python}
+larger_entries = X >= 2
+larger_subs, larger_vals = larger_entries.find()
+larger_subs, larger_vals
+```
+
+
+## Norm
+The Frobenius norm is computed with norm. 
+```{python}
+X.norm()
+```
+
+
+## Elementwise Operations
+pyttb supports logical operations with logical_and, logical_or, and logical_xor.
+
+The method tenfun allows any function not predefined to tensors to work on them elementwise.
+
+```{python}
+A = ttb.tensor(np.floor(3 * np.random.rand(2, 2, 3)))
+
+A.tenfun(lambda x: x + 1) # add 1 to every element
+```
+
+
+## Symmetry
+
+A tensor can be symmetrized with symmetrize. This is formed by averaging over all elements that should be equal. 
+```{python}
+np.random.rand(0)
+X = ttb.tensor(np.arange(1, 5), (4,))  # Create some data
+W = ttb.tensor(np.random.rand(4, 4, 4))
+Y = X.symmetrize()
+
+Y.issymmetric()
+```
+
+
+# Sparse Tensors
+
+The sptensor class stores data in coordinate format. It can be created with a list of subscripts and values. The size of the tensor is implicitly the size of the largest subscript in each dimension, or it can be explicitly specified.  
+
+```{python}
+np.random.seed(0)
+subs = np.array([[0, 0, 0], [0, 1, 0], [2, 3, 1]])  # Subscripts of the nonzeros.
+vals = np.array([[1], [2], [3]])  # Vals is a column vector; values of the nonzeros.
+X = ttb.sptensor.from_aggregator(subs, vals)  # Sparse tensor with 3 nonzeros.
+
+X
+```
+
+
+## CP-ALS
+```{python}
+# Choose the rank and shape
+R = 2
+tensor_shape = (3, 4, 5)
+
+# Set the random seed for reproducibility
+np.random.seed(0)
+
+# Create a low-rank dense tensor from a Kruskal tensor (i.e., ktensor)
+factor_matrices = [np.random.randn(s, R) for s in tensor_shape]
+M_true = ttb.ktensor(factor_matrices)  # true solution
+X = M_true.to_tensor()
+```
+
+
+```{python}
+
+```
+

@@ -24,18 +24,11 @@ mle_est <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
   num_dim  <- length(all_dims)
   n <- dim(data)[1]
 
-  if (num_dim == 1) { #vector case
+  if(num_dim == 1) {
     mu <- apply(data, 2, mean)
-    sigma <- cov(data)
-    #mu <- mean(data)
-    #sigma <- var(data)
-    return(list(mu = mu, sigmas = list(matrix(sigma, ncol = 1))))
-  }
-
-  if(num_dim == 0) {
-    mu <- mean(data)
-    sigma <- var(data)
-    return(list(mu = mu, sigmas = list(matrix(sigma, ncol = 1))))
+    sigma <- cov(data) * (n - 1)/n
+    #sigma <- sigma * (nrow(sigma) / sum(diag(sigma)))
+    return(list(mu = mu, sigmas = list(sigma)))
   }
 
   #center input data
@@ -44,6 +37,8 @@ mle_est <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
 
   #intialize as identity matrices
   est_sigmas <- lapply(all_dims, diag)
+
+  logliks <- rep(0, max_iter)
 
   for (t in 1:max_iter) {
     # store previous iteration
@@ -79,25 +74,54 @@ mle_est <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
       est_sigmas[[k]] <- est_sigmas[[k]] / sum(diag(est_sigmas[[k]]))
     }
 
+    # Step 5: Check convergence
+
+    logliks[t] <- loglik_normal_observed(data, mean_array, est_sigmas)
+
+    if(t >= 3) {
+
+      lt_after <- logliks[t]
+      lt <- logliks[t - 1]
+      lt_before <- logliks[t - 2]
+
+      aitken <- (lt_after - lt)/(lt - lt_before)
+
+      linf <- lt + 1/(1 - aitken) * (lt_after - lt)
+
+      converge <- abs(linf - lt_after)
+
+      if(converge < tol) {
+        if(!quiet) message("Converged at iteration ", t)
+        break
+      }
+
+      if (t %% 50 == 0 & !quiet) {
+        cat(sprintf(
+          "Iteration %d: mean relative change = %.3e\n",
+          t,
+          converge
+        ))
+      }
+    }
     # convergence check
-    rel_changes <- mapply(function(new, old)
-      norm(new - old, "F") / (norm(old, "F") + 1e-12),
-      est_sigmas, old_sigmas)
-
-    max_change <- max(rel_changes)
-
-    if (t %% 50 == 0 & !quiet) {
-      cat(sprintf(
-        "Iteration %d: mean relative change = %.3e\n",
-        t,
-        mean_change
-      ))
-    }
-
-    if (max_change < tol) {
-      if(!quiet) message("Converged at iteration ", t)
-      break
-    }
+    # rel_changes <- mapply(function(new, old)
+    #   norm(new - old, "F") / (norm(old, "F") + 1e-12),
+    #   est_sigmas, old_sigmas)
+    #
+    # max_change <- max(rel_changes)
+    #
+    # if (t %% 50 == 0 & !quiet) {
+    #   cat(sprintf(
+    #     "Iteration %d: mean relative change = %.3e\n",
+    #     t,
+    #     mean_change
+    #   ))
+    # }
+    #
+    # if (max_change < tol) {
+    #   if(!quiet) message("Converged at iteration ", t)
+    #   break
+    # }
   }
 
   # normalize covariance matrices with trace

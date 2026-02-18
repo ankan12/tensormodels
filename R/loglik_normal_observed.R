@@ -1,4 +1,4 @@
-#' loglik_normal_observed
+#' dtnorm
 #'
 #' Computes the observed log likelihood for normal.
 #'
@@ -24,9 +24,17 @@ loglik_normal_observed <- function(draws, mu, sigmas) {
   all_det <- 0
   kroneck_sigmas <- 1
 
-  for(d in length(sigmas):1) {
-    kroneck_sigmas <- kronecker(kroneck_sigmas, chol2inv(chol(sigmas[[d]])))
-    all_det <- all_det + (n_star/(2 * nrow(sigmas[[d]]))) * log(det(sigmas[[d]]))
+  # for(d in length(sigmas):1) {
+  #   kroneck_sigmas <- kronecker(kroneck_sigmas, chol2inv(chol(sigmas[[d]])))
+  #   all_det <- all_det + (n_star/(2 * nrow(sigmas[[d]]))) * log(det(sigmas[[d]]))
+  # }
+
+  for (d in length(sigmas):1) {
+    s_d <- sigmas[[d]]
+    U  <- chol(s_d)
+
+    all_det <- all_det + (n_star / (2 * nrow(s_d))) * (2 * sum(log(diag(U))))
+    kroneck_sigmas <- kronecker(kroneck_sigmas, chol2inv(U))
   }
 
   loglik <- 0

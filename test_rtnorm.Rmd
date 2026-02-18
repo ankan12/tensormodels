@@ -4,39 +4,54 @@ output: pdf_document
 ---
 
 ```{r, include = FALSE}
-library(tensormodels)
+#library(tensormodels)
 library(tidyverse)
 library(patchwork)
 library(MVN)
 library(MASS)
 ```
 
-
+# Test Tensor Var Norm with Mahalanobis + KS Test
 ```{r}
-tensor_mahalanobis_plot <- function(draws) {
+tensor_mahalanobis <- function(draws) {
+  draws <- as_tensor(draws)
+  centered <- draws
   
   dim_draws <- dim(draws)
   
+  n <- dim_draws[1]
   num_elem <- prod(dim_draws[-1])
   
   # compute tensor Mahalanobis first
-
   sample_stats <- mle_est(draws) # compute MLE estimates  
   
   sample_mean <- sample_stats$mu
   
   tensor_dist <- rep(0, n)
   
-  centered <- sweep(draws, MARGIN = 2:length(dim_draws), 
-                    STATS = sample_mean, FUN = "-")
-
-  centered_flatten <- aperm(centered, perm = c(2:length(dim_draws), 1)) |> as.vector()
-  
   for(i in 1:n) {
-    centered_curr <- 
-      centered_flatten[(num_elem * (i-1) + 1):
-                       (num_elem * (i-1) + num_elem)] |> 
-      array(dim = dim_draws[-1]) # pull out current draw
+    centered[i, ] <- draws[i, ] - sample_mean
+  }
+  
+  # centered <- sweep(draws, MARGIN = 2:length(dim_draws), 
+  #                   STATS = sample_mean, FUN = "-")
+  # 
+  # centered_flatten <- aperm(centered, 
+  #                           perm = c(2:length(dim_draws), 1)) |>
+  #   as.vector()
+  # 
+  for(i in 1:n) {
+    centered_curr <- centered[i, ]
+    
+     # centered_flatten[(num_elem * (i-1) + 1):
+      #                  (num_elem * (i-1) + num_elem)] |> 
+      # array(dim = dim_draws[-1]) # pull out current draw
+    
+    
+    if(is.null(dim(centered_curr))) {
+      centered_curr <- matrix(centered_curr, 
+                              nrow = length(centered_curr))
+    }
     
     centered_multiply <- centered_curr 
     
@@ -58,23 +73,164 @@ tensor_mahalanobis_plot <- function(draws) {
   
   # scaling factor is divide by number of elements in a draw
   tensor_dist <- tensor_dist * mean(vec_dist) / mean(tensor_dist)
-  #c_hat <- sum(diag(cov(vec_draws)))/num_elem
   
-  #tensor_dist <- tensor_dist / c_hat
-  
-  # plot the distances against each other
-  plot <-
-    tibble("vec" = (vec_dist),
-         "mat" = (tensor_dist)) |> 
+  tibble(vec = vec_dist, tensor = tensor_dist)
+}
+
+plot_distances <- function(distance_data, alpha = 0.4) {
+  distance_data |> 
     ggplot() +
-    geom_point(aes(x = vec, y = mat)) +
+    geom_point(aes(x = vec, y = tensor), alpha = alpha) +
     geom_abline(slope = 1, color = "red") +
     labs(x = "Multivariate", y = "Tensor Variate") +
     theme_minimal()
-  
-  plot
+}
+```
+
+
+```{r}
+n <- 1e3
+
+s1 <- matrix(rnorm(4), nrow = 2) |> crossprod()
+s2 <- matrix(rnorm(16), nrow = 4) |> crossprod()
+
+matnorm_draws <- rtnorm(n, mu = matrix(1:8, nrow = 2),
+                        sigmas = list(s1, s2))
+
+distances <- tensor_mahalanobis(matnorm_draws)
+ks.test(distances$vec, distances$tensor)
+
+plot_distances(distances)  
+```
+
+
+```{r}
+# multivariate normal draws
+Sigma <- matrix(c(rnorm(24*24)), nrow = 24, ncol = 24)
+Sigma[lower.tri(Sigma)] = t(Sigma)[lower.tri(Sigma)]
+Sigma <- crossprod(Sigma, Sigma)
+
+mu_vec <- rnorm(24, mean = 10, sd = 2)
+
+multivar_draws_tensortools <- rtnorm(n, mu = mu_vec, sigmas = list(Sigma))
+
+distances_multivar_tensortools <- tensor_mahalanobis(multivar_draws)
+
+with(distances_multivar_tensortools, ks.test(vec, tensor))
+
+plot_distances(distances_multivar_tensortools) 
+```
+
+
+```{r}
+X_vec <- MASS::mvrnorm(n, mu = mu_vec, Sigma = Sigma)
+
+#reshape into 2x3x4 matrices
+multivar_draws <- array(0, dim = c(n, 2, 3, 4))
+
+for(i in 1:n) {
+  multivar_draws[i, , ,] <- array(data = X_vec[i, ], dim = c(2, 3, 4))
 }
 
+distances_multivar <- tensor_mahalanobis(multivar_draws)
+
+ks.test(distances_multivar$vec, distances_multivar$tensor)
+
+plot_distances(distances_multivar) 
+```
+
+
+```{r}
+univarnorm_draws <- rnorm(1e3 * 8, mean = 1, sd = 2) |> 
+  array(dim = c(1e3, 2, 4))
+
+distances_univar <- tensor_mahalanobis(univarnorm_draws)
+
+ks.test(distances_univar$vec, distances_univar$tensor)
+
+plot_distances(distances_univar)
+```
+
+
+# LRT for TVN
+```{r}
+lrt_test <- function(draws_one, draws_two) {
+  draws_one <- as_tensor(draws_one)
+  draws_two <- as_tensor(draws_two)
+  
+  draws_one_mle <- mle_est(draws_one)
+  draws_two_mle <- mle_est(draws_two)
+  
+  n1 <- dim(draws_one)[1] #num of samples
+  n2 <- dim(draws_two)[1] 
+  
+  tot_log_one <- 0 #log lik
+  tot_log_two <- 0
+  
+  for(i in 1:n1) { #iterate over all samples
+    tot_log_one <- 
+      tot_log_one + dtnorm(draws_one[i, ], draws_one_mle$mu, 
+                           draws_one_mle$sigmas, log = TRUE)
+  }
+  
+  for(j in 1:n2) {
+    tot_log_two <- 
+      tot_log_two + dtnorm(draws_two[j,], draws_two_mle$mu, 
+                           draws_two_mle$sigmas, log = TRUE)
+  }
+  
+  list(first_loglik = tot_log_one,
+       second_loglik = tot_log_two)
+} 
+
+univar_draws <- rnorm(n = 1e3 * 2 * 3 * 4) 
+three_dim <- univar_draws |> array(dim = c(1e3, 2, 3, 4))
+two_dim <- univar_draws |> array(dim = c(1000, 2, 12))
+one_dim <- univar_draws |> array(dim = c(1000, 24))
+
+lrt_test(three_dim, two_dim)
+lrt_test(two_dim, one_dim)
+
+-2 * (res[1] - res[2])
+res
+
+
+```
+
+
+```{r}
+three_dim_mle <- mle_est(three_dim)
+two_dim_mle <- mle_est(two_dim)
+one_dim_mle <- mle_est(one_dim)
+
+
+tot_log <- 0
+
+for(i in 1:1000) {
+  tot_log <- tot_log + dtnorm(three_dim[i, , ,], 
+             three_dim_mle$mu, three_dim_mle$sigmas, log = TRUE)
+}
+
+tot_log
+
+three_dim_lik <- loglik_normal_observed(three_dim, three_dim_mle$mu, three_dim_mle$sigmas)
+two_dim_lik <- loglik_normal_observed(two_dim, two_dim_mle$mu, two_dim_mle$sigmas)
+one_dim_lik <- loglik_normal_observed(one_dim, one_dim_mle$mu, one_dim_mle$sigmas)
+
+one_dim_lik
+two_dim_lik
+three_dim_lik
+```
+
+
+```{r}
+-2 * (one_dim_lik - two_dim_lik)
+-2 * (one_dim_lik - three_dim_lik)
+-2 * (two_dim_lik - three_dim_lik)
+```
+
+
+```{r}
 tensor_mahalanobis_plot_normal <- function(draws) {
   
   dim_draws <- dim(draws)
@@ -138,6 +294,59 @@ tensor_mahalanobis_plot_normal <- function(draws) {
 }
 ```
 
+```{r}
+test_array <- array(1:24, dim = c(2, 3, 4))
+
+test_tensor <- tensor(1:24, dim = c(2, 3, 4))
+
+a <- array(1:3, dim = c(3, 1, 1))
+x <- matrix(4:9, nrow = 2, ncol = 3)
+n_prod(a, x, 1)
+
+a |> n_prod(x, 1)
+
+test_array[1, , ]
+
+test_tensor[1, ]
+
+print(test_array)
+
+print(test_tensor)
+
+str(test_array)
+
+str(test_tensor)
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+n <- 1e3
+
+# tensor variate random normal draws
+s1 <- matrix(rnorm(4), nrow = 2) |> crossprod()
+s2 <- matrix(rnorm(9), nrow = 3) |> crossprod()
+s3 <- matrix(rnorm(16), nrow = 4) |> crossprod()
+
+rand_mu <- array(rnorm(24, mean = 10), dim = c(2, 3, 4))
+
+rtnorm_draws <- rtnorm(n = n, mu = rand_mu, sigmas = list(s1, s2, s3))
+
+rtnorm_mles <- mle_est(rtnorm_draws)
+
+centered <- (rtnorm_draws - array(rep(rtnorm_mles$mu, each = n), 
+                                  dim = c(n, 2, 3, 4))) |> 
+  as_tensor()
+
+centered[1, ] %x1% s1 %x2% s2 %x3% s3
+
+n_prod(centered[1,], s1, 1) |> n_prod(s2, 2) |> n_prod(s3, 3)
+```
+
 
 ```{r}
 n <- 1e3
@@ -162,7 +371,7 @@ Sigma <- crossprod(Sigma, Sigma)
 
 mu_vec <- rnorm(24, mean = 10, sd = 2)
 
-X_vec <- mvrnorm(n, mu = mu_vec, Sigma = Sigma)
+X_vec <- MASS::mvrnorm(n, mu = mu_vec, Sigma = Sigma)
 
 # reshape into 2x3x4 matrices
 multivar_draws <- array(0, dim = c(n, 2, 3, 4))
@@ -171,6 +380,50 @@ for(i in 1:n) {
   multivar_draws[i, , ,] <- array(data = X_vec[i, ], dim = c(2, 3, 4))
 }
 
+#univar_draws
+```
+
+
+```{r}
+three_dim <- univar_draws
+two_dim <- univar_draws |> array(dim = c(1000, 2, 12))
+one_dim <- univar_draws |> array(dim = c(1000, 24))
+
+three_dim_mle <- mle_est(three_dim)
+two_dim_mle <- mle_est(two_dim)
+one_dim_mle <- mle_est(one_dim)
+
+three_dim_lik <- loglik_normal_observed(three_dim, three_dim_mle$mu, three_dim_mle$sigmas)
+two_dim_lik <- loglik_normal_observed(two_dim, two_dim_mle$mu, two_dim_mle$sigmas)
+one_dim_lik <- loglik_normal_observed(one_dim, one_dim_mle$mu, one_dim_mle$sigmas)
+
+one_dim_lik
+two_dim_lik
+three_dim_lik
+
+-2 * (one_dim_lik - two_dim_lik)
+-2 * (one_dim_lik - three_dim_lik)
+-2 * (two_dim_lik - three_dim_lik)
+```
+
+
+```{r}
+all_dim <- mle_est(univar_draws)
+
+no_third <- (univar_draws |> array(dim = c(1000, 2, 12))) |> mle_est()
+no_dims <- (univar_draws |> array(dim = c(1000, 24))) |> mle_est()
+
+loglik_normal_observed(univar_draws, all_dim$mu, all_dim$sigmas)
+
+loglik_normal_observed(univar_draws |> array(dim = c(1000, 2, 12)),
+                       no_third$mu, no_third$sigmas)
+
+loglik_normal_observed(univar_draws |> array(dim = c(1000, 24)),
+                       no_dims$mu, no_dims$sigmas)
+```
+
+
+```{r}
 (tensor_mahalanobis_plot(rtnorm_draws) + labs(title = "Tensor")) +
 (tensor_mahalanobis_plot(univar_draws) + labs(title = "Univar")) +
 (tensor_mahalanobis_plot(multivar_draws) + labs(title = "Multivariate"))
