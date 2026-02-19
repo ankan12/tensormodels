@@ -1,11 +1,11 @@
-#' em_est_genhyper
+#' tensor_mle_vargamma
 #'
-#' Computes the EM estimation algorithm for the genhyper distribution.
+#' Computes the EM estimation algorithm for the vargamma distribution.
 #' @return A list containing the estimated mean array, skew array, list of
-#'   covariance matrices, lambda, and omega.
+#'   covariance matrices, and gamma.
 #'
 #' @noRd
-em_est_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
+tensor_mle_vargamma <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
 
   # get dim of input
   dims <- dim(draws)[-1]
@@ -22,8 +22,7 @@ em_est_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
   logliks <- rep(0, max_iter)
 
   # different params based on model
-  lambda <- 10
-  omega <- 10
+  gamma <- 6
 
   for (t in 1:max_iter) {
     # Step 2: Update a, b, c depending on expected values
@@ -57,9 +56,8 @@ em_est_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
       delta_vals[i] <- sum(center_draw * centered_compute)
     }
 
-    rho <- rho + omega
-    delta_vals <- delta_vals + omega
-    param_vals <- lambda - n_star / 2
+    rho <- rho + 2 * gamma
+    param_vals <- gamma - n_star / 2
 
     k_lambda_1 <- besselK(
       x = sqrt(rho * delta_vals),
@@ -127,35 +125,11 @@ em_est_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
       log(gamma) + 1 - digamma(gamma) + mean(c) - mean(a)
     }
 
-    K_plus <- besselK(x = omega, nu = lambda + eps, expon.scaled = TRUE)
-
-    K_minus <- besselK(x = omega, nu = lambda - eps, expon.scaled = TRUE)
-
-    new_lambda <- mean(c) *
-      lambda *
-      1 /
-      ((log(K_plus) - log(K_minus)) / (2 * eps))
-
-    R_lambda <-
-      besselK(x = omega, nu = new_lambda + 1, expon.scaled = TRUE) /
-      besselK(x = omega, nu = new_lambda, expon.scaled = TRUE)
-
-    R_neg_lambda <-
-      besselK(x = omega, nu = -new_lambda + 1, expon.scaled = TRUE) /
-      besselK(x = omega, nu = -new_lambda, expon.scaled = TRUE)
-
-    first_deriv <- 1 / 2 * (R_lambda + R_neg_lambda - (mean(a) + mean(b)))
-
-    second_deriv <- 1 /
-      2 *
-      (R_lambda^2 -
-         (1 + 2 * new_lambda) / omega * R_lambda -
-         1 +
-         R_neg_lambda^2 -
-         (1 - 2 * new_lambda) / omega * R_neg_lambda -
-         1)
-
-    new_omega <- omega - first_deriv / second_deriv
+    new_gamma <- uniroot(
+      update_gamma,
+      interval = c(1e-3, 1e3),
+      a = a,
+      c = c)$root
 
     scale_prod <- 1
 
@@ -205,7 +179,7 @@ em_est_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
 
     # Step 5: Check convergence
 
-    logliks[t] <- loglik_genhyper_observed(draws, mu, skew, sigmas, lambda, omega)
+    logliks[t] <- loglik_vargamma_observed(draws, mu, skew, sigmas, gamma)
 
     if(t >= 3) {
 
@@ -232,16 +206,8 @@ em_est_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
         ))
       }
     }
-
-    # update all parameters
-    mu <- new_mu
-    skew <- new_skew
-    sigmas <- new_sigmas
-
-    lambda <- new_lambda
-    omega <- new_omega
   }
 
-  list(mu = mu, skew = skew, sigmas = sigmas, lambda = lambda, omega = omega,
+  list(mu = mu, skew = skew, sigmas = sigmas, gamma = gamma,
        Ew = a, Einvw = b, Elogw = c)
 }

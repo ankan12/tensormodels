@@ -1,4 +1,4 @@
-#' mle_est
+#' tensor_mle_normal
 #'
 #' Estimates the mean array and covariance matrices from an array of tensor variate normal draws.
 #'
@@ -18,7 +18,7 @@
 #' fourth_scaled <- lapply(fourth_sigma, function(S) S * (nrow(S) / sum(diag(S))))
 #' (mse_each <- mapply(function(est, true) mean((est - true)^2), est_fourth$sigmas, fourth_scaled))
 #' @export
-mle_est <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
+tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
   #get dim of input
   all_dims <- dim(data)[-1]
   num_dim  <- length(all_dims)

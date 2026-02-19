@@ -23,7 +23,7 @@ tensor_mahalanobis <- function(draws) {
   num_elem <- prod(dim_draws[-1])
   
   # compute tensor Mahalanobis first
-  sample_stats <- mle_est(draws) # compute MLE estimates  
+  sample_stats <- tensor_mle(draws, model = "normal") # compute MLE estimates  
   
   sample_mean <- sample_stats$mu
   
@@ -88,6 +88,7 @@ plot_distances <- function(distance_data, alpha = 0.4) {
 ```
 
 
+# Matrix Variate Normal
 ```{r}
 n <- 1e3
 
@@ -98,7 +99,7 @@ matnorm_draws <- rtnorm(n, mu = matrix(1:8, nrow = 2),
                         sigmas = list(s1, s2))
 
 distances <- tensor_mahalanobis(matnorm_draws)
-ks.test(distances$vec, distances$tensor)
+with(distances, ks.test(vec, tensor))
 
 plot_distances(distances)  
 ```
@@ -112,31 +113,34 @@ Sigma <- crossprod(Sigma, Sigma)
 
 mu_vec <- rnorm(24, mean = 10, sd = 2)
 
-multivar_draws_tensortools <- rtnorm(n, mu = mu_vec, sigmas = list(Sigma))
+multivar_draws <- rtnorm(n, mu = mu_vec, sigmas = list(Sigma))
 
-distances_multivar_tensortools <- tensor_mahalanobis(multivar_draws)
+# make a 2x3x4 array
+multivar_draws_3dim <- array(multivar_draws, dim = c(n, 2, 3, 4))
 
-with(distances_multivar_tensortools, ks.test(vec, tensor))
+distances_multivar <- tensor_mahalanobis(multivar_draws_3dim)
 
-plot_distances(distances_multivar_tensortools) 
+with(distances_multivar, ks.test(vec, tensor))
+
+plot_distances(distances_multivar) 
 ```
 
 
 ```{r}
-X_vec <- MASS::mvrnorm(n, mu = mu_vec, Sigma = Sigma)
-
-#reshape into 2x3x4 matrices
-multivar_draws <- array(0, dim = c(n, 2, 3, 4))
-
-for(i in 1:n) {
-  multivar_draws[i, , ,] <- array(data = X_vec[i, ], dim = c(2, 3, 4))
-}
-
-distances_multivar <- tensor_mahalanobis(multivar_draws)
-
-ks.test(distances_multivar$vec, distances_multivar$tensor)
-
-plot_distances(distances_multivar) 
+# X_vec <- MASS::mvrnorm(n, mu = mu_vec, Sigma = Sigma)
+# 
+# #reshape into 2x3x4 matrices
+# multivar_draws <- array(0, dim = c(n, 2, 3, 4))
+# 
+# for(i in 1:n) {
+#   multivar_draws[i, , ,] <- array(data = X_vec[i, ], dim = c(2, 3, 4))
+# }
+# 
+# distances_multivar <- tensor_mahalanobis(multivar_draws)
+# 
+# ks.test(distances_multivar$vec, distances_multivar$tensor)
+# 
+# plot_distances(distances_multivar) 
 ```
 
 
@@ -190,11 +194,6 @@ one_dim <- univar_draws |> array(dim = c(1000, 24))
 
 lrt_test(three_dim, two_dim)
 lrt_test(two_dim, one_dim)
-
--2 * (res[1] - res[2])
-res
-
-
 ```
 
 
