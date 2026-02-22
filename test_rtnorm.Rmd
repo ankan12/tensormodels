@@ -11,89 +11,27 @@ library(MVN)
 library(MASS)
 ```
 
-# Test Tensor Var Norm with Mahalanobis + KS Test
-```{r}
-tensor_mahalanobis <- function(draws) {
-  draws <- as_tensor(draws)
-  centered <- draws
-  
-  dim_draws <- dim(draws)
-  
-  n <- dim_draws[1]
-  num_elem <- prod(dim_draws[-1])
-  
-  # compute tensor Mahalanobis first
-  sample_stats <- tensor_mle(draws, model = "normal") # compute MLE estimates  
-  
-  sample_mean <- sample_stats$mu
-  
-  tensor_dist <- rep(0, n)
-  
-  for(i in 1:n) {
-    centered[i, ] <- draws[i, ] - sample_mean
-  }
-  
-  # centered <- sweep(draws, MARGIN = 2:length(dim_draws), 
-  #                   STATS = sample_mean, FUN = "-")
-  # 
-  # centered_flatten <- aperm(centered, 
-  #                           perm = c(2:length(dim_draws), 1)) |>
-  #   as.vector()
-  # 
-  for(i in 1:n) {
-    centered_curr <- centered[i, ]
-    
-     # centered_flatten[(num_elem * (i-1) + 1):
-      #                  (num_elem * (i-1) + num_elem)] |> 
-      # array(dim = dim_draws[-1]) # pull out current draw
-    
-    
-    if(is.null(dim(centered_curr))) {
-      centered_curr <- matrix(centered_curr, 
-                              nrow = length(centered_curr))
-    }
-    
-    centered_multiply <- centered_curr 
-    
-    for(j in 1:(length(dim_draws)-1)) { # standardize with sigma estimates
-      centered_multiply <- n_prod(centered_multiply, 
-                                  solve(sample_stats$sigmas[[j]]), j)
-    }
-    
-    tensor_dist[i] <- c(centered_curr) %*% c(centered_multiply)
-  }
-  
-  # compute vector Mahalanobis
-  
-  vec_draws <- matrix(data = draws, nrow = n, ncol = num_elem)
-  
-  mu_vec <- apply(vec_draws, MARGIN = 2, FUN = mean)
-  
-  vec_dist <- mahalanobis(vec_draws, center = mu_vec, cov = cov(vec_draws))
-  
-  # scaling factor is divide by number of elements in a draw
-  tensor_dist <- tensor_dist * mean(vec_dist) / mean(tensor_dist)
-  
-  tibble(vec = vec_dist, tensor = tensor_dist)
-}
 
-plot_distances <- function(distance_data, alpha = 0.4) {
-  distance_data |> 
-    ggplot() +
-    geom_point(aes(x = vec, y = tensor), alpha = alpha) +
-    geom_abline(slope = 1, color = "red") +
-    labs(x = "Multivariate", y = "Tensor Variate") +
-    theme_minimal()
-}
-```
-
-
-# Matrix Variate Normal
+# Matrix Variate Normal Tests
 ```{r}
 n <- 1e3
 
 s1 <- matrix(rnorm(4), nrow = 2) |> crossprod()
 s2 <- matrix(rnorm(16), nrow = 4) |> crossprod()
+
+# error if sigmas don't match mu
+univarnorm_draws <- rtnorm(n, mu = 1:2, sigmas = list(s1))
+
+univar_distances <- tensor_mahalanobis(univarnorm_draws)
+
+a <- with(univar_distances, ks.test(vec, tensor))
+
+plot_dist(univar_distances) 
+```
+
+
+```{r}
+#a <- univarnorm_draws[[1]] 
 
 matnorm_draws <- rtnorm(n, mu = matrix(1:8, nrow = 2),
                         sigmas = list(s1, s2))
@@ -116,7 +54,13 @@ mu_vec <- rnorm(24, mean = 10, sd = 2)
 multivar_draws <- rtnorm(n, mu = mu_vec, sigmas = list(Sigma))
 
 # make a 2x3x4 array
-multivar_draws_3dim <- array(multivar_draws, dim = c(n, 2, 3, 4))
+
+multivar_draws_3dim <- 
+  lapply(multivar_draws, function(x) { 
+    array(x, dim = c(2, 3, 4))
+  })
+
+#multivar_draws_3dim <- array(multivar_draws, dim = c(n, 2, 3, 4))
 
 distances_multivar <- tensor_mahalanobis(multivar_draws_3dim)
 
@@ -318,9 +262,49 @@ str(test_tensor)
 ```
 
 
-```{r}
 
+
+```{r}
+library(sn)
+
+x <- seq(-4,4,length=15)
+xi <- c(0.5, -1)
+Omega <- diag(2)
+Omega[2,1] <- Omega[1,2] <- 0.5
+alpha <- c(2,2)
+pdf <- dmst(cbind(x,2*x-1), xi, Omega, alpha, 5)
+rnd <- rmst(10,  xi, Omega, alpha, 6)
+
+rnd
 ```
+
+
+```{r}
+library(sn)
+data(wines)
+fit2 <- selm(cbind(tartaric, malic, uronic) ~ colour + hue,
+family="ST", data=wines, subset=(wine != "Grignolino"))
+plot(fit2, which=2:3)
+summary(fit2) # works with CP
+summary(fit2, param.type="DP")
+# constraint on degrees of freedom:
+fit3 <- selm(cbind(tartaric, malic, uronic) ~ colour + hue,
+family="ST", fixed.param=list(nu=8),
+data=wines, subset=(wine != "Grignolino"))
+```
+
+
+```{r}
+olo.ph <- wines[wines$wine=="Barolo", "phenols"]
+fit <- selm(olo.ph ~ 1, family="SN")
+
+show(fit)
+
+pll <- profile(fit, "cp", param.name="gamma1", param.val=c(0, 0.97))
+profile(fit, "dp", param.name=c("omega", "alpha"),
+param.val=list(c(0.25, 1), c(-1, 9)), npt=c(51,51) )
+```
+
 
 
 ```{r}

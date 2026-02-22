@@ -10,16 +10,17 @@
 #'
 #' @noRd
 loglik_normal_observed <- function(draws, mu, sigmas) {
-  dims   <- dim(draws)[-1]
+
+  n <- length(draws)
+  dims <- dim(draws[[1]])
   num_dim <- length(dims)
-  n      <- dim(draws)[1]
   n_star <- prod(dims)
 
-  mu_array <- replicate(n, mu, simplify = "array") |>
-    aperm(c(num_dim + 1, (1:(num_dim)))) |>
-    as_tensor()
-
-  centered <- draws - mu_array
+  # mu_array <- replicate(n, mu, simplify = "array") |>
+  #   aperm(c(num_dim + 1, (1:(num_dim)))) |>
+  #   as_tensor()
+  #
+  # centered <- draws - mu_array
 
   all_det <- 0
   kroneck_sigmas <- 1
@@ -40,7 +41,9 @@ loglik_normal_observed <- function(draws, mu, sigmas) {
   loglik <- 0
 
   for(i in 1:n) {
-    ve_xm <- matrix(c(centered[i, ]), nrow = n_star)
+    centered <- draws[[i]] - mu
+
+    ve_xm <- matrix(c(centered), nrow = n_star)
 
     delta <- t(ve_xm) %*% kroneck_sigmas %*% ve_xm
 

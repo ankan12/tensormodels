@@ -32,6 +32,7 @@
 #' sd(univar_norm)
 #' matrix_var_norm <- rtnorm(n = 10000, mu = matrix(1:6, nrow = 2, ncol = 3))
 #'
+#' @seealso [tucker()] to create the list of cores from the Tucker decomposition.
 #' @export
 rtnorm <- function(n, mu = 0, sigmas = 1) {
   dims <- dim(mu)
@@ -44,6 +45,8 @@ rtnorm <- function(n, mu = 0, sigmas = 1) {
     sigmas <- lapply(dims, diag)
   }
 
+  d <- length(dims)
+
   # get all Z draws
   X <- array(rnorm(prod(c(n, dims))), c(n, dims))
 
@@ -53,5 +56,7 @@ rtnorm <- function(n, mu = 0, sigmas = 1) {
   for (k in seq_along(chol_sigmas)) {
     X <- n_prod(X, t(chol_sigmas[[k]]), k+1) # multiply
   }
-  X + array(rep(mu, each = n), dim = c(n, dims)) # add mean
+  norm_array <- X + array(rep(mu, each = n), dim = c(n, dims)) # add mean
+
+  asplit(norm_array, 1) # return as list of arrays
 }

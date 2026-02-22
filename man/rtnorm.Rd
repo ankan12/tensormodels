@@ -46,3 +46,6 @@ sd(univar_norm)
 matrix_var_norm <- rtnorm(n = 10000, mu = matrix(1:6, nrow = 2, ncol = 3))
 
 }
+\seealso{
+\code{\link[=tucker]{tucker()}} to create the list of cores from the Tucker decomposition.
+}

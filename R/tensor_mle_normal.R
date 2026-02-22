@@ -20,23 +20,31 @@
 #' @export
 tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
   #get dim of input
-  all_dims <- dim(data)[-1]
-  num_dim  <- length(all_dims)
-  n <- dim(data)[1]
+  n <- length(data)
+  dims <- dim(data[[1]])
+  num_dim <- length(dims)
+
+  # all_dims <- dim(data)[-1]
+  # num_dim  <- length(all_dims)
+  # n <- dim(data)[1]
+
+  mean_array <- Reduce(`+`, data) / length(data)
 
   if(num_dim == 1) {
-    mu <- apply(data, 2, mean)
-    sigma <- cov(data) * (n - 1)/n
-    #sigma <- sigma * (nrow(sigma) / sum(diag(sigma)))
-    return(list(mu = mu, sigmas = list(sigma)))
+    #mu <- Reduce(`+`, data) / length(data)
+    #mu <- apply(data, 2, mean)
+
+    array_data <- simplify2array(data) |> aperm(c(2, 1))
+    sigma <- cov(array_data) * (n - 1)/n
+    return(list(mu = mean_array, sigmas = list(sigma)))
   }
 
   #center input data
-  mean_array <- apply(data, MARGIN = 2:(num_dim+1), FUN = mean)
-  centered_X <- sweep(data, MARGIN = 2:(num_dim+1), STATS = mean_array, FUN = "-")
+  #mean_array <- apply(data, MARGIN = 2:(num_dim+1), FUN = mean)
+  #centered_X <- sweep(data, MARGIN = 2:(num_dim+1), STATS = mean_array, FUN = "-")
 
   #intialize as identity matrices
-  est_sigmas <- lapply(all_dims, diag)
+  est_sigmas <- lapply(dims, diag)
 
   logliks <- rep(0, max_iter)
 
@@ -55,14 +63,16 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
       kron_except_k <- Reduce(function(A,B) kronecker(B, A), inv_sigma_except_k)
 
       # dim for kth mode
-      d_k    <- all_dims[k]
-      d_negk <- prod(all_dims[-k])
+      d_k    <- dims[k]
+      d_negk <- prod(dims[-k])
       s_k    <- matrix(0, d_k, d_k)
 
       # accumlate mode-k covar
       for (draw in 1:n) {
-        idx_list <- c(list(draw), rep(list(bquote()), num_dim))
-        Xi <- do.call("[", c(list(centered_X), idx_list, list(drop = TRUE)))
+        Xi <- data[[draw]] - mean_array
+
+        #idx_list <- c(list(draw), rep(list(bquote()), num_dim))
+        #Xi <- do.call("[", c(list(centered_X), idx_list, list(drop = TRUE)))
         Xik <- tensormodels::matricization(Xi, k)
         s_k <- s_k + Xik %*% kron_except_k %*% t(Xik)
       }
@@ -79,7 +89,6 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
     logliks[t] <- loglik_normal_observed(data, mean_array, est_sigmas)
 
     if(t >= 3) {
-
       lt_after <- logliks[t]
       lt <- logliks[t - 1]
       lt_before <- logliks[t - 2]
