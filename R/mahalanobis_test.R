@@ -19,7 +19,7 @@
 #'
 #' @export
 mahalanobis_test <- function(distances) {
-  res <- with(univar_distances, ks.test(vec, tensor))
+  res <- with(distances, ks.test(vec, tensor))
 
   res$method <- "Asymptotic two-sample Kolmogorov-Smirnov Test
                   for Vector vs Tensor Malahanobis Distances"

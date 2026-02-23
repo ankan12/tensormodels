@@ -30,9 +30,19 @@ loglik_normal_observed <- function(draws, mu, sigmas) {
   #   all_det <- all_det + (n_star/(2 * nrow(sigmas[[d]]))) * log(det(sigmas[[d]]))
   # }
 
+  safe_chol <- function(S, eps = 1e-8) {
+    tryCatch(chol(S),
+        error = function(e) {
+        # if matrix is not positive definite
+        lam <- eps * mean(diag(S)) # add some error
+        chol(S + diag(lam, nrow(S)))
+      }
+    )
+  }
+
   for (d in length(sigmas):1) {
     s_d <- sigmas[[d]]
-    U  <- chol(s_d)
+    U  <- safe_chol(s_d)
 
     all_det <- all_det + (n_star / (2 * nrow(s_d))) * (2 * sum(log(diag(U))))
     kroneck_sigmas <- kronecker(kroneck_sigmas, chol2inv(U))

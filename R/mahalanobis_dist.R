@@ -27,9 +27,9 @@ mahalanobis_dist <- function(draws) {
 
   sample_mean <- sample_stats$mu
 
-  sigma_inv <- lapply(sample_stats$sigmas, solve)
-
   tensor_dist <- rep(0, n)
+
+  sigma_inv <- lapply(sample_stats$sigmas, invert_safe)
 
   for(i in 1:n) {
     centered_curr <- draws[[i]] - sample_mean # center draws
@@ -54,7 +54,8 @@ mahalanobis_dist <- function(draws) {
 
   mu_vec <- apply(vec_draws, MARGIN = 2, FUN = mean)
 
-  vec_dist <- mahalanobis(vec_draws, center = mu_vec, cov = cov(vec_draws))
+  vec_dist <- mahalanobis(vec_draws, center = mu_vec,
+                          cov = invert_safe(cov(vec_draws)), inverted = TRUE)
 
   # scaling factor is divide by number of elements in a draw
   tensor_dist <- tensor_dist * mean(vec_dist) / mean(tensor_dist)

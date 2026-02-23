@@ -17,6 +17,7 @@
 #'
 #' @export
 plot_dist <- function(distances) {
-  plot(distances, xlab = "Vector Dists", ylab = "Tensor Dists")
-  abline(a = 0, b = 1, col = "red", lwd = 2)
+  plot(distances, xlab = "Vector Dists", ylab = "Tensor Dists",
+       col = rgb(0, 0, 0, alpha = 0.2))
+  abline(a = 0, b = 1, col = rgb(1, 0, 0, alpha = 0.6), lwd = 2)
 }

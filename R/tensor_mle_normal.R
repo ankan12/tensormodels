@@ -54,7 +54,7 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
 
     for (k in 1:num_dim) {
       #inverses of all sigma
-      inv_sigma <- lapply(est_sigmas, solve)
+      inv_sigma <- lapply(est_sigmas, invert_safe)
 
       #exclude kth mode
       inv_sigma_except_k <- inv_sigma[-k]
