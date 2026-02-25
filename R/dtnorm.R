@@ -16,11 +16,14 @@
 #' @export
 dtnorm <- function(x, mu, sigmas, log = FALSE) {
   d <- dim(x)
-
   num_dim <- length(d)
   n_star <- prod(d)
 
-  if(is.null(d)) d <- 1; num_dim <- 1; n_star <- length(x)
+  if(is.null(d)) {
+    d <- 1
+    num_dim <- 1
+    n_star <- length(x)
+  }
 
   centered <- x - mu
 
@@ -29,7 +32,7 @@ dtnorm <- function(x, mu, sigmas, log = FALSE) {
 
   for (d in length(sigmas):1) {
     s_d <- sigmas[[d]]
-    U  <- chol(s_d)
+    U  <- chol_safe(s_d)
 
     all_det <- all_det + (n_star / (2 * nrow(s_d))) * (2 * sum(log(diag(U))))
     kroneck_sigmas <- kronecker(kroneck_sigmas, chol2inv(U))

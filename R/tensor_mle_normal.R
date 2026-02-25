@@ -24,26 +24,15 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
   dims <- dim(data[[1]])
   num_dim <- length(dims)
 
-  # all_dims <- dim(data)[-1]
-  # num_dim  <- length(all_dims)
-  # n <- dim(data)[1]
-
   mean_array <- Reduce(`+`, data) / length(data)
 
   if(num_dim == 1) {
-    #mu <- Reduce(`+`, data) / length(data)
-    #mu <- apply(data, 2, mean)
-
     array_data <- simplify2array(data) |> aperm(c(2, 1))
     sigma <- cov(array_data) * (n - 1)/n
     return(list(mu = mean_array, sigmas = list(sigma)))
   }
 
-  #center input data
-  #mean_array <- apply(data, MARGIN = 2:(num_dim+1), FUN = mean)
-  #centered_X <- sweep(data, MARGIN = 2:(num_dim+1), STATS = mean_array, FUN = "-")
-
-  #intialize as identity matrices
+  #intialize sigmas as identity matrices
   est_sigmas <- lapply(dims, diag)
 
   logliks <- rep(0, max_iter)
@@ -71,22 +60,37 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
       for (draw in 1:n) {
         Xi <- data[[draw]] - mean_array
 
-        #idx_list <- c(list(draw), rep(list(bquote()), num_dim))
-        #Xi <- do.call("[", c(list(centered_X), idx_list, list(drop = TRUE)))
         Xik <- tensormodels::matricization(Xi, k)
         s_k <- s_k + Xik %*% kron_except_k %*% t(Xik)
       }
 
       # update sigma_k
       est_sigmas[[k]] <- s_k / (n * d_negk)
-
-      # normalize sigmas
-      est_sigmas[[k]] <- est_sigmas[[k]] / sum(diag(est_sigmas[[k]]))
     }
+
+    scale_prod <- 1
+
+    for (d in 1:(num_dim - 1)) {
+      c_d <- est_sigmas[[d]][1, 1]
+
+      if (!is.finite(c_d) || c_d == 0) c_d <- 1
+
+      est_sigmas[[d]] <- est_sigmas[[d]] / c_d
+      scale_prod <- scale_prod * c_d
+    }
+
+    est_sigmas[[num_dim]] <- est_sigmas[[num_dim]] * scale_prod
 
     # Step 5: Check convergence
 
-    logliks[t] <- loglik_normal_observed(data, mean_array, est_sigmas)
+    total_loglik <- 0
+
+    for(i in 1:n) {
+      total_loglik <-
+        total_loglik + dtnorm(data[[i]], mean_array, est_sigmas, log = TRUE)
+    }
+
+    logliks[t] <- total_loglik
 
     if(t >= 3) {
       lt_after <- logliks[t]
@@ -112,28 +116,7 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
         ))
       }
     }
-    # convergence check
-    # rel_changes <- mapply(function(new, old)
-    #   norm(new - old, "F") / (norm(old, "F") + 1e-12),
-    #   est_sigmas, old_sigmas)
-    #
-    # max_change <- max(rel_changes)
-    #
-    # if (t %% 50 == 0 & !quiet) {
-    #   cat(sprintf(
-    #     "Iteration %d: mean relative change = %.3e\n",
-    #     t,
-    #     mean_change
-    #   ))
-    # }
-    #
-    # if (max_change < tol) {
-    #   if(!quiet) message("Converged at iteration ", t)
-    #   break
-    # }
   }
 
-  # normalize covariance matrices with trace
-  list(mu = mean_array,
-       sigmas = lapply(est_sigmas, function(S) S * (nrow(S) / sum(diag(S)))))
+  list(mu = mean_array, sigmas = est_sigmas)
 }

@@ -34,7 +34,7 @@
 #'
 #' @seealso [tucker()] to create the list of cores from the Tucker decomposition.
 #' @export
-rtnorm <- function(n, mu = 0, sigmas = 1) {
+rtnorm <- function(n, mu = 0, sigmas = list(matrix(1))) {
   dims <- dim(mu)
 
   # mu was a scalar
