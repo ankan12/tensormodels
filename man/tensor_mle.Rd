@@ -4,7 +4,14 @@
 \alias{tensor_mle}
 \title{tensor_mle}
 \usage{
-tensor_mle(draws, max_iter = 1000, tol = 0.01, quiet = TRUE, model)
+tensor_mle(
+  draws,
+  max_iter = 1000,
+  tol = 0.01,
+  quiet = TRUE,
+  model,
+  restrict = NULL
+)
 }
 \arguments{
 \item{draws}{An array containing the draws, where the first mode represents

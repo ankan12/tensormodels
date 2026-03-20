@@ -4,10 +4,10 @@
 #'
 #' @param n An integer stating the sample size.
 #' @param mu An array containing the mean values of and dims of each draw.
-#' @param sigmas A list of covariance matrices. Defaults to the identity.
 #' @param skew An array that determines how skewed the distribution is.
-#' @param omega Shape parameter for generalized inverse Gaussian distribution.
+#' @param sigmas A list of covariance matrices. Defaults to the identity.
 #' @param lambda Shape/scale parameter for generalized inverse Gaussian distribution.
+#' @param omega Shape parameter for generalized inverse Gaussian distribution.
 #'
 #' @return An array containing n draws of the tensor generalized hyperbolic distribution.
 #'
@@ -19,25 +19,29 @@
 #' @importFrom GIGrvg rgig
 
 
-rtgenhyper <- function(n, mu = 0, sigmas = 1, skew = 1, omega = 2, lambda = 2) {
+rtgenhyper <- function(n, mu = 0, skew = 1, sigmas = list(matrix(1)),
+                       lambda = 2, omega = 2) {
   dims <- dim(mu)
 
   # mu was a scalar
   if(is.vector(mu)) dims <- 1
 
+  # no sigmas provided, use identity
+  if (length(sigmas) == 1 && nrow(sigmas[[1]]) == 1 && sigmas[[1]] == 1) {
+    sigmas <- lapply(dims, diag)
+  }
+
   # draw tensor variate normals
   tensor_norms <- rtnorm(n, mu = mu, sigmas)
-
-  all_dim <- dim(tensor_norms)
 
   # generate inv GIG
   inv_gig <- rgig(n = n, lambda = lambda, chi = omega, psi = 2)
 
-  # scale normals by inv GIG
-  scale_norms <-  tensor_norms * array(sqrt(inv_gig), dim = all_dim)
+  genhyper_draws <- vector("list", n)
 
-  # scale skew by inv GIG
-  scale_skew <- array(rep(skew, each = n), dim = all_dim) * array(inv_gig, dim = all_dim)
+  for(i in 1:n) { # scale normals and skew by inv GIG
+    genhyper_draws[[i]] <- tensor_norms[[i]] * sqrt(inv_gig[i]) + skew * inv_gig[i]
+  }
 
-  array(rep(mu, each = n), dim = c(n, dims)) + scale_skew + scale_norms
+  genhyper_draws
 }

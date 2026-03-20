@@ -18,19 +18,31 @@
 #' fourth_scaled <- lapply(fourth_sigma, function(S) S * (nrow(S) / sum(diag(S))))
 #' (mse_each <- mapply(function(est, true) mean((est - true)^2), est_fourth$sigmas, fourth_scaled))
 #' @export
-tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
+tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
+                              quiet = TRUE, restrict = NULL) {
   #get dim of input
   n <- length(data)
   dims <- dim(data[[1]])
   num_dim <- length(dims)
 
-  mean_array <- Reduce(`+`, data) / length(data)
+  if (length(restrict) >= num_dim) {
+    stop("Invalid restriction: You must restrict at most number of dims - 1 scale parameters.")
+  }
+
+  if(num_dim == 1 && dims == 1) {
+    vector_data <- simplify2array(data)
+    mu <- mean(vector_data)
+    sigma <- sd(vector_data)
+    return(list(mu = mu, sigmas = list(sigma)))
+  }
 
   if(num_dim == 1) {
     array_data <- simplify2array(data) |> aperm(c(2, 1))
     sigma <- cov(array_data) * (n - 1)/n
-    return(list(mu = mean_array, sigmas = list(sigma)))
+    return(list(mu = mu, sigmas = list(sigma)))
   }
+
+  mu <- simplify2array(data) |> apply(1:num_dim, mean)
 
   #intialize sigmas as identity matrices
   est_sigmas <- lapply(dims, diag)
@@ -45,12 +57,6 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
       #inverses of all sigma
       inv_sigma <- lapply(est_sigmas, invert_safe)
 
-      #exclude kth mode
-      inv_sigma_except_k <- inv_sigma[-k]
-
-      # Kronecker product of inverses except k
-      kron_except_k <- Reduce(function(A,B) kronecker(B, A), inv_sigma_except_k)
-
       # dim for kth mode
       d_k    <- dims[k]
       d_negk <- prod(dims[-k])
@@ -58,12 +64,22 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
 
       # accumlate mode-k covar
       for (draw in 1:n) {
-        Xi <- data[[draw]] - mean_array
+        Xi <- data[[draw]] - mu
+        Xik <- matricization(Xi, k)
 
-        Xik <- tensormodels::matricization(Xi, k)
-        s_k <- s_k + Xik %*% kron_except_k %*% t(Xik)
+        for(index_kroneck in (1:num_dim)[-k]) {
+          Xi <- n_prod(Xi, inv_sigma[[index_kroneck]], index_kroneck)
+        }
+
+        s_k <- s_k + matricization(Xi, k) %*% t(Xik)
       }
 
+      if (k %in% restrict) { # restrict to be product of identity
+        s_k <- s_k / (n * d_negk)
+        curr_sigma <- sum(diag(s_k)) / d_k
+        est_sigmas[[k]] <- diag(d_k) * curr_sigma
+        next
+      }
       # update sigma_k
       est_sigmas[[k]] <- s_k / (n * d_negk)
     }
@@ -71,6 +87,8 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
     scale_prod <- 1
 
     for (d in 1:(num_dim - 1)) {
+      if (d %in% restrict) next  # don't rescale constrained factors
+
       c_d <- est_sigmas[[d]][1, 1]
 
       if (!is.finite(c_d) || c_d == 0) c_d <- 1
@@ -86,8 +104,8 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
     total_loglik <- 0
 
     for(i in 1:n) {
-      total_loglik <-
-        total_loglik + dtnorm(data[[i]], mean_array, est_sigmas, log = TRUE)
+      total_loglik <- total_loglik +
+                      dtnorm(data[[i]], mu, est_sigmas, log = TRUE)
     }
 
     logliks[t] <- total_loglik
@@ -118,5 +136,5 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
     }
   }
 
-  list(mu = mean_array, sigmas = est_sigmas)
+  list(mu = mu, sigmas = est_sigmas)
 }

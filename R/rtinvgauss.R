@@ -18,11 +18,16 @@
 #' @importFrom statmod rinvgauss
 
 
-rtinvgauss <- function(n, mu = 0, sigmas = 1, skew = 1, kappa = 2) {
+rtinvgauss <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, kappa = 2) {
   dims <- dim(mu)
 
   # mu was a scalar
   if(is.vector(mu)) dims <- 1
+
+  # no sigmas provided, use identity
+  if (length(sigmas) == 1 && nrow(sigmas[[1]]) == 1 && sigmas[[1]] == 1) {
+    sigmas <- lapply(dims, diag)
+  }
 
   # draw tensor variate normals
   tensor_norms <- rtnorm(n, mu = mu, sigmas)
@@ -32,11 +37,12 @@ rtinvgauss <- function(n, mu = 0, sigmas = 1, skew = 1, kappa = 2) {
   # generate inv Gauss
   inv_gauss <- rinvgauss(n = n, mean = 1, shape = kappa)
 
-  # scale normals by inv Gauss
-  scale_norms <- tensor_norms * array(sqrt(inv_gauss), dim = all_dim)
+  invgauss_draws <- vector("list", n)
 
-  # scale skew by inv Gauss
-  scale_skew <- array(rep(skew, each = n), dim = all_dim) * array(inv_gauss, dim = all_dim)
+  for(i in 1:n) { # scale normals and skew by inv Gauss
+    invgauss_draws[[i]] <- tensor_norms[[i]] * sqrt(inv_gauss[i]) +
+                           skew * inv_gauss[i]
+  }
 
-  array(rep(mu, each = n), dim = c(n, dims)) + scale_skew + scale_norms
+  invgauss_draws
 }

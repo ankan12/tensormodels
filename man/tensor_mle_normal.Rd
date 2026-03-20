@@ -4,7 +4,13 @@
 \alias{tensor_mle_normal}
 \title{tensor_mle_normal}
 \usage{
-tensor_mle_normal(data, max_iter = 1000, tol = 1e-06, quiet = TRUE)
+tensor_mle_normal(
+  data,
+  max_iter = 1000,
+  tol = 1e-06,
+  quiet = TRUE,
+  restrict = NULL
+)
 }
 \arguments{
 \item{data}{An array containing the draws, where the first mode represents each draw.}

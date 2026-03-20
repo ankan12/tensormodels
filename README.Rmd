@@ -135,9 +135,9 @@ simulate from a univariate normal with mean $-2$ and variance $4$.
 ```{r}
 univar_draws <- rtnorm(n = 1000, mu = -2, sigmas = 4)
 
-mean(univar_draws)
+mean(simplify2array(univar_draws))
 
-sd(univar_draws)
+sd(simplify2array(univar_draws))
 ```
 
 
@@ -147,7 +147,7 @@ default, the covariance matrices will be the identity.
 ```{r}
 matrix_draws <- rtnorm(n = 1e3, mu = matrix(1:6, nrow = 2, ncol = 3))
 
-matrix_draws[1, , ]
+matrix_draws[[1]]
 ```
 
 
@@ -155,9 +155,9 @@ Below is a simulation from a tensor variate normal of size $3 \times 4 \times
 2$.
 
 ```{r}
-tensor_draws <- rtnorm(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
+tvn_draws <- rtnorm(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
 
-tensor_draws[1, , , ]
+tvn_draws[[1]]
 ```
 
 
@@ -170,11 +170,11 @@ The package supports MLE estimation for the mean and list of covariance
 matrices.
 
 ```{r}
-univar_est <- mle_est(univar_draws)
+univarnorm_est <- tensor_mle(draws = univar_draws, model = "normal")
 
-univar_est$mu
+univarnorm_est$mu
 
-univar_est$sigmas
+univarnorm_est$sigmas
 ```
 
 
@@ -182,10 +182,9 @@ Here, the mean matrix from the draws above has values 1 through 6. The
 covariance matrices are the identity matrices by default.
 
 ```{r}
-matrix_est <- mle_est(matrix_draws)
+matrix_est <- tensor_mle(matrix_draws, model = "normal")
 
 matrix_est$mu
-
 matrix_est$sigmas |> lapply(round, 3)
 ```
 
@@ -193,11 +192,10 @@ matrix_est$sigmas |> lapply(round, 3)
 This function works on array objects of dimensions above 2. 
 
 ```{r}
-tensor_est <- mle_est(tensor_draws)
+normal_est <- tensor_mle(draws = tvn_draws, model = "normal")
 
-tensor_est$mu
-
-tensor_est$sigmas |> lapply(round, 3)
+normal_est$mu
+normal_est$sigmas |> lapply(round, 3)
 ```
 
 
@@ -209,118 +207,147 @@ tensor_est$sigmas |> lapply(round, 3)
 ## Tensor variate generalized hyperbolic
 
 ```{r}
-genhyper_draws <- rtgenhyper(n = 1e3, mu = rand_mu)
+genhyper_draws <- rtgenhyper(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
 ```
 
 
 ```{r}
-em_est_genhyper(genhyper_draws)
+genhyper_est <- tensor_mle(genhyper_draws, model = "genhyper", quiet = FALSE)
+
+genhyper_est$mu
+genhyper_est$skew
+genhyper_est$sigmas |> lapply(round, 3)
+genhyper_est$lambda
+genhyper_est$omega
 ```
 
 
 ## Tensor variate variance gamma
 ```{r}
-vargamma_draws <- rtvargamma(n = 1e3, mu = rand_mu)
+vargamma_draws <- rtvargamma(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
 ```
 
 
 
 ```{r}
-vargam_est <- em_est_vargamma(vargamma_draws)
+vargamma_est <- tensor_mle(vargamma_draws, model = "vargamma", quiet = FALSE)
 
-vargam_est$mu 
-vargam_est$skew 
-vargam_est$sigmas |> lapply(round, 3)
+vargamma_est$mu
+vargamma_est$skew
+vargamma_est$sigmas |> lapply(round, 3)
 ```
 
 
 ## Tensor variate normal inverse Gaussian 
 ```{r}
-invgauss_draws <- rtinvgauss(n = 1e3)
+invgauss_draws <- rtinvgauss(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
 ```
 
 
 ```{r}
-invgauss_est <- em_est_invgauss(vargamma_draws)
+invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss", quiet = FALSE)
 
 invgauss_est$mu
-invgauss_est$skew |> lapply(round, 3)
+invgauss_est$skew |> round(3) 
 invgauss_est$sigmas |> lapply(round, 3)
+invgauss_est$kappa
+```
+
+## Tensor variate skewed t
+
+```{r}
+skewt_draws <- rtskewt(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
+```
+
+
+```{r}
+skewt_est <- tensor_mle(skewt_draws, model = "skewt", 
+                        quiet = FALSE, tol = 1e-3)
+
+skewt_est$mu
+skewt_est$skew |> round(3) 
+skewt_est$sigmas |> lapply(round, 3)
+skewt_est$nu
+
+skewt_est$mu + (skewt_est$nu / (skewt_est$nu - 2)) * skewt_est$skew
 ```
 
 
 ## Assessing tensor variate normality
 
-We can use the Mahalanobis distance to assess the tensor variate normality. If
-we compute the distances and plot them, they should be distributed as
-approximately $\chi_{p}$ where $p$ is the product of all the modes of the draws.
+<!-- We can use the Mahalanobis distance to assess the tensor variate normality. If -->
+<!-- we compute the distances and plot them, they should be distributed as -->
+<!-- approximately $\chi_{p}$ where $p$ is the product of all the modes of the draws. -->
 
-```{r}
-#| error: true
-centered_draws <- matrix_draws - array(rep(matrix_est$mu, each = n), dim = dim(matrix_draws))
+<!-- ```{r} -->
+<!-- #| error: true -->
+<!-- centered_draws <- matrix_draws - array(rep(matrix_est$mu, each = n), dim = dim(matrix_draws)) -->
 
-inv_sqrt <- function(Sigma, tol = 1e-8) {
-  # syemmetric matrix
-  Sigma <- (Sigma + t(Sigma)) / 2
-  
-  eig <- eigen(Sigma, symmetric = TRUE)
-  vals <- pmax(eig$values, tol)  # positive eigenvalues
-  V <- eig$vectors
-  
-  Winv <- V %*% diag(1 / sqrt(vals), nrow = length(vals)) %*% t(V)
-  Winv
-}
+<!-- inv_sqrt <- function(Sigma, tol = 1e-8) { -->
+<!--   # syemmetric matrix -->
+<!--   Sigma <- (Sigma + t(Sigma)) / 2 -->
 
-D2 <- rep(0, n)
+<!--   eig <- eigen(Sigma, symmetric = TRUE) -->
+<!--   vals <- pmax(eig$values, tol)  # positive eigenvalues -->
+<!--   V <- eig$vectors -->
 
-inv_sigmas <- vector("list", length(matrix_est$sigmas))
+<!--   Winv <- V %*% diag(1 / sqrt(vals), nrow = length(vals)) %*% t(V) -->
+<!--   Winv -->
+<!-- } -->
 
-for(k in 1:2) {
-  inv_sigmas[[k]] <- inv_sqrt(matrix_est$sigmas[[k]])
-}
+<!-- D2 <- rep(0, n) -->
 
-for(i in 1:n) {
-  Y <- centered_draws[i, , ]
-  for(k in 1:2) {
-    Y <- n_prod(Y, matrix_est$sigmas[[k]], k)
-  }
-  D2[i] <- sum(c(Y)^2)
-}
+<!-- inv_sigmas <- vector("list", length(matrix_est$sigmas)) -->
 
-sigma2_hat <- mean(D2) / 2
-D2_std <- D2 / sigma2_hat    
+<!-- for(k in 1:2) { -->
+<!--   inv_sigmas[[k]] <- inv_sqrt(matrix_est$sigmas[[k]]) -->
+<!-- } -->
 
-ggplot() +
-  geom_histogram(aes(x = D2_std, y = after_stat(density)), color = "black", fill = "pink", bins = 30) + 
-  geom_function(fun = dchisq, args = list(df = prod(dim(matrix_est$mu))), color = "red") +
-  theme_minimal() + 
-  labs(x = "Mahalanobis distance", y = "Density")
-```
+<!-- for(i in 1:n) { -->
+<!--   Y <- centered_draws[i, , ] -->
+<!--   for(k in 1:2) { -->
+<!--     Y <- n_prod(Y, matrix_est$sigmas[[k]], k) -->
+<!--   } -->
+<!--   D2[i] <- sum(c(Y)^2) -->
+<!-- } -->
+
+<!-- sigma2_hat <- mean(D2) / 2 -->
+<!-- D2_std <- D2 / sigma2_hat     -->
+
+<!-- ggplot() + -->
+<!--   geom_histogram(aes(x = D2_std, y = after_stat(density)), color = "black", fill = "pink", bins = 30) +  -->
+<!--   geom_function(fun = dchisq, args = list(df = prod(dim(matrix_est$mu))), color = "red") + -->
+<!--   theme_minimal() +  -->
+<!--   labs(x = "Mahalanobis distance", y = "Density") -->
+<!-- ``` -->
 
 
 ## Tensor Variate Skewed T
 
 
 ```{r}
-tibble(skew25 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 0.25, nu = 6)),
-       skew50 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 0.5, nu = 6)),
-       skew0 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 0, nu = 6)),
-       skew1 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 6)),
-       skew5 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 5, nu = 6)),
-       skew10 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 10, nu = 6))) |>
-  pivot_longer(cols = everything()) |>
+tibble(skew25 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 0.25, nu = 6)),
+       skew50 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 0.5, nu = 6)),
+       skew0 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 0, nu = 6)),
+       skew1 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 6)),
+       skew5 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 5, nu = 6)),
+       skew10 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 10, nu = 6))) |>
+  pivot_longer(cols = everything()) |> 
+  mutate(name = factor(name, levels = c("skew0", "skew1", 
+                                     "skew5", "skew10", "skew25", "skew50"))) |> 
   ggplot() +
   geom_histogram(aes(x = value), color = "black", fill = "pink") +
   facet_wrap(~name, nrow = 2, scales = "free_x") +
   theme_minimal()
 
-tibble(nu05 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 0.5)),
-       nu1 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 1)),
-       nu5 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 5)),
-       nu10 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 10)),
-       nu20 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 20)),
-       nu50 = c(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 50))) |>
+tibble(nu05 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 0.5)),
+       nu1 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 1)),
+       nu5 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 5)),
+       nu10 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 10)),
+       nu20 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 20)),
+       nu50 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 50))) |>
   pivot_longer(cols = everything()) |>
+  mutate(name = factor(name, levels = c("nu05", "nu1", "nu5", "nu10", "nu20", "nu50"))) |> 
   ggplot() +
   geom_histogram(aes(x = value), color = "black", fill = "pink") +
   facet_wrap(~name, nrow = 2, scales = "free_x") +

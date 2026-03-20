@@ -5,7 +5,7 @@ output: pdf_document
 
 ```{r, include = FALSE}
 #library(tensormodels)
-#library(tidyverse)
+library(tidyverse)
 #library(patchwork)
 #library(MVN)
 #library(MASS)
@@ -32,7 +32,6 @@ matnorm_draws <- rtnorm(n, mu = matrix(1:6, nrow = 2),
 matnorm_distances <- mahalanobis_dist(matnorm_draws)
 
 tensor_mle(matnorm_draws, model = "normal", quiet = FALSE)
-
 
 # multivariate normal draws
 s_multivar <- matrix(rnorm(6*6), nrow = 6) |> crossprod()
@@ -120,48 +119,301 @@ with(tensornorm_test, mtext(text = sprintf("D = %.3f, p = %.3f", statistic, p.va
 
 # LRT Test
 ```{r}
-lrt_test <- function(draws_one, draws_two, model) {
-  draws_one_mle <- tensor_mle(draws_one, model = model)
-  draws_two_mle <- tensor_mle(draws_two, model = model)
+lrt_test <- function(draws, restrict, model) {
+  draws_mle <- tensor_mle(draws, model = model)
+  draws_restrict_mle <- tensor_mle(draws, restrict = restrict, model = model)
   
-  n1 <- length(draws_one) #num of samples
-  n2 <- length(draws_two) 
+  n <- length(draws) 
   
-  tot_log_one <- 0 #log lik
-  tot_log_two <- 0
+  tot_log <- 0 #log lik
+  tot_log_restrict <- 0
   
-  for(i in 1:n1) { #iterate over all samples
-    tot_log_one <- 
-      tot_log_one + dtnorm(draws_one[[i]], draws_one_mle$mu, 
-                           draws_one_mle$sigmas, log = TRUE)
+  for(i in 1:n) { #iterate over all samples
+    tot_log <- tot_log + dtnorm(draws[[i]], draws_mle$mu, 
+                                draws_mle$sigmas, log = TRUE)
+    
+    tot_log_restrict <- tot_log_restrict + 
+                        dtnorm(draws[[i]], draws_restrict_mle$mu, 
+                               draws_restrict_mle$sigmas, log = TRUE)
   }
   
-  for(j in 1:n2) {
-    tot_log_two <- 
-      tot_log_two + dtnorm(draws_two[[j]], draws_two_mle$mu, 
-                           draws_two_mle$sigmas, log = TRUE)
-  }
-
-  dim_one <- dim(draws_one[[1]])
-  dim_two <- dim(draws_two[[1]])
+  dim_draws <- dim(draws[[1]])
   
-  param_one <- prod(dim_one) + sum(sapply(dim_one, function(p) p*(p + 1) / 2)) - length(dim_one) + 1
-  param_two <- prod(dim_two) + sum(sapply(dim_two, function(p) p*(p + 1) / 2)) - length(dim_two) + 1
-  
-  df <- param_one - param_two
+  unrestrict <- dim_draws[-restrict]
 
-  stat <- 2 * (tot_log_one - tot_log_two)
+  param <- prod(dim_draws) + 
+           sum(sapply(dim_draws, function(p) p*(p + 1) / 2)) - length(dim_draws) + 1
+  
+  param_restrict <- prod(dim_draws) + 
+                    sum(sapply(unrestrict, function(p) p*(p + 1) / 2)) - 
+                    length(unrestrict) + 1 + length(restrict) # one free param for scalar of identity
+
+  df <- param - param_restrict
+
+  stat <- 2 * (tot_log - tot_log_restrict)
   pval <- pchisq(stat, df = df, lower.tail = FALSE)
   list(stat = stat, df = df, p.value = pval,
-       first_loglik = tot_log_one,
-       second_loglik = tot_log_two)
+       first_loglik = tot_log,
+       second_loglik = tot_log_restrict)
 }
+ 
+# lrt_test <- function(draws_one, draws_two, model) {
+#   draws_one_mle <- tensor_mle(draws_one, model = model)
+#   draws_two_mle <- tensor_mle(draws_two, model = model)
+#   
+#   n1 <- length(draws_one) #num of samples
+#   n2 <- length(draws_two) 
+#   
+#   tot_log_one <- 0 #log lik
+#   tot_log_two <- 0
+#   
+#   for(i in 1:n1) { #iterate over all samples
+#     tot_log_one <- 
+#       tot_log_one + dtnorm(draws_one[[i]], draws_one_mle$mu, 
+#                            draws_one_mle$sigmas, log = TRUE)
+#   }
+#   
+#   for(j in 1:n2) {
+#     tot_log_two <- 
+#       tot_log_two + dtnorm(draws_two[[j]], draws_two_mle$mu, 
+#                            draws_two_mle$sigmas, log = TRUE)
+#   }
+# 
+#   dim_one <- dim(draws_one[[1]])
+#   dim_two <- dim(draws_two[[1]])
+#   
+#   param_one <- prod(dim_one) + sum(sapply(dim_one, function(p) p*(p + 1) / 2)) - length(dim_one) + 1
+#   param_two <- prod(dim_two) + sum(sapply(dim_two, function(p) p*(p + 1) / 2)) - length(dim_two) + 1
+#   
+#   df <- param_one - param_two
+# 
+#   stat <- 2 * (tot_log_one - tot_log_two)
+#   pval <- pchisq(stat, df = df, lower.tail = FALSE)
+#   list(stat = stat, df = df, p.value = pval,
+#        first_loglik = tot_log_one,
+#        second_loglik = tot_log_two)
+# }
 ```
 
 
-## Univariate normal data
+## Restricted model data
 ```{r}
-three_dim <- rtnorm(1e3, mu = array(0, dim = c(2, 3, 4)))
+simulate_null <- function(n = 1000) {
+
+  # generate full Kronecker but with sigma^2 I_4
+  s1 <- s1
+  s2 <- s2
+  s3 <- diag(4) * 2  # scalar identity
+
+  draws <- rtnorm(n, mu = array(0, dim = c(2,3,4)), sigmas = list(s1, s2, s3))
+
+  lrt_test(draws, restrict = 3, model = "normal")$p.value
+}
+
+pvals <- replicate(10, simulate_null())
+
+mean(pvals < 0.05)
+```
+
+
+```{r}
+univar_draws <- rtnorm(1e3*24, mu = 2) |> unlist()
+
+univar_3dim <- vector("list", 1e3)
+
+for(i in 1:1e3) {
+  univar_3dim[[i]] <- array(univar_draws[(24*(i-1)+1):(24*(i))], dim = c(2, 3, 4))
+}
+
+lrt_test(univar_3dim, restrict = c(1, 3), model = "normal")
+
+```
+
+
+```{r}
+three_dim <- rtnorm(1e3, mu = array(0, dim = c(2, 3, 4)),
+                    sigmas = list(s1, s2, s3))
+
+tic()
+lrt_test(three_dim, restrict = c(3), model = "normal")
+toc()
+```
+
+
+```{r}
+three_dim_identity <- rtnorm(1e3, mu = array(0, dim = c(2, 3, 4)), 
+                             sigmas = list(s1, s2, diag(4)))
+  
+tic()
+a <- lrt_test(three_dim_identity, restrict = c(2, 3), model = "normal")
+toc()
+```
+
+
+```{r}
+simulate_null <- function(rep) {
+  # generate full Kronecker but with sigma^2 I_4
+  s1 <- s1
+  s2 <- s2
+  s3 <- diag(4) * 2  # scalar identity
+
+  draws <- rtnorm(1000, mu = array(0, dim = c(2,3,4)), sigmas = list(s1, s2, s3))
+
+  test <- lrt_test(draws, restrict = 3, model = "normal")
+  
+  with(test, tibble(rep = rep, stat = as.numeric(stat), df = df, p.value = as.numeric(p.value),
+                    first_loglik = as.numeric(first_loglik), 
+                    second_loglik = as.numeric(second_loglik)))
+}
+
+library(furrr)
+plan(multisession, workers = 4)
+
+res <- future_map_dfr(1:100, simulate_null, .progress = TRUE,
+                      .options = furrr_options(seed = TRUE))
+
+mean(res$p.value < 0.05)
+```
+
+
+```{r}
+simulate_alternate <- function(rep) {
+  s1 <- s1
+  s2 <- s2
+  s3 <- s3
+
+  draws <- rtnorm(100, mu = array(0, dim = c(2,3,4)), sigmas = list(s1, s2, s3))
+
+  test <- lrt_test(draws, restrict = 3, model = "normal")
+  
+  with(test, tibble(rep = rep, stat = as.numeric(stat), df = df, p.value = as.numeric(p.value),
+                    first_loglik = as.numeric(first_loglik), 
+                    second_loglik = as.numeric(second_loglik)))
+}
+
+plan(multisession, workers = 4)
+
+res <- future_map_dfr(1:100, simulate_alternate, .progress = TRUE,
+                      .options = furrr_options(seed = TRUE))
+
+```
+
+
+```{r}
+#inverses of all sigma
+    inv_sigma <- lapply(est_sigmas, invert_safe)
+
+    #exclude kth mode
+    inv_sigma_except_k <- inv_sigma[-k]
+
+    # Kronecker product of inverses except k
+    kron_except_k <- Reduce(function(A,B) kronecker(B, A), inv_sigma_except_k)
+
+    # dim for kth mode
+    d_k    <- dims[k]
+    d_negk <- prod(dims[-k])
+    s_k    <- matrix(0, d_k, d_k)
+
+    # accumlate mode-k covar
+    for (draw in 1:n) {
+      Xi <- data[[draw]] - mean_array
+
+      Xik <- matricization(Xi, k)
+      s_k <- s_k + Xik %*% kron_except_k %*% t(Xik)
+    }
+    
+inv_real <- lapply(list(s1, s2, s3), invert_safe)
+
+inv_real_except_k <- inv_real[-k]
+
+
+matricization(((test |> n_prod(inv_real_except_k[[1]], 2)) |> n_prod(inv_real_except_k[[2]], 3)), 1) %*%
+  t(matricization(test, 1))
+
+  # Kronecker product of inverses except k
+kron_real_except_k <- Reduce(function(A,B) kronecker(B, A), inv_real_except_k)
+
+Xik_real <- matricization(test, 1) #2x12
+
+
+Xik_real %*% kron_real_except_k %*% t(Xik)
+
+a <- n_prod(test, inv_real_except_k[[1]], 2) |> n_prod(inv_real_except_k[[2]], 3)
+
+(Xik_real %*% kron_real_except_k)
+
+matricization(a, 1) #%*% t(matricization(a, 1))
+
+Xik_real %*% kron_real_except_k
+
+matricization(a, 1)
+
+
+test |> n_prod(inv_real_except_k[[1]], 2) |> n_prod(inv_real_except_k[[2]], 3)
+```
+
+
+```{r}
+```
+
+
+```{r}
+lrt_test(univar_3dim, restrict = c(3), model = "normal")
+
+lrt_test(univar_3dim, restrict = c(2, 3), model = "normal")
+
+tensor_mle(three_dim, model = "normal")
+
+#1:24
+#25:48
+#49:...
+
+unlist(univar_draws) |> 
+
+
+univar_3dim <- lapply(univar_draws, function(x) {
+  array(x, dim = c(2, 12))
+})
+
+
+
+
+
+lrt_test(three_dim, restrict = c(3), model = "normal")
+
+lrt_test(multivar_draws_3dim, restrict = c(3), model = "normal")
+
+
+
+
+lrt_test(three_dim, restrict = c(2, 3), model = "normal")
+
+
+three_dim_mle <- tensor_mle(three_dim, model = "normal")
+
+three_dim_restrict_mle <-
+  tensor_mle(three_dim, model = "normal", restrict = c(3))
+
+three_dim_restrict_mle$sigmas
+
+tot_log_one <- 0
+
+for(i in 1:n1) { #iterate over all samples
+  tot_log_one <- 
+    tot_log_one + dtnorm(three_dim[[i]], three_dim_mle$mu, 
+                         three_dim_mle$sigmas, log = TRUE)
+}
+
+tot_log_two <- 0  
+
+for(j in 1:n2) {
+  tot_log_two <- 
+    tot_log_two + dtnorm(three_dim[[j]], three_dim_restrict_mle$mu, 
+                         three_dim_restrict_mle$sigmas, log = TRUE)
+}
+
+tot_log_one
+tot_log_two
 
 two_dim <- lapply(three_dim, function(x) {
   array(x, dim = c(2, 12))
@@ -173,6 +425,16 @@ one_dim <- lapply(three_dim, function(x) {
 
 lrt_test(two_dim, three_dim, model = "normal")
 lrt_test(one_dim, two_dim, model = "normal")
+
+Sigma_full_1 <- Reduce(kronecker, three_dim_mle$sigmas)
+Sigma_full_2 <- Reduce(kronecker, three_dim_restrict_mle$sigmas)
+
+# compare traces / determinants (use logdet for stability)
+tr1 <- sum(diag(Sigma_full_1))
+tr2 <- sum(diag(Sigma_full_2))
+
+tr1; tr2; tr2/tr1
+
 ```
 
 

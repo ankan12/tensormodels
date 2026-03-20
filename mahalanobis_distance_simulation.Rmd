@@ -1,0 +1,126 @@
+---
+title: "mahalanobis_distance_simulation"
+output: pdf_document
+date: "2026-02-26"
+---
+
+```{r}
+library(tidyverse)
+library(tensormodels)
+library(patchwork)
+```
+
+
+```{r}
+df <- 
+  tibble(x = rnorm(n = 1e4, mean = 5, sd = 2))
+
+xbar <- mean(df$x)
+s2 <- var(df$x)
+
+df |> 
+  mutate(dist = n()/(n()-1)^2 * as.vector(scale(x))^2) |> 
+  ggplot() +
+  geom_histogram(aes(x = dist, y = after_stat(density))) + 
+  geom_function(fun = dbeta,
+  args = list(shape1 = 1/2, shape2 = (1e4-1-1)/2)) +
+  xlim(0.005, 0.04)
+
+#p/2, N-p-1/2
+```
+
+
+```{r}
+(df |> 
+  mutate(row = row_number()) |> 
+  ggplot(aes(x = x)) +
+  geom_rug(aes(color = row)) +
+  geom_histogram()) /
+(df |> 
+  mutate(m_dist = (x - 5)/2,
+         row = row_number()) |> 
+  ggplot(aes(x = m_dist)) +
+  geom_rug(aes(color = row)) +
+  geom_histogram()) & coord_cartesian(xlim = c(-3, 12))
+
+df |> 
+  mutate(mahalanobis_dist = (x - 5)/2,
+         row = row_number()) |> 
+  ggplot() + 
+  geom_point(aes(x = mahalanobis_dist, y = 0, color = row), alpha = 0.4) +
+  theme_minimal()
+
+s1 <- crossprod(matrix(c(1, 0.5, 0.5, 2), nrow = 2))
+
+rmvnorm_draws <- rtnorm(n = 500, mu = c(2, 4), 
+                        sigmas = list(s1))
+
+for(i in 1:500) {
+  centered <- rmvnorm_draws[[i]] - c(2, 4)
+  #whiten_data[[i]] <- s_inv_half %*% centered
+  mahalanobis_dist[[i]] <- t(centered) %*% s_inv %*% centered
+}
+
+tibble(m_dist = mahalanobis_dist) |> 
+  mutate(row = row_number()) |> 
+  ggplot(aes(x = m_dist)) +
+  geom_rug(aes(color = row)) +
+  geom_histogram()
+  
+
+
+rmvnorm_array <- simplify2array(rmvnorm_draws) |> t() 
+
+rmvnorm_array - c(2, 4000)
+
+lapply(rtnorm_draws)
+
+rmvnorm_draws
+
+s_inv <- solve(s1)
+
+#spectral_decomp <- eigen(s1)
+#with(spectral_decomp, vectors %*% (diag(1/values)) %*% t(vectors))
+
+s_inv_half <- with(spectral_decomp, vectors %*% diag(sqrt(1/values)) %*% t(vectors))
+
+whiten_data <- vector("list", 500)
+mahalanobis_dist <- rep(0, 500)
+
+for(i in 1:500) {
+  centered <- rmvnorm_draws[[i]] - c(2, 4)
+  whiten_data[[i]] <- s_inv_half %*% centered
+  mahalanobis_dist[[i]] <- t(centered) %*% s_inv %*% centered
+}
+
+(rmvnorm_draws |>
+  map_dfr(~ tibble(x = .x[1], y = .x[2])) |> 
+  mutate(row = row_number()) |> 
+  ggplot() + 
+  geom_point(aes(x = x, y = y, color = row)) +
+  theme_minimal()) /
+(whiten_data |>
+  map_dfr(~ tibble(x = .x[1], y = .x[2])) |> 
+  mutate(row = row_number()) |> 
+  ggplot() + 
+  geom_point(aes(x = x, y = y, color = row)) + 
+  theme_minimal()) & 
+  coord_equal(xlim = c(-3, 6), ylim = c(-3, 10))
+
+rmvnorm_draws |>
+  map_dfr(~ tibble(x = .x[1], y = .x[2])) |> 
+  mutate(dist = mahalanobis_dist,
+         row = row_number()) |> 
+  ggplot() + 
+  geom_point(aes(x = x, y = y, color = dist)) +
+  theme_minimal()
+
+whiten_data |>
+  map_dfr(~ tibble(x = .x[1], y = .x[2])) |> 
+  mutate(dist = mahalanobis_dist,
+         row = row_number()) |> 
+  ggplot() + 
+  geom_point(aes(x = x, y = y, color = dist)) + 
+  theme_minimal() 
+```
+

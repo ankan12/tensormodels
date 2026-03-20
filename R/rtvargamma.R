@@ -16,25 +16,30 @@
 #' sd(univar_vargam)
 #' @export
 
-rtvargamma <- function(n, mu = 0, sigmas = 1, skew = 1, scale = 2) {
+rtvargamma <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, scale = 2) {
   dims <- dim(mu)
 
   # mu was a scalar
   if(is.vector(mu)) dims <- 1
 
-  # draw tensor variate normals
-  tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
+  # no sigmas provided, use identity
+  if (length(sigmas) == 1 && nrow(sigmas[[1]]) == 1 && sigmas[[1]] == 1) {
+    sigmas <- lapply(dims, diag)
+  }
 
-  all_dim <- dim(tensor_norms)
+  # draw tensor variate normals
+  tensor_norms <- rtnorm(n, mu = mu, sigmas)
+
+  #all_dim <- dim(tensor_norms)
 
   # generate gamma draws
   gammas <- rgamma(n = n, shape = scale, rate = scale)
 
-  # scale normals by gamma
-  scale_norms <- tensor_norms * array(sqrt(gammas), dim = all_dim)
+  vargamma_draws <- vector("list", n)
 
-  # scale skew by gamma
-  scale_skew <- array(rep(skew, each = n), dim = all_dim) * array(gammas, dim = all_dim)
+  for(i in 1:n) { # scale normals and skew by gamma
+    vargamma_draws[[i]] <- tensor_norms[[i]] * sqrt(gammas[i]) + skew * gammas[i]
+  }
 
-  array(rep(mu, each = n), dim = c(n, dims)) + scale_skew + scale_norms
+  vargamma_draws
 }

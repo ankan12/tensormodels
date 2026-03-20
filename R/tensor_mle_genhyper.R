@@ -5,19 +5,28 @@
 #'   covariance matrices, lambda, and omega.
 #'
 #' @noRd
-tensor_mle_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE) {
+tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
+                                quiet = TRUE, restrict = NULL) {
 
   # get dim of input
-  dims <- dim(draws)[-1]
+  n <- length(data)
+  dims <- dim(data[[1]])
   num_dim <- length(dims)
-  n <- dim(draws)[1]
   n_star <- prod(dims)
 
+  # dims <- dim(draws)[-1]
+  # num_dim <- length(dims)
+  # n <- dim(draws)[1]
+  # n_star <- prod(dims)
+
   # Step 1: Initialize vals
-  mu <- apply(X = draws, MARGIN = 2:(num_dim + 1), FUN = mean)
+  #mu <- apply(X = draws, MARGIN = 2:(num_dim + 1), FUN = mean)
+  mu <- simplify2array(data) |> apply(1:num_dim, mean)
 
   skew <- array(rnorm(prod(dims)), dim = dims)
-  sigmas <- lapply(dims, diag)
+
+  #intialize sigmas as identity matrices
+  est_sigmas <- lapply(dims, diag)
 
   logliks <- rep(0, max_iter)
 
@@ -28,32 +37,31 @@ tensor_mle_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE
   for (t in 1:max_iter) {
     # Step 2: Update a, b, c depending on expected values
     skew_compute <- skew
+    inv_sigma <- lapply(est_sigmas, invert_safe)
 
-    for (d in seq_along(sigmas)) {
-      skew_compute <- n_prod(skew_compute, chol2inv(chol(sigmas[[d]])), d)
+    for (d in seq_along(est_sigmas)) {
+      skew_compute <- n_prod(skew_compute, inv_sigma[[d]], d)
     }
 
     rho <- sum(skew * skew_compute)
 
     delta_vals <- rep(0, n)
 
-    mu_array <- replicate(n, mu, simplify = "array") |>
-      aperm(c(num_dim + 1, (1:(num_dim))))
+    # mu_array <- replicate(n, mu, simplify = "array") |>
+    #   aperm(c(num_dim + 1, (1:(num_dim))))
 
-    centered <- draws - mu_array
+    #centered <- draws - mu_array
 
     for (i in 1:n) {
-      center_draw <- centered[i, , , ]
+      center_draw <- data[[i]] - mu
 
       centered_compute <- center_draw
 
-      for (d in seq_along(sigmas)) {
-        centered_compute <- n_prod(
-          centered_compute,
-          chol2inv(chol(sigmas[[d]])),
-          d
-        )
+      for (d in seq_along(est_sigmas)) {
+        centered_compute <-
+          n_prod(centered_compute, inv_sigma[[d]], d)
       }
+
       delta_vals[i] <- sum(center_draw * centered_compute)
     }
 
@@ -66,6 +74,7 @@ tensor_mle_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE
       nu = param_vals + 1,
       expon.scaled = TRUE
     )
+
     k_lambda <- besselK(
       x = sqrt(rho * delta_vals),
       nu = param_vals,
@@ -106,8 +115,8 @@ tensor_mle_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE
     num_skew <- 0
 
     for (i in 1:n) {
-      num_mean <- num_mean + weight_mean[i] * draws[i, , , ]
-      num_skew <- num_skew + weight_skew[i] * draws[i, , , ]
+      num_mean <- num_mean + weight_mean[i] * data[[i]]
+      num_skew <- num_skew + weight_skew[i] * data[[i]]
     }
 
     den_mean <- sum(mean(a) * b) - n
@@ -117,7 +126,7 @@ tensor_mle_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE
     den_skew <- sum(a * mean(b)) - n
     new_skew <- num_skew / den_skew
 
-    new_sigmas <- sigmas
+    new_sigmas <- est_sigmas
 
     # update params based on model
     update_nu <- function(nu, b, c, n) {
@@ -177,13 +186,13 @@ tensor_mle_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE
       inv_others <- diag(1)
 
       for (d in rev(other_modes)) {
-        inv_others <- kronecker(inv_others, chol2inv(chol(sigmas[[d]])))
+        inv_others <- kronecker(inv_others, invert_safe(new_sigmas[[d]]))
       }
 
       A_i <- matricization(new_skew, j)
 
       for (i in 1:n) {
-        Xi_centered <- matricization(draws[i, , , ] - new_mu, j)
+        Xi_centered <- matricization(data[[i]] - new_mu, j)
 
         first <- first + b[i] * (Xi_centered %*% inv_others %*% t(Xi_centered))
 
@@ -203,9 +212,24 @@ tensor_mle_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE
       new_sigmas[[j]] <- sigma_j
     }
 
+    # update all parameters
+    mu <- new_mu
+    skew <- new_skew
+    est_sigmas <- new_sigmas
+
+    lambda <- new_lambda
+    omega <- new_omega
+
     # Step 5: Check convergence
 
-    logliks[t] <- loglik_genhyper_observed(draws, mu, skew, sigmas, lambda, omega)
+    total_loglik <- 0
+
+    for(i in 1:n) {
+      total_loglik <- total_loglik +
+        dtgenhyper(data[[i]], mu, skew, est_sigmas, lambda, omega, log = TRUE)
+    }
+
+    logliks[t] <- total_loglik
 
     if(t >= 3) {
 
@@ -232,16 +256,9 @@ tensor_mle_genhyper <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE
         ))
       }
     }
-
-    # update all parameters
-    mu <- new_mu
-    skew <- new_skew
-    sigmas <- new_sigmas
-
-    lambda <- new_lambda
-    omega <- new_omega
   }
 
-  list(mu = mu, skew = skew, sigmas = sigmas, lambda = lambda, omega = omega,
+  list(mu = mu, skew = skew, sigmas = est_sigmas,
+       lambda = lambda, omega = omega,
        Ew = a, Einvw = b, Elogw = c)
 }

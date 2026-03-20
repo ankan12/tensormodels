@@ -5,31 +5,32 @@
 #'   covariance matrices, and nu.
 #'
 #' @noRd
-tensor_mle_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
+tensor_mle_skewt <- function(data, max_iter, tol,
+                             quiet = TRUE, restrict) {
 
   # get dim of input
-  dims <- dim(draws)[-1]
+  n <- length(data)
+  dims <- dim(data[[1]])
   num_dim <- length(dims)
-  n <- dim(draws)[1]
   n_star <- prod(dims)
 
   # Step 1: Initialize vals
-  mu <- apply(X = draws, MARGIN = 2:(num_dim + 1), FUN = mean)
+  mu <- simplify2array(data) |> apply(1:num_dim, mean)
 
-  skew <- array(rnorm(prod(dims)), dim = dims)
+  skew <- array(rnorm(n = n_star), dim = dims)
 
   logliks <- rep(0, max_iter)
 
   # s1 <- matrix(rnorm(4), nrow = 2); s2 <- diag(3); s3 <- matrix(rnorm(16), nrow = 4)
   # s1 <- crossprod(s1, s1); s3 <- crossprod(s3, s3)
   #
-  sigmas <- vector(mode = "list", length = num_dim)
+  est_sigmas <- lapply(dims, diag)
 
   for(k in 1:num_dim) {
     tot_sum <- 0
 
     for(i in 1:n) {
-        curr_unfold <- matricization(draws[i, , ,] - mu, k)
+        curr_unfold <- matricization(data[[i]] - mu, k)
 
         tot_sum <- tot_sum + (curr_unfold %*% t(curr_unfold))
     }
@@ -38,10 +39,8 @@ tensor_mle_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
 
     tot_sum <- tot_sum/(sum(diag(tot_sum))) * dims[k]
 
-    sigmas[[k]] <- tot_sum
+    est_sigmas[[k]] <- tot_sum
   }
-
-  #sigmas <- lapply(dims, diag)
 
   # different params based on model
   nu <- 4
@@ -49,31 +48,23 @@ tensor_mle_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
   for (t in 1:max_iter) {
     # Step 2: Update a, b, c depending on expected values
     skew_compute <- skew
+    inv_sigma <- lapply(est_sigmas, invert_safe)
 
-    for (d in seq_along(sigmas)) {
-      skew_compute <- n_prod(skew_compute, chol2inv(chol(sigmas[[d]])), d)
+    for (d in seq_along(est_sigmas)) {
+      skew_compute <- n_prod(skew_compute, inv_sigma[[d]], d)
     }
 
     rho <- sum(skew * skew_compute)
 
     delta_vals <- rep(0, n)
 
-    mu_array <- replicate(n, mu, simplify = "array") |>
-      aperm(c(num_dim + 1, (1:(num_dim))))
-
-    centered <- draws - mu_array
-
     for (i in 1:n) {
-      center_draw <- centered[i, , , ]
+      center_draw <- data[[i]] - mu
 
       centered_compute <- center_draw
 
-      for (d in seq_along(sigmas)) {
-        centered_compute <- n_prod(
-          centered_compute,
-          chol2inv(chol(sigmas[[d]])),
-          d
-        )
+      for (d in seq_along(est_sigmas)) {
+        centered_compute <- n_prod(centered_compute, inv_sigma[[d]], d)
       }
       delta_vals[i] <- sum(center_draw * centered_compute)
     }
@@ -126,8 +117,8 @@ tensor_mle_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
     num_skew <- 0
 
     for (i in 1:n) {
-      num_mean <- num_mean + weight_mean[i] * draws[i, , , ]
-      num_skew <- num_skew + weight_skew[i] * draws[i, , , ]
+      num_mean <- num_mean + weight_mean[i] * data[[i]]
+      num_skew <- num_skew + weight_skew[i] * data[[i]]
     }
 
     den_mean <- sum(mean(a) * b) - n
@@ -137,7 +128,7 @@ tensor_mle_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
     den_skew <- sum(a * mean(b)) - n
     new_skew <- num_skew / den_skew
 
-    new_sigmas <- sigmas
+    new_sigmas <- est_sigmas
 
     # update params based on model
     update_nu <- function(nu, b, c, n) {
@@ -179,7 +170,7 @@ tensor_mle_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
       A_i <- matricization(new_skew, j)
 
       for (i in 1:n) {
-        Xi_centered <- matricization(draws[i, , , ] - new_mu, j)
+        Xi_centered <- matricization(data[[i]] - new_mu, j)
 
         first <- first + b[i] * (Xi_centered %*% inv_others %*% t(Xi_centered))
 
@@ -192,35 +183,41 @@ tensor_mle_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
 
       sigma_j <- n_d/(n * n_star) * (first - second - third + fourth)
 
-      if (j < num_dim) { # add a bit of error to avoid singularity
-        sigma_j <- sigma_j / (sum(diag(sigma_j))) * n_d
+      scale_prod <- 1
 
-        sigma_j <- sigma_j + diag(1e-3, nrow(sigma_j))
+      if (j < num_dim) {
+        c_d <- sigma_j[1, 1]
+
+        if (!is.finite(c_d) || c_d == 0) c_d <- 1
+
+        scale_prod <- scale_prod * c_d
+
+        sigma_j <- sigma_j / c_d
       }
 
       new_sigmas[[j]] <- sigma_j
     }
 
-    diff_mu <- max(abs(mu - new_mu))
-    diff_nu <- abs(nu - new_nu)
-    eig1 <- min(eigen(new_sigmas[[1]])$values)
-    eig2 <- min(eigen(new_sigmas[[2]])$values)
-    eig3 <- min(eigen(new_sigmas[[3]])$values)
-
-    #cat("diff_mu =", diff_mu, "  diff_nu =", diff_nu, "\n eigs = ", eig1, " ", eig2, " ", eig3)
+    new_sigmas[[num_dim]] <- new_sigmas[[num_dim]] * scale_prod
 
     # update all parameters
     mu <- new_mu
     skew <- new_skew
-    sigmas <- new_sigmas
+    est_sigmas <- new_sigmas
     nu <- new_nu
 
     # Step 5: Check convergence
 
-    logliks[t] <- loglik_skewt_observed(draws, mu, skew, sigmas, nu)
+    total_loglik <- 0
+
+    for(i in 1:n) {
+      total_loglik <- total_loglik +
+        dtskewt(data[[i]], mu, skew, est_sigmas, nu, log = TRUE)
+    }
+
+    logliks[t] <- total_loglik
 
     if(t >= 3) {
-
       lt_after <- logliks[t]
       lt <- logliks[t - 1]
       lt_before <- logliks[t - 2]
@@ -229,20 +226,7 @@ tensor_mle_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
 
       linf <- lt + 1/(1 - aitken) * (lt_after - lt)
 
-      converge <- abs(linf - lt)
-
-      dlt <- logliks[t] - logliks[t-1]
-
-      #cat("converge = ", converge, "\n")
-
-      #converge_cond <- abs(linf - lt)/n < tol
-
-      #converge_cond2 <- if((lt_after - lt)/n < 1e-6 & diff_mu < 1e-4 & diff_nu < 1e-4)
-      #inc <- lt_after - lt
-
-      #cat("\n Δℓ =", inc, "  Aitken =", converge, "\n")
-
-      converge <- logliks[t] - logliks[t-1]
+      converge <- abs(linf - lt_after)
 
       if(converge < tol) {
         if(!quiet) message("Converged at iteration ", t)
@@ -250,7 +234,6 @@ tensor_mle_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
       }
     }
     if (t %% 50 == 0 & !quiet) {
-      cat("t=",t," loglik=",logliks[t]," dlt=",dlt,"\n")
       cat(sprintf("Iteration %d: criterion based on Aitken = %.3e\n", t, converge))
     }
   }
@@ -259,7 +242,7 @@ tensor_mle_skewt <- function(draws, max_iter, tol, quiet = TRUE) {
 
   k <- n_star + sum((dims * (dims+1))/2) - (num_dim - 1) + 1
 
-  list(mu = mu, skew = skew, sigmas = sigmas, nu = nu,
+  list(mu = mu, skew = skew, sigmas = est_sigmas, nu = nu,
        Ew = a, Einvw = b, Elogw = c,
        loglik = logliks[t], BIC = k * log(n) - 2 * logliks[t])
 }
