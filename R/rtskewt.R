@@ -28,7 +28,7 @@ rtskewt <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, nu = 4) {
   }
 
   # draw tensor variate normals
-  tensor_norms <- rtnorm(n, mu = mu, sigmas)
+  tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
 
   all_dim <- dim(tensor_norms)
 
@@ -38,7 +38,7 @@ rtskewt <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, nu = 4) {
   skewt_draws <- vector("list", n)
 
   for(i in 1:n) { # scale normals and skew by inv gamma
-    skewt_draws[[i]] <- tensor_norms[[i]] * sqrt(inv_gammas[i]) +
+    skewt_draws[[i]] <- mu + tensor_norms[[i]] * sqrt(inv_gammas[i]) +
                         skew * inv_gammas[i]
   }
 

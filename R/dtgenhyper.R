@@ -14,8 +14,7 @@
 #' @return The log likelihood.
 #'
 #' @examples
-#' one_draw <- rtgenhyper(n = 1, mu = 2)
-#' dtgenhyper(one_draw[[1]], mu = 0, skew = 1,
+#' dtgenhyper(array(1), mu = 0, skew = array(1),
 #'            sigmas = list(matrix(1)), lambda = 2, omega = 2)
 #' @export
 dtgenhyper <- function(x, mu, skew, sigmas, lambda, omega, log = FALSE) {
@@ -24,28 +23,34 @@ dtgenhyper <- function(x, mu, skew, sigmas, lambda, omega, log = FALSE) {
   n_star <- prod(d)
 
   all_det <- 0
-  kroneck_sigmas <- 1
 
-  for(d in length(sigmas):1) {
-    kroneck_sigmas <- kronecker(kroneck_sigmas, invert_safe(sigmas[[d]]))
-    all_det <- all_det + (n_star/(2 * nrow(sigmas[[d]]))) * log(det(sigmas[[d]]))
-  }
+  xm_tmp <- x - mu
+  skew_tmp <- skew
 
+  ve_xm <- matrix(c(x - mu), nrow = n_star)
   ve_skew <- matrix(c(skew), nrow = n_star)
 
-  loglik <- 0
+  for(d in 1:num_dim) {
+    sigd <- sigmas[[d]]
 
-  centered <- x - mu
+    curr_inv <- invert_safe(sigd)
 
-  ve_xm <- matrix(c(centered), nrow = n_star)
+    xm_tmp <- n_prod(xm_tmp, curr_inv, d)
+    skew_tmp <- n_prod(skew_tmp, curr_inv, d)
 
-  xm_skew <- t(ve_xm) %*% kroneck_sigmas %*% ve_skew
-  rho <- t(ve_skew) %*% kroneck_sigmas %*% ve_skew
-  delta <- t(ve_xm) %*% kroneck_sigmas %*% ve_xm
+    all_det <- all_det + (n_star/(2 * nrow(sigd))) * log(det(sigd))
+  }
+
+  xm_tmp <- as.numeric(xm_tmp)
+  skew_tmp <- as.numeric(skew_tmp)
+
+  rho <- sum(skew_tmp * ve_skew)
+  delta <- sum(xm_tmp * ve_xm)
+  xm_skew <- sum(xm_tmp * ve_skew)
 
   Kw <- log(besselK(omega, nu = lambda, expon.scaled = TRUE)) - omega
 
-  loglik <- loglik - (n_star)/2 * log(2 * pi) - all_det - Kw + xm_skew +
+  loglik <- -(n_star)/2 * log(2 * pi) - all_det - Kw + xm_skew +
     (lambda - n_star/2)/2 * log((delta + omega)/(rho + omega)) +
     log(besselK(sqrt((rho + omega) * (delta + omega)), nu = lambda - n_star/2,
                 expon.scaled = TRUE)) - sqrt((rho + omega) * (delta + omega))

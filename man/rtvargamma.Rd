@@ -4,7 +4,7 @@
 \alias{rtvargamma}
 \title{rtvargamma}
 \usage{
-rtvargamma(n, mu = 0, sigmas = 1, skew = 1, scale = 2)
+rtvargamma(n, mu = 0, sigmas = list(matrix(1)), skew = 1, scale = 2)
 }
 \arguments{
 \item{n}{An integer stating the sample size.}

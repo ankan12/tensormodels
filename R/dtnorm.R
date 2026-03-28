@@ -10,11 +10,12 @@
 #' @return The log likelihood.
 #'
 #' @examples
-#' one_draw <- rnorm(n = 1)
-#' dtnorm(one_draw, mu = 0, sigmas = list(matrix(1)))
-#' dnorm(one_draw)
+#' dtnorm(x = array(1), mu = 0, sigmas = list(matrix(1)))
+#' dnorm(1)
+#' dtnorm(x = array(1:12, dim = c(2, 3)), mu = array(0, dim = c(2, 3)),
+#'        sigmas = lapply(c(2, 3), diag))
 #' @export
-dtnorm <- function(x, mu, sigmas, log = FALSE) {
+dtnorm <- function(x, mu = NULL, sigmas = NULL, log = FALSE) {
   d <- dim(x)
   num_dim <- length(d)
   n_star <- prod(d)
@@ -25,26 +26,27 @@ dtnorm <- function(x, mu, sigmas, log = FALSE) {
     n_star <- length(x)
   }
 
-  centered <- x - mu
-
   all_det <- 0
-  kroneck_sigmas <- 1
+
+  xm_tmp <- x - mu
+
+  ve_xm <- matrix(c(x - mu), nrow = n_star)
 
   for (d in length(sigmas):1) {
-    s_d <- sigmas[[d]]
-    U  <- chol_safe(s_d)
+    sigd <- sigmas[[d]]
 
-    all_det <- all_det + (n_star / (2 * nrow(s_d))) * (2 * sum(log(diag(U))))
-    kroneck_sigmas <- kronecker(kroneck_sigmas, chol2inv(U))
+    curr_inv <- invert_safe(sigd)
+
+    xm_tmp <- n_prod(xm_tmp, curr_inv, d)
+
+    all_det <- all_det + (n_star / (2 * nrow(sigd))) * (2 * sum(log(det(sigd))))
   }
 
-  loglik <- 0
+  xm_tmp <- as.numeric(xm_tmp)
 
-  ve_xm <- matrix(c(centered), nrow = n_star)
+  delta <- sum(xm_tmp * ve_xm)
 
-  delta <- t(ve_xm) %*% kroneck_sigmas %*% ve_xm
-
-  loglik <- loglik - (n_star)/2 * log(2 * pi) - all_det + (-1/2 * delta)
+  loglik <- - (n_star)/2 * log(2 * pi) - all_det + (-1/2 * delta)
 
   if(log == FALSE) loglik <- exp(loglik)
 

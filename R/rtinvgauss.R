@@ -30,17 +30,17 @@ rtinvgauss <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, kappa = 2)
   }
 
   # draw tensor variate normals
-  tensor_norms <- rtnorm(n, mu = mu, sigmas)
+  tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
 
   all_dim <- dim(tensor_norms)
 
   # generate inv Gauss
-  inv_gauss <- rinvgauss(n = n, mean = 1, shape = kappa)
+  inv_gauss <- rinvgauss(n = n, mean = 1/kappa, shape = 1)
 
   invgauss_draws <- vector("list", n)
 
   for(i in 1:n) { # scale normals and skew by inv Gauss
-    invgauss_draws[[i]] <- tensor_norms[[i]] * sqrt(inv_gauss[i]) +
+    invgauss_draws[[i]] <- mu + tensor_norms[[i]] * sqrt(inv_gauss[i]) +
                            skew * inv_gauss[i]
   }
 

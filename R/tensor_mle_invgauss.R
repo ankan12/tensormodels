@@ -13,45 +13,68 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
   num_dim <- length(dims)
   n_star <- prod(dims)
 
-  # dims <- dim(draws)[-1]
-  # num_dim <- length(dims)
-  # n <- dim(draws)[1]
-  # n_star <- prod(dims)
-
   # Step 1: Initialize vals
-  #mu <- apply(X = data, MARGIN = 2:(num_dim + 1), FUN = mean)
-  mu <- simplify2array(data) |> apply(1:num_dim, mean)
 
-  skew <- array(rnorm(prod(dims)), dim = dims)
+  # different params based on model
+  kappa <- 2
+
+  flat_draws <- simplify2array(data)
+
+  mu_draws <- flat_draws |> apply(1:num_dim, mean)
+
+  centered2 <- data
+  centered3 <- data
+
+  for (i in 1:n) {
+    resid <- data[[i]] - mu_draws
+    centered2[[i]] <- resid^2
+    centered3[[i]] <- resid^3
+  }
+
+  m2 <- apply(simplify2array(centered2), 1:num_dim, mean)
+  m3 <- apply(simplify2array(centered3), 1:num_dim, mean)
+
+  skew <- m3 / (m2^(3/2) + 1e-8)
+  skew <- 0.5 * skew / (max(abs(skew)) + 1e-8)
+
+  mu <- mu_draws - (1 / kappa) * skew
+  # centered <- data
+  #
+  # for(i in 1:n) {
+  #   centered[[i]] <- (centered[[i]] - mu_draws)^3
+  # }
+  #
+  # skew <- apply(simplify2array(centered), 1:num_dim, mean)
+  #
+  # skew <- skew / max(abs(skew))
+
+  mu <- mu_draws - 1/kappa * skew
+
+  sigmas <- lapply(dims, diag)
 
   logliks <- rep(0, max_iter)
-
-  est_sigmas <- lapply(dims, diag)
 
   for(k in 1:num_dim) {
     tot_sum <- 0
     for(i in 1:n) {
       curr_unfold <- matricization(data[[i]] - mu, k)
 
-      tot_sum <- tot_sum + (curr_unfold %*% t(curr_unfold))
+      tot_sum <- tot_sum + tcrossprod(curr_unfold)
     }
 
     tot_sum <- tot_sum * dims[k]/(n * n_star)
 
     tot_sum <- tot_sum/(sum(diag(tot_sum))) * dims[k]
 
-    est_sigmas[[k]] <- tot_sum
+    sigmas[[k]] <- tot_sum
   }
-
-  # different params based on model
-  kappa <- 2
 
   for (t in 1:max_iter) {
     # Step 2: Update a, b, c depending on expected values
     skew_compute <- skew
-    inv_sigma <- lapply(est_sigmas, invert_safe)
+    inv_sigma <- lapply(sigmas, invert_safe)
 
-    for (d in seq_along(est_sigmas)) {
+    for (d in seq_along(sigmas)) {
       skew_compute <- n_prod(skew_compute, inv_sigma[[d]], d)
     }
 
@@ -64,7 +87,7 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
 
       centered_compute <- center_draw
 
-      for (d in seq_along(est_sigmas)) {
+      for (d in seq_along(sigmas)) {
         centered_compute <- n_prod(centered_compute, inv_sigma[[d]], d)
       }
       delta_vals[i] <- sum(center_draw * centered_compute)
@@ -79,6 +102,7 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
       nu = param_vals + 1,
       expon.scaled = TRUE
     )
+
     k_lambda <- besselK(
       x = sqrt(rho * delta_vals),
       nu = param_vals,
@@ -108,20 +132,25 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
     c <- 1/2 * log(delta_vals / rho) + (log(K_plus) - log(K_minus)) / (2*eps)
 
     # replace NaN or Inf values
-    b[!is.finite(b)] <- 0
-    c[!is.finite(c)] <- 0
+    #b[!is.finite(b)] <- 0
+    #c[!is.finite(c)] <- 0
 
     # Step 3: Update mu, skew, params
     weight_mean <- mean(a) * b - 1
     weight_skew <- mean(b) - b
 
-    num_mean <- 0
-    num_skew <- 0
+    data_mat <- matrix(flat_draws, nrow = n_star, ncol = n)
 
-    for (i in 1:n) {
-      num_mean <- num_mean + weight_mean[i] * data[[i]]
-      num_skew <- num_skew + weight_skew[i] * data[[i]]
-    }
+    num_mean <- array(data_mat %*% weight_mean, dim = dims)
+    num_skew <- array(data_mat %*% weight_skew, dim = dims)
+
+    # num_mean <- 0
+    # num_skew <- 0
+
+    # for (i in 1:n) {
+    #   num_mean <- num_mean + weight_mean[i] * data[[i]]
+    #   num_skew <- num_skew + weight_skew[i] * data[[i]]
+    # }
 
     den_mean <- sum(mean(a) * b) - n
 
@@ -130,54 +159,90 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
     den_skew <- sum(a * mean(b)) - n
     new_skew <- num_skew / den_skew
 
-    new_sigmas <- est_sigmas
+    new_sigmas <- sigmas
 
     # update params based on model
     update_nu <- function(nu, b, c, n) {
       log(nu / 2) + 1 - digamma(nu / 2) - 1 / n * sum(b + c)
     }
+
     update_gamma <- function(gamma, a, c) {
       log(gamma) + 1 - digamma(gamma) + mean(c) - mean(a)
     }
 
     new_kappa = n / (sum(a))
 
-    scale_prod <- 1
-
     for (j in 1:num_dim) {
-      first <- 0
-      second <- 0
-      third <- 0
-      fourth <- 0
+      inv_new_sigma <- lapply(new_sigmas, invert_safe) # compute sigmas
 
       n_d <- dims[j]
-
-      # covar estimate for mode j
-      sigma_j <- matrix(0, nrow = n_d, ncol = n_d)
-
-      # other modes
       other_modes <- (1:num_dim)[-j]
 
-      # Build the whitening operator
-      inv_others <- diag(1)
+      first <- matrix(0, n_d, n_d)
+      x_sum  <- matrix(0, n_d, prod(dims[-j]))
 
-      for (d in rev(other_modes)) {
-        inv_others <- kronecker(inv_others, invert_safe(new_sigmas[[d]]))
+      skew_tmp <- new_skew # compute skew once for each dim
+
+      for (d in other_modes) { # multiply by inverse covars
+        skew_tmp <- n_prod(skew_tmp, inv_new_sigma[[d]], d)
       }
 
-      A_i <- matricization(new_skew, j)
+      flat_skew_tmp <- matricization(skew_tmp, j) # flatten the skews
+      flat_skew <- matricization(new_skew, j)
 
       for (i in 1:n) {
-        Xi_centered <- matricization(data[[i]] - new_mu, j)
+        xm <- data[[i]] - new_mu # take centered draw
+        flat_xm <- matricization(xm, j)
 
-        first <- first + b[i] * (Xi_centered %*% inv_others %*% t(Xi_centered))
+        x_sum <- x_sum + flat_xm
 
-        second <- second + A_i %*% inv_others %*% t(Xi_centered)
+        xm_tmp <- xm
+        for (d in other_modes) { # multiply by inverse covars
+          xm_tmp <- n_prod(xm_tmp, inv_new_sigma[[d]], d)
+        }
 
-        third <- third + Xi_centered %*% inv_others %*% t(A_i)
+        flat_xm_tmp <- matricization(xm_tmp, j)
 
-        fourth <- fourth + a[i] * A_i %*% inv_others %*% t(A_i)
+        first <- first + b[i] * (flat_xm_tmp %*% t(flat_xm))
       }
+
+      second <- flat_skew_tmp %*% t(x_sum)
+      third  <- x_sum %*% t(flat_skew_tmp)
+      fourth <- sum(a) * (flat_skew_tmp %*% t(flat_skew))
+
+      sigma_j <- n_d / (n * n_star) * (first - second - third + fourth)
+
+    # for (j in 1:num_dim) {
+    #   first <- 0
+    #   second <- 0
+    #   third <- 0
+    #   fourth <- 0
+    #
+    #   n_d <- dims[j]
+    #
+    #   # other modes
+    #   other_modes <- (1:num_dim)[-j]
+    #
+      # for (i in 1:n) {
+      #   xm <- data[[i]] - new_mu
+      #   xm_tmp <- xm
+      #   skew_tmp <- new_skew
+      #
+      #   for(d in other_modes) {
+      #     xm_tmp <- n_prod(xm_tmp, inv_new_sigma[[d]], d)
+      #     skew_tmp <- n_prod(skew_tmp, inv_new_sigma[[d]], d)
+      #   }
+      #
+      #   flat_xm_tmp <- matricization(xm_tmp, j)
+      #   flat_skew_tmp <- matricization(skew_tmp, j)
+      #   flat_xm <- matricization(xm, j)
+      #   flat_skew <- matricization(new_skew, j)
+      #
+      #   first <- first + b[i] * (flat_xm_tmp %*% t(flat_xm))
+      #   second <- second + flat_skew_tmp %*% t(flat_xm)
+      #   third <- third + flat_xm_tmp %*% t(flat_skew)
+      #   fourth <- fourth + a[i] * flat_skew_tmp %*% t(flat_skew)
+      # }
 
       sigma_j <- n_d / (n * n_star) * (first - second - third + fourth)
 
@@ -201,7 +266,7 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
     # update all parameters
     mu <- new_mu
     skew <- new_skew
-    est_sigmas <- new_sigmas
+    sigmas <- new_sigmas
     kappa <- new_kappa
 
     # Step 5: Check convergence
@@ -210,20 +275,15 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
 
     for(i in 1:n) {
       total_loglik <- total_loglik +
-        dtinvgauss(data[[i]], mu, skew, est_sigmas, kappa, log = TRUE)
+        dtinvgauss(data[[i]], mu, skew, sigmas, kappa, log = TRUE)
     }
 
-    logliks[t] <- total_loglik
+    logliks[t] <- total_loglik/n
 
     if(t >= 3) {
-
-      lt_after <- logliks[t]
-      lt <- logliks[t - 1]
-      lt_before <- logliks[t - 2]
-
       converge <- logliks[t] - logliks[t-1]
 
-      if(converge < tol) {
+      if(abs(converge) < tol) {
         if(!quiet) message("Converged at iteration ", t)
         break
       }
@@ -238,9 +298,11 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
     }
   }
 
+  if(t == max_iter) message("Reached max iter ", max_iter)
+
   k <- n_star + sum((dims * (dims+1))/2) - (num_dim - 1) + 1
 
-  list(mu = mu, skew = skew, sigmas = est_sigmas, kappa = kappa,
+  list(mu = mu, skew = skew, sigmas = sigmas, kappa = kappa,
        Ew = a, Einvw = b, Elogw = c,
        loglik = logliks[t], BIC = k * log(n) - 2 * logliks[t])
 }

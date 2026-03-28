@@ -258,6 +258,8 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
     }
   }
 
+  if(t == max_iter) message("Reached max iter ", max_iter)
+
   list(mu = mu, skew = skew, sigmas = est_sigmas,
        lambda = lambda, omega = omega,
        Ew = a, Einvw = b, Elogw = c)

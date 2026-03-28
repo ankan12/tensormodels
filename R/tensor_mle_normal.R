@@ -29,14 +29,14 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
     stop("Invalid restriction: You must restrict at most number of dims - 1 scale parameters.")
   }
 
-  if(num_dim == 1 && dims == 1) {
+  if(num_dim == 1 && dims == 1) { # if univariate
     vector_data <- simplify2array(data)
     mu <- mean(vector_data)
-    sigma <- sd(vector_data)
+    sigma <- var(vector_data)
     return(list(mu = mu, sigmas = list(sigma)))
   }
 
-  if(num_dim == 1) {
+  if(num_dim == 1) { # multivariate
     array_data <- simplify2array(data) |> aperm(c(2, 1))
     sigma <- cov(array_data) * (n - 1)/n
     return(list(mu = mu, sigmas = list(sigma)))
@@ -135,6 +135,8 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
       }
     }
   }
+
+  if(t == max_iter) message("Reached max iter ", max_iter)
 
   list(mu = mu, sigmas = est_sigmas)
 }

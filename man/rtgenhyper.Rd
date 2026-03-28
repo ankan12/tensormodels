@@ -4,20 +4,27 @@
 \alias{rtgenhyper}
 \title{rtgenhyper}
 \usage{
-rtgenhyper(n, mu = 0, sigmas = 1, skew = 1, omega = 2, lambda = 2)
+rtgenhyper(
+  n,
+  mu = 0,
+  skew = 1,
+  sigmas = list(matrix(1)),
+  lambda = 2,
+  omega = 2
+)
 }
 \arguments{
 \item{n}{An integer stating the sample size.}
 
 \item{mu}{An array containing the mean values of and dims of each draw.}
 
-\item{sigmas}{A list of covariance matrices. Defaults to the identity.}
-
 \item{skew}{An array that determines how skewed the distribution is.}
 
-\item{omega}{Shape parameter for generalized inverse Gaussian distribution.}
+\item{sigmas}{A list of covariance matrices. Defaults to the identity.}
 
 \item{lambda}{Shape/scale parameter for generalized inverse Gaussian distribution.}
+
+\item{omega}{Shape parameter for generalized inverse Gaussian distribution.}
 }
 \value{
 An array containing n draws of the tensor generalized hyperbolic distribution.

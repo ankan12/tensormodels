@@ -28,7 +28,7 @@ rtvargamma <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, scale = 2)
   }
 
   # draw tensor variate normals
-  tensor_norms <- rtnorm(n, mu = mu, sigmas)
+  tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
 
   #all_dim <- dim(tensor_norms)
 
@@ -38,7 +38,7 @@ rtvargamma <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, scale = 2)
   vargamma_draws <- vector("list", n)
 
   for(i in 1:n) { # scale normals and skew by gamma
-    vargamma_draws[[i]] <- tensor_norms[[i]] * sqrt(gammas[i]) + skew * gammas[i]
+    vargamma_draws[[i]] <- mu + tensor_norms[[i]] * sqrt(gammas[i]) + skew * gammas[i]
   }
 
   vargamma_draws

@@ -4,7 +4,7 @@
 \alias{dtnorm}
 \title{dtnorm}
 \usage{
-dtnorm(x, mu, sigmas, log = FALSE)
+dtnorm(x, mu = NULL, sigmas = NULL, log = FALSE)
 }
 \arguments{
 \item{x}{An array of quantiles.}
@@ -22,7 +22,8 @@ The log likelihood.
 Computes the density function for the tensor variate normal.
 }
 \examples{
-one_draw <- rnorm(n = 1)
-dtnorm(one_draw, mu = 0, sigmas = list(matrix(1)))
-dnorm(one_draw)
+dtnorm(x = array(1), mu = 0, sigmas = list(matrix(1)))
+dnorm(1)
+dtnorm(x = array(1:12, dim = c(2, 3)), mu = array(0, dim = c(2, 3)),
+       sigmas = lapply(c(2, 3), diag))
 }

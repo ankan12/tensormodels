@@ -71,7 +71,9 @@ options(digits = 3)
 
 The $n$-mode matrix product of  a tensor $\tensor{A} \in \field{k}^{I_1 \times I_2 \times ... \times I_n}$ with a matrix $\mat{U} \in \field{k}^{J \times I_n}$  
 is
-$$(\tensor{A} \times_n \mat{U}) \in \field{k}^{I_1 \times ... \times I_{n-1} \times J \times I_{n+1} \times ... \times I_N}$$ with entries $$(\tensor{A} \times_n \mat{U})_{i_1, ..., i_{n-1}, j, i_{n+1}, ... I_N} = \sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_N} u_{j, i_n}.$$ The tensor and matrix share one mode in common, denoted here as $I_n$. This operation is also called the tensor times matrix product.
+$$(\tensor{A} \times_n \mat{U}) \in \field{k}^{I_1 \times ... \times I_{n-1} \times J \times I_{n+1} \times ... \times I_N}$$ with entries 
+$$(\tensor{A} \times_n \mat{U})_{i_1, ..., i_{n-1}, j, i_{n+1}, ... I_N} = \sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_N} u_{j, i_n}.$$ 
+The tensor and matrix share one mode in common, denoted here as $I_n$. This operation is also called the tensor times matrix product.
 
 The n-mode product between a tensor and a matrix can be computed with `n_mode_prod()`{.R}.
 
@@ -124,12 +126,11 @@ The density function of the multilinear normal distribution is @tensornormprop
 $$f(x) = (2\pi)^{-p*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p*/(2\pi)}\right) \exp\left\{-\frac{1}{2} (x-\mu)' \Sigma_{1:k}^{-1} (x-\mu\right\}$$
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$, $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
-The function `rtnorm()`{.R} simulates from the tensor variate normal with a
-specified mean array mu and a list of covariance matrices called list_sigmas.
+The function `rtnorm()`{.R} simulates random draws from the tensor variate normal with a specified mean array mu and a list of covariance matrices called list_sigmas.
 
 Since the univariate normal and matrix variate normal are simpler cases of the
 tensor variate normal, this function can simulate from them as well.  Here, we
-simulate from a univariate normal with mean $-2$ and variance $4$.
+simulate random draws from a univariate normal with mean $-2$ and variance $4$.
 
 
 ```{r}
@@ -137,7 +138,16 @@ univar_draws <- rtnorm(n = 1000, mu = -2, sigmas = 4)
 
 mean(simplify2array(univar_draws))
 
-sd(simplify2array(univar_draws))
+var(simplify2array(univar_draws))
+```
+
+
+We can also simulate random draws from a multivariate normal distribution by specifying a mean vector and the covariance matrix. 
+
+```{r}
+S1 <- crossprod(matrix(data = c(1, 0.5, 0.5, 1), nrow = 2))
+
+(multivar_draws <- rtnorm(n = 5, mu = c(2, 3), sigmas = list(S1)))
 ```
 
 
@@ -152,10 +162,15 @@ matrix_draws[[1]]
 
 
 Below is a simulation from a tensor variate normal of size $3 \times 4 \times
-2$.
+2$.The covariance structure is specified with a list of matrices. 
 
 ```{r}
-tvn_draws <- rtnorm(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
+S1 <- crossprod(matrix(rnorm(9), nrow = 3))
+S2 <- crossprod(matrix(rnorm(16), nrow = 4))
+S3 <- crossprod(matrix(rnorm(4), nrow = 2))
+
+tvn_draws <- rtnorm(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)),
+                    sigmas = list(S1, S2, S3))
 
 tvn_draws[[1]]
 ```
@@ -166,15 +181,10 @@ tvn_draws[[1]]
 
 ## MLE estimation for the tensor variate normal 
 
-The package supports MLE estimation for the mean and list of covariance
-matrices.
+The package supports MLE estimation. Given an array of draws, it will return a list containing the MLE for the mean and covariance matrices. 
 
 ```{r}
-univarnorm_est <- tensor_mle(draws = univar_draws, model = "normal")
-
-univarnorm_est$mu
-
-univarnorm_est$sigmas
+(univarnorm_est <- tensor_mle(draws = univar_draws, model = "normal"))
 ```
 
 
@@ -189,14 +199,23 @@ matrix_est$sigmas |> lapply(round, 3)
 ```
 
 
-This function works on array objects of dimensions above 2. 
+This function works for tensor-valued data. 
 
 ```{r}
-normal_est <- tensor_mle(draws = tvn_draws, model = "normal")
+tensor_est <- tensor_mle(draws = tvn_draws, model = "normal")
 
-normal_est$mu
-normal_est$sigmas |> lapply(round, 3)
+tensor_est$mu
+
+true_sigmas <- list(S1, S2, S3)
+
+for(i in 1:3) {
+  true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
+  est_scaled <- tensor_est$sigmas[[i]] / sum(diag(tensor_est$sigmas[[i]]))
+  
+  print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
+}
 ```
+
 
 
 
@@ -204,7 +223,74 @@ normal_est$sigmas |> lapply(round, 3)
 
 # Other models
 
+## Tensor variate normal inverse Gaussian 
+
+The density function of the normal inverse Gaussian distribution is
+
+$$f_{\text{TVNIG}}(\tensor{X}|\mat{V}) =
+\frac{2 \exp\left\{\text{vec}(\tensor{X} - \tensor{M})^{T} \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\tensor{A} + \kappa) \right\}}{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}}} \left(\frac{\delta(\tensor{X}; \tensor{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1}{\rho(\tensor{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^2}\right)^{-\frac{1 + n^{*}}{4}}$$ 
+
+$$\quad K_{- \frac{1 + n^{*}}{2}} \left(\sqrt{[\rho(\tensor{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}}) + \kappa^{2}] \left[\delta(\tensor{X}; \tensor{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1\right]\right)$$
+where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$, $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
+
+The function `rtinvgauss()`{.R} simulates random draws from the tensor variate normal inverse Gaussian with a specified mean array mu, a list of covariance matrices, a skew array, and $\kappa$ which describes the shape of the inverse Gaussian distribution
+
+```{r}
+mu_true <- array(1:24, dim = c(3, 4, 2))
+skew_true <- array(seq(0.2, 2.4, length.out = 24), dim = c(3,4,2))
+
+
+```
+
+
+```{r}
+invgauss_draws <- rtinvgauss(n = 1e3, mu = mu_true,
+                             skew = skew_true, sigmas = list(S1, S2, S3))
+
+invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss", quiet = FALSE)
+
+invgauss_est$kappa
+```
+
+
+```{r}
+invgauss_est$mu
+invgauss_est$skew |> round(3)
+invgauss_est$sigmas |> lapply(round, 3)
+
+true_sigmas <- list(S1, S2, S3)
+
+for(i in 1:3) {
+  true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
+  est_scaled <- invgauss_est$sigmas[[i]] / sum(diag(invgauss_est$sigmas[[i]]))
+  
+  print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
+}
+
+est_mean_draws <- invgauss_est$mu + 1/invgauss_est$kappa * invgauss_est$skew
+
+true_mean_draws <- mu_true + 1/2 * skew_true
+
+frob_norm(est_mean_draws - true_mean_draws) / frob_norm(true_mean_draws)
+
+frob_norm(invgauss_est$mu - mu_true) / frob_norm(mu_true)
+frob_norm(invgauss_est$skew - skew_true) / frob_norm(skew_true)
+
+invgauss_est$kappa
+```
+
+
 ## Tensor variate generalized hyperbolic
+
+The density function of the generalized hyperbolic distribution is
+$$f(x) = (2\pi)^{-p*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p*/(2\pi)}\right) \exp\left\{-\frac{1}{2} (x-\mu)' \Sigma_{1:k}^{-1} (x-\mu\right\}$$
+where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$, $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
+
+The function `rtnorm()`{.R} simulates random draws from the tensor variate normal with a specified mean array mu and a list of covariance matrices called list_sigmas.
+
+Since the univariate normal and matrix variate normal are simpler cases of the
+tensor variate normal, this function can simulate from them as well.  Here, we
+simulate random draws from a univariate normal with mean $-2$ and variance $4$.
 
 ```{r}
 genhyper_draws <- rtgenhyper(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
@@ -212,13 +298,13 @@ genhyper_draws <- rtgenhyper(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
 
 
 ```{r}
-genhyper_est <- tensor_mle(genhyper_draws, model = "genhyper", quiet = FALSE)
-
-genhyper_est$mu
-genhyper_est$skew
-genhyper_est$sigmas |> lapply(round, 3)
-genhyper_est$lambda
-genhyper_est$omega
+# genhyper_est <- tensor_mle(genhyper_draws, model = "genhyper", quiet = FALSE)
+# 
+# genhyper_est$mu
+# genhyper_est$skew
+# genhyper_est$sigmas |> lapply(round, 3)
+# genhyper_est$lambda
+# genhyper_est$omega
 ```
 
 
@@ -230,27 +316,11 @@ vargamma_draws <- rtvargamma(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
 
 
 ```{r}
-vargamma_est <- tensor_mle(vargamma_draws, model = "vargamma", quiet = FALSE)
-
-vargamma_est$mu
-vargamma_est$skew
-vargamma_est$sigmas |> lapply(round, 3)
-```
-
-
-## Tensor variate normal inverse Gaussian 
-```{r}
-invgauss_draws <- rtinvgauss(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
-```
-
-
-```{r}
-invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss", quiet = FALSE)
-
-invgauss_est$mu
-invgauss_est$skew |> round(3) 
-invgauss_est$sigmas |> lapply(round, 3)
-invgauss_est$kappa
+# vargamma_est <- tensor_mle(vargamma_draws, model = "vargamma", quiet = FALSE)
+# 
+# vargamma_est$mu
+# vargamma_est$skew
+# vargamma_est$sigmas |> lapply(round, 3)
 ```
 
 ## Tensor variate skewed t
@@ -261,15 +331,15 @@ skewt_draws <- rtskewt(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
 
 
 ```{r}
-skewt_est <- tensor_mle(skewt_draws, model = "skewt", 
-                        quiet = FALSE, tol = 1e-3)
+# skewt_est <- tensor_mle(skewt_draws, model = "skewt", 
+#                         quiet = FALSE, tol = 1e-3)
+# 
+# skewt_est$mu
+# skewt_est$skew |> round(3) 
+# skewt_est$sigmas |> lapply(round, 3)
+# skewt_est$nu
 
-skewt_est$mu
-skewt_est$skew |> round(3) 
-skewt_est$sigmas |> lapply(round, 3)
-skewt_est$nu
-
-skewt_est$mu + (skewt_est$nu / (skewt_est$nu - 2)) * skewt_est$skew
+#skewt_est$mu + (skewt_est$nu / (skewt_est$nu - 2)) * skewt_est$skew
 ```
 
 

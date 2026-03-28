@@ -22,7 +22,7 @@ that converge.}
 
 \item{tol}{A tolerance level to define the convergence of matrices.}
 
-\item{method}{Specify the distribution of draws. Must be one of normal, skewt,
+\item{model}{Specify the distribution of draws. Must be one of normal, skewt,
 vargamma, invgauss, or gen hyper}
 }
 \value{

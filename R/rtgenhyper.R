@@ -32,7 +32,7 @@ rtgenhyper <- function(n, mu = 0, skew = 1, sigmas = list(matrix(1)),
   }
 
   # draw tensor variate normals
-  tensor_norms <- rtnorm(n, mu = mu, sigmas)
+  tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
 
   # generate inv GIG
   inv_gig <- rgig(n = n, lambda = lambda, chi = omega, psi = 2)
@@ -40,7 +40,7 @@ rtgenhyper <- function(n, mu = 0, skew = 1, sigmas = list(matrix(1)),
   genhyper_draws <- vector("list", n)
 
   for(i in 1:n) { # scale normals and skew by inv GIG
-    genhyper_draws[[i]] <- tensor_norms[[i]] * sqrt(inv_gig[i]) + skew * inv_gig[i]
+    genhyper_draws[[i]] <- mu + tensor_norms[[i]] * sqrt(inv_gig[i]) + skew * inv_gig[i]
   }
 
   genhyper_draws

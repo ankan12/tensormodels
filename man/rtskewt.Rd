@@ -4,7 +4,7 @@
 \alias{rtskewt}
 \title{rtskewt}
 \usage{
-rtskewt(n, mu = 0, sigmas = 1, skew = 1, nu = 4)
+rtskewt(n, mu = 0, sigmas = list(matrix(1)), skew = 1, nu = 4)
 }
 \arguments{
 \item{n}{An integer stating the sample size.}
