@@ -22,13 +22,11 @@ inverse Gaussian}
 }
 \value{
 The log likelihood.
-
-#' @examples
-one_draw <- rtinvgauss(n = 1, mu = 2)
-dtinvgauss(one_draw[\link{1}], mu = 0, skew = 1,
-sigmas = list(matrix(1)), kappa = 2)
 }
 \description{
 Computes the observed log likelihood for the tensor variate
 inverse Gaussian.
+}
+\examples{
+dtinvgauss(array(1), mu = 0, skew = array(1), sigmas = list(matrix(1)), kappa = 2)
 }

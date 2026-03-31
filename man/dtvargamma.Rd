@@ -26,6 +26,5 @@ The log likelihood.
 Computes the density function for the tensor variate gamma.
 }
 \examples{
-one_draw <- rtvargamma(n = 1, mu = 2)
-dtskewt(one_draw[[1]], mu = 0, skew = 1, sigmas = list(matrix(1)), scale = 4)
+dtvargamma(array(1), mu = 0, skew = array(1), sigmas = list(matrix(1)), scale = 4)
 }

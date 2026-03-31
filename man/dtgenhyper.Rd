@@ -32,7 +32,6 @@ dtgenhyper
 Computes the density function for the tensor variate generalized hyperbolic.
 }
 \examples{
-
-dtgenhyper(array(1), mu = 0, skew = 1,
+dtgenhyper(array(1), mu = 0, skew = array(1),
            sigmas = list(matrix(1)), lambda = 2, omega = 2)
 }

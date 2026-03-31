@@ -14,7 +14,7 @@
 #' fourth_sigma = lapply(seq_along(all_dims), function(k) diag(all_dims[k]))
 #' fourth_tensor <- rtnorm(n = 1e3, mu = fourth_mu, sigmas = fourth_sigma)
 #' est_fourth <- mle_est(fourth_tensor)
-#' (fourth_mu - est_fourth$mu)^2 |> mean()
+#' mean(fourth_mu - est_fourth$mu)^2
 #' fourth_scaled <- lapply(fourth_sigma, function(S) S * (nrow(S) / sum(diag(S))))
 #' (mse_each <- mapply(function(est, true) mean((est - true)^2), est_fourth$sigmas, fourth_scaled))
 #' @export
@@ -23,81 +23,88 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
   #get dim of input
   n <- length(data)
   dims <- dim(data[[1]])
-  num_dim <- length(dims)
+  o <- length(dims)
+  n_star <- prod(dims)
 
-  if (length(restrict) >= num_dim) {
+  if (length(restrict) >= o) {
     stop("Invalid restriction: You must restrict at most number of dims - 1 scale parameters.")
   }
 
-  if(num_dim == 1 && dims == 1) { # if univariate
+  if(o == 1 && dims == 1) { # if univariate
     vector_data <- simplify2array(data)
     mu <- mean(vector_data)
     sigma <- var(vector_data)
     return(list(mu = mu, sigmas = list(sigma)))
   }
 
-  if(num_dim == 1) { # multivariate
-    array_data <- simplify2array(data) |> aperm(c(2, 1))
+  if(o == 1) { # multivariate
+    array_data <- simplify2array(aperm(data, c(2, 1)))
     sigma <- cov(array_data) * (n - 1)/n
     return(list(mu = mu, sigmas = list(sigma)))
   }
 
-  mu <- simplify2array(data) |> apply(1:num_dim, mean)
+  mu <- apply(simplify2array(data), 1:o, mean)
 
-  #intialize sigmas as identity matrices
-  est_sigmas <- lapply(dims, diag)
+  sigmas <- lapply(dims, diag)
 
   logliks <- rep(0, max_iter)
 
+  for(k in 1:o) {
+    tot_sum <- 0
+    for(i in 1:n) {
+      curr_unfold <- matricization(data[[i]] - mu, k)
+
+      tot_sum <- tot_sum + tcrossprod(curr_unfold)
+    }
+
+    tot_sum <- tot_sum * dims[k]/(n * n_star)
+
+    tot_sum <- tot_sum/(sum(diag(tot_sum))) * dims[k]
+
+    sigmas[[k]] <- tot_sum
+  }
+
   for (t in 1:max_iter) {
-    # store previous iteration
-    old_sigmas <- lapply(est_sigmas, identity)
-
-    for (k in 1:num_dim) {
+    for (j in 1:o) {
       #inverses of all sigma
-      inv_sigma <- lapply(est_sigmas, invert_safe)
+      inv_sigma <- lapply(sigmas, invert_safe)
 
-      # dim for kth mode
-      d_k    <- dims[k]
-      d_negk <- prod(dims[-k])
-      s_k    <- matrix(0, d_k, d_k)
+      # dim for j-th mode
+      n_d <- dims[j]
+      other_modes <- (1:o)[-j]
 
-      # accumlate mode-k covar
+      sigma_j <- matrix(0, nrow = n_d, ncol = n_d)
+
+      # accumlate mode-j covar estimate
       for (draw in 1:n) {
-        Xi <- data[[draw]] - mu
-        Xik <- matricization(Xi, k)
+        xm <- data[[draw]] - mu
+        xm_tmp <- xm
+        flat_xm <- matricization(xm, j)
 
-        for(index_kroneck in (1:num_dim)[-k]) {
-          Xi <- n_prod(Xi, inv_sigma[[index_kroneck]], index_kroneck)
+        for(d in other_modes) {
+          xm_tmp <- n_prod(xm_tmp, inv_sigma[[d]], d)
         }
 
-        s_k <- s_k + matricization(Xi, k) %*% t(Xik)
+        sigma_j <- sigma_j + matricization(xm_tmp, j) %*% t(flat_xm)
       }
 
-      if (k %in% restrict) { # restrict to be product of identity
-        s_k <- s_k / (n * d_negk)
-        curr_sigma <- sum(diag(s_k)) / d_k
-        est_sigmas[[k]] <- diag(d_k) * curr_sigma
-        next
+      sigma_j <- sigma_j * n_d / (n * n_star)
+
+      if(j < o) { # force trace to be n_d
+        sigma_j <- sigma_j / sum(diag(sigma_j)) * n_d
       }
+
+      sigmas[[j]] <- sigma_j
+
+      # if (k %in% restrict) { # restrict to be product of identity
+      #   s_k <- s_k / (n * d_negk)
+      #   curr_sigma <- sum(diag(s_k)) / d_k
+      #   sigmas[[k]] <- diag(d_k) * curr_sigma
+      #   next
+      # }
       # update sigma_k
-      est_sigmas[[k]] <- s_k / (n * d_negk)
+      #sigmas[[k]] <- s_k / (n * d_negk)
     }
-
-    scale_prod <- 1
-
-    for (d in 1:(num_dim - 1)) {
-      if (d %in% restrict) next  # don't rescale constrained factors
-
-      c_d <- est_sigmas[[d]][1, 1]
-
-      if (!is.finite(c_d) || c_d == 0) c_d <- 1
-
-      est_sigmas[[d]] <- est_sigmas[[d]] / c_d
-      scale_prod <- scale_prod * c_d
-    }
-
-    est_sigmas[[num_dim]] <- est_sigmas[[num_dim]] * scale_prod
 
     # Step 5: Check convergence
 
@@ -105,23 +112,18 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
 
     for(i in 1:n) {
       total_loglik <- total_loglik +
-                      dtnorm(data[[i]], mu, est_sigmas, log = TRUE)
+                      dtnorm(data[[i]], mu, sigmas, log = TRUE)
     }
 
-    logliks[t] <- total_loglik
+    logliks[t] <- total_loglik/n
 
     if(t >= 3) {
-      lt_after <- logliks[t]
-      lt <- logliks[t - 1]
-      lt_before <- logliks[t - 2]
+      aitken <- (logliks[t] - logliks[t-1])/(logliks[t-1] - logliks[t-2])
 
-      aitken <- (lt_after - lt)/(lt - lt_before)
+      ltplus <- logliks[t-1] + 1/(1-aitken) * (logliks[t] - logliks[t-1])
+      converge <- ltplus - logliks[t-1]
 
-      linf <- lt + 1/(1 - aitken) * (lt_after - lt)
-
-      converge <- abs(linf - lt_after)
-
-      if(converge < tol) {
+      if(abs(converge) < tol) {
         if(!quiet) message("Converged at iteration ", t)
         break
       }
@@ -138,5 +140,5 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
 
   if(t == max_iter) message("Reached max iter ", max_iter)
 
-  list(mu = mu, sigmas = est_sigmas)
+  list(mu = mu, sigmas = sigmas)
 }

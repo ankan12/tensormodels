@@ -19,7 +19,7 @@
 #' @export
 dtgenhyper <- function(x, mu, skew, sigmas, lambda, omega, log = FALSE) {
   d <- dim(x)
-  num_dim <- length(d)
+  o <- length(d)
   n_star <- prod(d)
 
   all_det <- 0
@@ -30,7 +30,7 @@ dtgenhyper <- function(x, mu, skew, sigmas, lambda, omega, log = FALSE) {
   ve_xm <- matrix(c(x - mu), nrow = n_star)
   ve_skew <- matrix(c(skew), nrow = n_star)
 
-  for(d in 1:num_dim) {
+  for(d in 1:o) {
     sigd <- sigmas[[d]]
 
     curr_inv <- invert_safe(sigd)

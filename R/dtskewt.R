@@ -17,12 +17,12 @@
 #' @export
 dtskewt <- function(x, mu, skew, sigmas, nu, log = FALSE) {
   d <- dim(x)
-  num_dim <- length(d)
+  o <- length(d)
   n_star <- prod(d)
 
   if(is.null(d)) {
     d <- 1
-    num_dim <- 1
+    o <- 1
     n_star <- length(x)
   }
 

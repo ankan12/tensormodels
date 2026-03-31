@@ -11,11 +11,11 @@ tensor_mle_skewt <- function(data, max_iter, tol,
   # get dim of input
   n <- length(data)
   dims <- dim(data[[1]])
-  num_dim <- length(dims)
+  o <- length(dims)
   n_star <- prod(dims)
 
   # Step 1: Initialize vals
-  mu <- simplify2array(data) |> apply(1:num_dim, mean)
+  mu <- simplify2array(data) |> apply(1:o, mean)
 
   skew <- array(rnorm(n = n_star), dim = dims)
 
@@ -26,7 +26,7 @@ tensor_mle_skewt <- function(data, max_iter, tol,
   #
   est_sigmas <- lapply(dims, diag)
 
-  for(k in 1:num_dim) {
+  for(k in 1:o) {
     tot_sum <- 0
 
     for(i in 1:n) {
@@ -146,7 +146,7 @@ tensor_mle_skewt <- function(data, max_iter, tol,
 
     scale_prod <- 1
 
-    for (j in 1:num_dim) {
+    for (j in 1:o) {
       first <- 0
       second <- 0
       third <- 0
@@ -158,7 +158,7 @@ tensor_mle_skewt <- function(data, max_iter, tol,
       sigma_j <- matrix(0, nrow = n_d, ncol = n_d)
 
       # other modes
-      other_modes <- (1:num_dim)[-j]
+      other_modes <- (1:o)[-j]
 
       # Build the whitening operator
       inv_others <- diag(1)
@@ -185,7 +185,7 @@ tensor_mle_skewt <- function(data, max_iter, tol,
 
       scale_prod <- 1
 
-      if (j < num_dim) {
+      if (j < o) {
         c_d <- sigma_j[1, 1]
 
         if (!is.finite(c_d) || c_d == 0) c_d <- 1
@@ -198,7 +198,7 @@ tensor_mle_skewt <- function(data, max_iter, tol,
       new_sigmas[[j]] <- sigma_j
     }
 
-    new_sigmas[[num_dim]] <- new_sigmas[[num_dim]] * scale_prod
+    new_sigmas[[o]] <- new_sigmas[[o]] * scale_prod
 
     # update all parameters
     mu <- new_mu
@@ -240,7 +240,7 @@ tensor_mle_skewt <- function(data, max_iter, tol,
 
   if(t == max_iter) message("Reached max iter ", max_iter)
 
-  k <- n_star + sum((dims * (dims+1))/2) - (num_dim - 1) + 1
+  k <- n_star + sum((dims * (dims+1))/2) - (o - 1) + 1
 
   list(mu = mu, skew = skew, sigmas = est_sigmas, nu = nu,
        Ew = a, Einvw = b, Elogw = c,

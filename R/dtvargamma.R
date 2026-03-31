@@ -16,7 +16,7 @@
 #' @export
 dtvargamma <- function(x, mu, skew, sigmas, scale, log = FALSE) {
   d <- dim(x)
-  num_dim <- length(d)
+  o <- length(d)
   n_star <- prod(d)
 
   all_det <- 0

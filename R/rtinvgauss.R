@@ -12,8 +12,8 @@
 #'
 #' @examples
 #' univar_invgauss <- rtinvgauss(n = 1e3, mu = 0)
-#' mean(univar_skewt)
-#' sd(univar_skewt)
+#' mean(univar_invgauss)
+#' sd(univar_invgauss)
 #' @export
 #' @importFrom statmod rinvgauss
 

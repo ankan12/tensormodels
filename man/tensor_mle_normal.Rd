@@ -31,7 +31,7 @@ fourth_mu = array(rnorm(400), dim = all_dims)
 fourth_sigma = lapply(seq_along(all_dims), function(k) diag(all_dims[k]))
 fourth_tensor <- rtnorm(n = 1e3, mu = fourth_mu, sigmas = fourth_sigma)
 est_fourth <- mle_est(fourth_tensor)
-(fourth_mu - est_fourth$mu)^2 |> mean()
+mean(fourth_mu - est_fourth$mu)^2
 fourth_scaled <- lapply(fourth_sigma, function(S) S * (nrow(S) / sum(diag(S))))
 (mse_each <- mapply(function(est, true) mean((est - true)^2), est_fourth$sigmas, fourth_scaled))
 }

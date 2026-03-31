@@ -27,6 +27,5 @@ The log likelihood.
 Computes the density function for the tensor variate skewed-t.
 }
 \examples{
-one_draw <- rtskewt(n = 1, mu = 2)
-dtskewt(one_draw[[1]], mu = 0, skew = 1, sigmas = list(matrix(1)), nu = 2)
+dtskewt(array(1), mu = 0, skew = array(1), sigmas = list(matrix(1)), nu = 2)
 }

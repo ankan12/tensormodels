@@ -10,7 +10,7 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
 
   n <- length(data)
   dims <- dim(data[[1]])
-  num_dim <- length(dims)
+  o <- length(dims)
   n_star <- prod(dims)
 
   # Step 1: Initialize vals
@@ -20,41 +20,19 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
 
   flat_draws <- simplify2array(data)
 
-  mu_draws <- flat_draws |> apply(1:num_dim, mean)
+  # E[X] = M + 1/kappa * skew
+  mean_draws <- apply(flat_draws, 1:o, mean)
+  median_draws <- apply(flat_draws, 1:o, median)
 
-  centered2 <- data
-  centered3 <- data
+  mu <- median_draws
 
-  for (i in 1:n) {
-    resid <- data[[i]] - mu_draws
-    centered2[[i]] <- resid^2
-    centered3[[i]] <- resid^3
-  }
-
-  m2 <- apply(simplify2array(centered2), 1:num_dim, mean)
-  m3 <- apply(simplify2array(centered3), 1:num_dim, mean)
-
-  skew <- m3 / (m2^(3/2) + 1e-8)
-  skew <- 0.5 * skew / (max(abs(skew)) + 1e-8)
-
-  mu <- mu_draws - (1 / kappa) * skew
-  # centered <- data
-  #
-  # for(i in 1:n) {
-  #   centered[[i]] <- (centered[[i]] - mu_draws)^3
-  # }
-  #
-  # skew <- apply(simplify2array(centered), 1:num_dim, mean)
-  #
-  # skew <- skew / max(abs(skew))
-
-  mu <- mu_draws - 1/kappa * skew
+  skew <- kappa * (mean_draws - median_draws)
 
   sigmas <- lapply(dims, diag)
 
   logliks <- rep(0, max_iter)
 
-  for(k in 1:num_dim) {
+  for(k in 1:o) {
     tot_sum <- 0
     for(i in 1:n) {
       curr_unfold <- matricization(data[[i]] - mu, k)
@@ -131,10 +109,6 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
 
     c <- 1/2 * log(delta_vals / rho) + (log(K_plus) - log(K_minus)) / (2*eps)
 
-    # replace NaN or Inf values
-    #b[!is.finite(b)] <- 0
-    #c[!is.finite(c)] <- 0
-
     # Step 3: Update mu, skew, params
     weight_mean <- mean(a) * b - 1
     weight_skew <- mean(b) - b
@@ -144,39 +118,22 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
     num_mean <- array(data_mat %*% weight_mean, dim = dims)
     num_skew <- array(data_mat %*% weight_skew, dim = dims)
 
-    # num_mean <- 0
-    # num_skew <- 0
-
-    # for (i in 1:n) {
-    #   num_mean <- num_mean + weight_mean[i] * data[[i]]
-    #   num_skew <- num_skew + weight_skew[i] * data[[i]]
-    # }
-
     den_mean <- sum(mean(a) * b) - n
+    den_skew <- sum(a * mean(b)) - n
 
     new_mu <- num_mean / den_mean
-
-    den_skew <- sum(a * mean(b)) - n
     new_skew <- num_skew / den_skew
 
     new_sigmas <- sigmas
 
     # update params based on model
-    update_nu <- function(nu, b, c, n) {
-      log(nu / 2) + 1 - digamma(nu / 2) - 1 / n * sum(b + c)
-    }
+    new_kappa <- n / sum(a)
 
-    update_gamma <- function(gamma, a, c) {
-      log(gamma) + 1 - digamma(gamma) + mean(c) - mean(a)
-    }
-
-    new_kappa = n / (sum(a))
-
-    for (j in 1:num_dim) {
+    for (j in 1:o) {
       inv_new_sigma <- lapply(new_sigmas, invert_safe) # compute sigmas
 
       n_d <- dims[j]
-      other_modes <- (1:num_dim)[-j]
+      other_modes <- (1:o)[-j]
 
       first <- matrix(0, n_d, n_d)
       x_sum  <- matrix(0, n_d, prod(dims[-j]))
@@ -212,56 +169,12 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
 
       sigma_j <- n_d / (n * n_star) * (first - second - third + fourth)
 
-    # for (j in 1:num_dim) {
-    #   first <- 0
-    #   second <- 0
-    #   third <- 0
-    #   fourth <- 0
-    #
-    #   n_d <- dims[j]
-    #
-    #   # other modes
-    #   other_modes <- (1:num_dim)[-j]
-    #
-      # for (i in 1:n) {
-      #   xm <- data[[i]] - new_mu
-      #   xm_tmp <- xm
-      #   skew_tmp <- new_skew
-      #
-      #   for(d in other_modes) {
-      #     xm_tmp <- n_prod(xm_tmp, inv_new_sigma[[d]], d)
-      #     skew_tmp <- n_prod(skew_tmp, inv_new_sigma[[d]], d)
-      #   }
-      #
-      #   flat_xm_tmp <- matricization(xm_tmp, j)
-      #   flat_skew_tmp <- matricization(skew_tmp, j)
-      #   flat_xm <- matricization(xm, j)
-      #   flat_skew <- matricization(new_skew, j)
-      #
-      #   first <- first + b[i] * (flat_xm_tmp %*% t(flat_xm))
-      #   second <- second + flat_skew_tmp %*% t(flat_xm)
-      #   third <- third + flat_xm_tmp %*% t(flat_skew)
-      #   fourth <- fourth + a[i] * flat_skew_tmp %*% t(flat_skew)
-      # }
-
-      sigma_j <- n_d / (n * n_star) * (first - second - third + fourth)
-
-      scale_prod <- 1
-
-      if (j < num_dim) {
-        c_d <- sigma_j[1, 1]
-
-        if (!is.finite(c_d) || c_d == 0) c_d <- 1
-
-        scale_prod <- scale_prod * c_d
-
-        sigma_j <- sigma_j / c_d
+      if (j < o) { # force trace to be n_d for all sigmas except last
+        sigma_j <- sigma_j / sum(diag(sigma_j)) * n_d
       }
 
       new_sigmas[[j]] <- sigma_j
     }
-
-    new_sigmas[[num_dim]] <- new_sigmas[[num_dim]] * scale_prod
 
     # update all parameters
     mu <- new_mu
@@ -281,26 +194,54 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
     logliks[t] <- total_loglik/n
 
     if(t >= 3) {
-      converge <- logliks[t] - logliks[t-1]
+      aitken <- (logliks[t] - logliks[t-1])/(logliks[t-1] - logliks[t-2])
+
+      ltplus <- logliks[t-1] + 1/(1-aitken) * (logliks[t] - logliks[t-1])
+      converge <- ltplus - logliks[t-1]
 
       if(abs(converge) < tol) {
         if(!quiet) message("Converged at iteration ", t)
         break
       }
 
-      if (t %% 50 == 0 & !quiet) {
-        cat(sprintf(
-          "Iteration %d: criterion based on Aitken = %.3e\n",
-          t,
-          converge
-        ))
-      }
+      # lt_after <- logliks[t]
+      # lt <- logliks[t - 1]
+      # lt_before <- logliks[t - 2]
+      #
+      # aitken <- (lt_after - lt)/(lt - lt_before)
+      #
+      # linf <- lt + 1/(1 - aitken) * (lt_after - lt)
+      #
+      # converge <- linf - lt_after
+      #print(logliks[t])
+
+      #converge <- logliks[t] - logliks[t-1]
+    }
+    # if(t >= 3) {
+    #   aitken <- (logliks[t] - logliks[t-1])/(logliks[t-1] - logliks[t-2])
+    #
+    #   l_inf <- logliks[t-1] + (logliks[t] - logliks[t-1]) / (1 - aitken)
+    #   converge <- abs(l_inf - logliks[t])
+    #   #ltplus <- logliks[t-1] + 1/(1-aitken) * (logliks[t] - logliks[t-1])
+    #   #converge <- ltplus - logliks[t-1]
+    #
+    #   if(converge < tol) {
+    #     if(!quiet) message("Converged at iteration ", t)
+    #     break
+    #   }
+    #
+    if (t %% 50 == 0 & !quiet) {
+      cat(sprintf(
+        "Iteration %d: criterion based on Aitken = %.3e\n",
+        t,
+        converge
+      ))
     }
   }
 
   if(t == max_iter) message("Reached max iter ", max_iter)
 
-  k <- n_star + sum((dims * (dims+1))/2) - (num_dim - 1) + 1
+  k <- n_star + sum((dims * (dims+1))/2) - (o - 1) + 1
 
   list(mu = mu, skew = skew, sigmas = sigmas, kappa = kappa,
        Ew = a, Einvw = b, Elogw = c,

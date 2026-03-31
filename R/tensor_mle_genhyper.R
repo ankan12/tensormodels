@@ -11,35 +11,53 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
   # get dim of input
   n <- length(data)
   dims <- dim(data[[1]])
-  num_dim <- length(dims)
+  o <- length(dims)
   n_star <- prod(dims)
 
-  # dims <- dim(draws)[-1]
-  # num_dim <- length(dims)
-  # n <- dim(draws)[1]
-  # n_star <- prod(dims)
-
   # Step 1: Initialize vals
-  #mu <- apply(X = draws, MARGIN = 2:(num_dim + 1), FUN = mean)
-  mu <- simplify2array(data) |> apply(1:num_dim, mean)
 
-  skew <- array(rnorm(prod(dims)), dim = dims)
+  # different params based on model
+  lambda <- 2
+  omega <- 2
 
-  #intialize sigmas as identity matrices
-  est_sigmas <- lapply(dims, diag)
+  R_lambda <- besselK(x = omega, nu = lambda + 1, expon.scaled = TRUE) /
+              besselK(x = omega, nu = lambda, expon.scaled = TRUE)
+
+  flat_draws <- simplify2array(data)
+
+  # E[X] = M + K_{lambda+1}(omega)/K_{lambda}(omega) * skew
+  mean_draws <- apply(flat_draws, 1:o, mean)
+  median_draws <- apply(flat_draws, 1:o, median)
+
+  mu <- median_draws
+
+  skew <- (mean_draws - median_draws)/R_lambda
+
+  sigmas <- lapply(dims, diag)
 
   logliks <- rep(0, max_iter)
 
-  # different params based on model
-  lambda <- 10
-  omega <- 10
+  for(k in 1:o) {
+    tot_sum <- 0
+    for(i in 1:n) {
+      curr_unfold <- matricization(data[[i]] - mu, k)
+
+      tot_sum <- tot_sum + tcrossprod(curr_unfold)
+    }
+
+    tot_sum <- tot_sum * dims[k]/(n * n_star)
+
+    tot_sum <- tot_sum/(sum(diag(tot_sum))) * dims[k]
+
+    sigmas[[k]] <- tot_sum
+  }
 
   for (t in 1:max_iter) {
     # Step 2: Update a, b, c depending on expected values
     skew_compute <- skew
-    inv_sigma <- lapply(est_sigmas, invert_safe)
+    inv_sigma <- lapply(sigmas, invert_safe)
 
-    for (d in seq_along(est_sigmas)) {
+    for (d in seq_along(sigmas)) {
       skew_compute <- n_prod(skew_compute, inv_sigma[[d]], d)
     }
 
@@ -47,19 +65,13 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
 
     delta_vals <- rep(0, n)
 
-    # mu_array <- replicate(n, mu, simplify = "array") |>
-    #   aperm(c(num_dim + 1, (1:(num_dim))))
-
-    #centered <- draws - mu_array
-
     for (i in 1:n) {
       center_draw <- data[[i]] - mu
 
       centered_compute <- center_draw
 
-      for (d in seq_along(est_sigmas)) {
-        centered_compute <-
-          n_prod(centered_compute, inv_sigma[[d]], d)
+      for (d in seq_along(sigmas)) {
+        centered_compute <- n_prod(centered_compute, inv_sigma[[d]], d)
       }
 
       delta_vals[i] <- sum(center_draw * centered_compute)
@@ -103,10 +115,6 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
 
     c <- 1/2 * log(delta_vals / rho) + (log(K_plus) - log(K_minus)) / (2*eps)
 
-    # replace NaN or Inf values
-    b[!is.finite(b)] <- 0
-    c[!is.finite(c)] <- 0
-
     # Step 3: Update mu, skew, params
     weight_mean <- mean(a) * b - 1
     weight_skew <- mean(b) - b
@@ -126,12 +134,13 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
     den_skew <- sum(a * mean(b)) - n
     new_skew <- num_skew / den_skew
 
-    new_sigmas <- est_sigmas
+    new_sigmas <- sigmas
 
     # update params based on model
     update_nu <- function(nu, b, c, n) {
       log(nu / 2) + 1 - digamma(nu / 2) - 1 / n * sum(b + c)
     }
+
     update_gamma <- function(gamma, a, c) {
       log(gamma) + 1 - digamma(gamma) + mean(c) - mean(a)
     }
@@ -140,10 +149,8 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
 
     K_minus <- besselK(x = omega, nu = lambda - eps, expon.scaled = TRUE)
 
-    new_lambda <- mean(c) *
-      lambda *
-      1 /
-      ((log(K_plus) - log(K_minus)) / (2 * eps))
+    new_lambda <- mean(c) * lambda *
+                  1 / ((log(K_plus) - log(K_minus)) / (2 * eps))
 
     R_lambda <-
       besselK(x = omega, nu = new_lambda + 1, expon.scaled = TRUE) /
@@ -155,58 +162,55 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
 
     first_deriv <- 1 / 2 * (R_lambda + R_neg_lambda - (mean(a) + mean(b)))
 
-    second_deriv <- 1 /
-      2 *
-      (R_lambda^2 -
-         (1 + 2 * new_lambda) / omega * R_lambda -
-         1 +
-         R_neg_lambda^2 -
-         (1 - 2 * new_lambda) / omega * R_neg_lambda -
-         1)
+    second_deriv <- 1 /2 * (R_lambda^2 - (1 + 2 * new_lambda) / omega * R_lambda -
+                            1 + R_neg_lambda^2 -
+                            (1 - 2 * new_lambda) / omega * R_neg_lambda - 1)
 
     new_omega <- omega - first_deriv / second_deriv
 
-    scale_prod <- 1
-
-    for (j in 1:num_dim) {
-      first <- 0
-      second <- 0
-      third <- 0
-      fourth <- 0
+    for (j in 1:o) {
+      inv_new_sigma <- lapply(new_sigmas, invert_safe) # compute sigmas
 
       n_d <- dims[j]
+      other_modes <- (1:o)[-j]
 
-      # covar estimate for mode j
-      sigma_j <- matrix(0, nrow = n_d, ncol = n_d)
+      first <- matrix(0, n_d, n_d)
+      x_sum  <- matrix(0, n_d, prod(dims[-j]))
 
-      # other modes
-      other_modes <- (1:num_dim)[-j]
+      skew_tmp <- new_skew # compute skew once for each dim
 
-      # Build the whitening operator
-      inv_others <- diag(1)
-
-      for (d in rev(other_modes)) {
-        inv_others <- kronecker(inv_others, invert_safe(new_sigmas[[d]]))
+      for (d in other_modes) { # multiply by inverse covars
+        skew_tmp <- n_prod(skew_tmp, inv_new_sigma[[d]], d)
       }
 
-      A_i <- matricization(new_skew, j)
+      flat_skew_tmp <- matricization(skew_tmp, j) # flatten the skews
+      flat_skew <- matricization(new_skew, j)
 
       for (i in 1:n) {
-        Xi_centered <- matricization(data[[i]] - new_mu, j)
+        xm <- data[[i]] - new_mu # take centered draw
+        flat_xm <- matricization(xm, j)
 
-        first <- first + b[i] * (Xi_centered %*% inv_others %*% t(Xi_centered))
+        x_sum <- x_sum + flat_xm
 
-        second <- second + A_i %*% inv_others %*% t(Xi_centered)
+        xm_tmp <- xm
 
-        third <- third + Xi_centered %*% inv_others %*% t(A_i)
+        for (d in other_modes) { # multiply by inverse covars
+          xm_tmp <- n_prod(xm_tmp, inv_new_sigma[[d]], d)
+        }
 
-        fourth <- fourth + a[i] * A_i %*% inv_others %*% t(A_i)
+        flat_xm_tmp <- matricization(xm_tmp, j)
+
+        first <- first + b[i] * (flat_xm_tmp %*% t(flat_xm))
       }
+
+      second <- flat_skew_tmp %*% t(x_sum)
+      third  <- x_sum %*% t(flat_skew_tmp)
+      fourth <- sum(a) * (flat_skew_tmp %*% t(flat_skew))
 
       sigma_j <- n_d / (n * n_star) * (first - second - third + fourth)
 
-      if (j < num_dim) {
-        sigma_j <- sigma_j / (sum(diag(sigma_j))) * n_d
+      if (j < o) { # force trace to be n_d for all sigmas except last
+        sigma_j <- sigma_j / sum(diag(sigma_j)) * n_d
       }
 
       new_sigmas[[j]] <- sigma_j
@@ -215,7 +219,7 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
     # update all parameters
     mu <- new_mu
     skew <- new_skew
-    est_sigmas <- new_sigmas
+    sigmas <- new_sigmas
 
     lambda <- new_lambda
     omega <- new_omega
@@ -226,7 +230,7 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
 
     for(i in 1:n) {
       total_loglik <- total_loglik +
-        dtgenhyper(data[[i]], mu, skew, est_sigmas, lambda, omega, log = TRUE)
+        dtgenhyper(data[[i]], mu, skew, sigmas, lambda, omega, log = TRUE)
     }
 
     logliks[t] <- total_loglik
@@ -260,7 +264,7 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
 
   if(t == max_iter) message("Reached max iter ", max_iter)
 
-  list(mu = mu, skew = skew, sigmas = est_sigmas,
+  list(mu = mu, skew = skew, sigmas = sigmas,
        lambda = lambda, omega = omega,
        Ew = a, Einvw = b, Elogw = c)
 }

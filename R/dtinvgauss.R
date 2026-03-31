@@ -7,7 +7,7 @@
 #' @param mu An array of the mean.
 #' @param skew An array of the skew.
 #' @param sigmas A list of the sigma covariance matrices.
-#' @param nu A parameter that describes the shape of the
+#' @param kappa A parameter that describes the shape of the
 #'           inverse Gaussian
 #' @param log Defaults to FALSE. If TRUE, return the log of the density.
 #'
@@ -18,7 +18,7 @@
 #' @export
 dtinvgauss <- function(x, mu, skew, sigmas, kappa, log = FALSE) {
   d <- dim(x)
-  num_dim <- length(d)
+  o <- length(d)
   n_star <- prod(d)
 
   all_det <- 0
@@ -29,7 +29,7 @@ dtinvgauss <- function(x, mu, skew, sigmas, kappa, log = FALSE) {
   ve_xm <- matrix(c(x - mu), nrow = n_star)
   ve_skew <- matrix(c(skew), nrow = n_star)
 
-  for(d in length(sigmas):1) {
+  for(d in 1:o) {
     sigd <- sigmas[[d]]
 
     curr_inv <- invert_safe(sigd)

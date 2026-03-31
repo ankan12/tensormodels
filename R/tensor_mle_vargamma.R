@@ -11,17 +11,17 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
   # get dim of input
   n <- length(data)
   dims <- dim(data[[1]])
-  num_dim <- length(dims)
+  o <- length(dims)
   n_star <- prod(dims)
 
   # dims <- dim(draws)[-1]
-  # num_dim <- length(dims)
+  # o <- length(dims)
   # n <- dim(draws)[1]
   # n_star <- prod(dims)
 
   # Step 1: Initialize vals
-  mu <- simplify2array(data) |> apply(1:num_dim, mean)
-  #mu <- apply(X = draws, MARGIN = 2:(num_dim + 1), FUN = mean)
+  mu <- simplify2array(data) |> apply(1:o, mean)
+  #mu <- apply(X = draws, MARGIN = 2:(o + 1), FUN = mean)
 
   skew <- array(rnorm(prod(dims)), dim = dims)
   est_sigmas <- lapply(dims, diag)
@@ -45,7 +45,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
     delta_vals <- rep(0, n)
 
     # mu_array <- replicate(n, mu, simplify = "array") |>
-    #   aperm(c(num_dim + 1, (1:(num_dim))))
+    #   aperm(c(o + 1, (1:(o))))
 
     #centered <- draws - mu_array
 
@@ -138,7 +138,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
 
     scale_prod <- 1
 
-    for (j in 1:num_dim) {
+    for (j in 1:o) {
       first <- 0
       second <- 0
       third <- 0
@@ -150,7 +150,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
       sigma_j <- matrix(0, nrow = n_d, ncol = n_d)
 
       # other modes
-      other_modes <- (1:num_dim)[-j]
+      other_modes <- (1:o)[-j]
 
       # Build the whitening operator
       inv_others <- diag(1)
@@ -175,7 +175,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
 
       sigma_j <- n_d / (n * n_star) * (first - second - third + fourth)
 
-      if (j < num_dim) {
+      if (j < o) {
         sigma_j <- sigma_j / (sum(diag(sigma_j))) * n_d
       }
 
