@@ -170,8 +170,6 @@ S1 <- crossprod(matrix(rnorm(9), nrow = 3))
 S2 <- crossprod(matrix(rnorm(16), nrow = 4))
 S3 <- crossprod(matrix(rnorm(4), nrow = 2))
 
-mu_true <- array(1:24, dim = c(3, 4, 2))
-
 tvn_draws <- rtnorm(n = 1e3, mu = mu_true,
                     sigmas = list(S1, S2, S3))
 
@@ -246,33 +244,33 @@ kappa_true <- 2
 invgauss_draws <- rtinvgauss(n = 1e3, mu = mu_true, skew = skew_true, 
                              sigmas = list(S1, S2), kappa = kappa_true)
 
-tibble(logliks) |> 
-  mutate(row = row_number()) |> 
-  ggplot() + 
-  geom_point(aes(x = logliks, y = row)) +
-  theme_minimal()
-
-
-tibble(converge) |> 
-  mutate(row = row_number()) |> 
-  ggplot() + 
-  geom_point(aes(x = row, y = converge)) +
-  theme_minimal()
-
-
-converge <- rep(0, 100)
-
-logliks |> summary()
-
-for(t in 3:100) {
-    aitken <- (logliks[t] - logliks[t-1])/(logliks[t-1] - logliks[t-2])
-
-    ltplus <- logliks[t-1] + 1/(1-aitken) * (logliks[t] - logliks[t-1])
-
-    converge[t] <- ltplus - logliks[t-1]
-}
-
-converge |> table()
+# tibble(logliks) |> 
+#   mutate(row = row_number()) |> 
+#   ggplot() + 
+#   geom_point(aes(x = logliks, y = row)) +
+#   theme_minimal()
+# 
+# 
+# tibble(converge) |> 
+#   mutate(row = row_number()) |> 
+#   ggplot() + 
+#   geom_point(aes(x = row, y = converge)) +
+#   theme_minimal()
+# 
+# 
+# converge <- rep(0, 100)
+# 
+# logliks |> summary()
+# 
+# for(t in 3:100) {
+#     aitken <- (logliks[t] - logliks[t-1])/(logliks[t-1] - logliks[t-2])
+# 
+#     ltplus <- logliks[t-1] + 1/(1-aitken) * (logliks[t] - logliks[t-1])
+# 
+#     converge[t] <- ltplus - logliks[t-1]
+# }
+# 
+# converge |> table()
 
 ```
 
@@ -282,7 +280,7 @@ skew_true <- array(seq(0, 4, length.out = 24), dim = c(3, 4, 2))
 kappa_true <- 2
 
 invgauss_draws <- rtinvgauss(n = 1e3, mu = mu_true, skew = skew_true, 
-                             sigmas = list(S1, S2, S3), kappa = kappa_true)
+                             sigmas = list(S1, S2), kappa = kappa_true)
 ```
 
 
@@ -296,6 +294,7 @@ toc()
 
 ```{r}
 fit_mean <- invgauss_est$mu + invgauss_est$skew / invgauss_est$kappa
+
 true_mean <- mu_true + skew_true / kappa_true
 
 frob_norm_diff(fit_mean, true_mean)
@@ -323,6 +322,7 @@ for(i in 1:2) {
 
 
 ```{r}
+mu_true <- array(1:24, dim = c(3, 4, 2))
 skew_true <- array(rnorm(24), dim = c(3,4,2))
 kappa_true <- 2
 
@@ -424,21 +424,37 @@ vargamma_est$gamma
 ## Tensor variate skewed t
 
 ```{r}
-skewt_draws <- rtskewt(n = 1e3, mu = array(1:24, dim = c(3, 4, 2)))
+nu_true <- 20
+skew_true <- array(c(
+   0.6,  0.3, -0.2,  0.5,
+   0.4, -0.5,  0.2, -0.3,
+  -0.4,  0.7,  0.1, -0.6,
+
+   0.5, -0.2,  0.3,  0.4,
+  -0.3,  0.6, -0.4,  0.2,
+   0.1, -0.5,  0.7, -0.1
+), dim = c(3, 4, 2))
+
+skewt_draws <- rtskewt(n = 1e3, mu = mu_true, skew = skew_true,
+                       sigmas = list(S1, S2, S3), nu = nu_true)
 ```
 
 
 ```{r}
-# skewt_est <- tensor_mle(skewt_draws, model = "skewt", 
-#                         quiet = FALSE, tol = 1e-3)
-# 
-# skewt_est$mu
-# skewt_est$skew |> round(3) 
-# skewt_est$sigmas |> lapply(round, 3)
-# skewt_est$nu
+skewt_est <- tensor_mle(skewt_draws, model = "skewt",
+                        quiet = FALSE, tol = 1e-3)
 
-#skewt_est$mu + (skewt_est$nu / (skewt_est$nu - 2)) * skewt_est$skew
+frob_norm_diff(with(skewt_est, mu + (nu)/(nu-2) * skew),
+               mu_true + nu_true / (nu_true - 2) * skew_true)
+
+for(i in 1:3) {
+  true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
+  est_scaled <- skewt_est$sigmas[[i]] / sum(diag(skewt_est$sigmas[[i]]))
+  
+  print(frob_norm_diff(est_scaled, true_scaled))
+}
 ```
+
 
 
 ## Assessing tensor variate normality

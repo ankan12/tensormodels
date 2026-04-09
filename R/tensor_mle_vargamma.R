@@ -14,22 +14,23 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
   o <- length(dims)
   n_star <- prod(dims)
 
-  # dims <- dim(draws)[-1]
-  # o <- length(dims)
-  # n <- dim(draws)[1]
-  # n_star <- prod(dims)
-
   # Step 1: Initialize vals
-  mu <- simplify2array(data) |> apply(1:o, mean)
-  #mu <- apply(X = draws, MARGIN = 2:(o + 1), FUN = mean)
-
-  skew <- array(rnorm(prod(dims)), dim = dims)
-  est_sigmas <- lapply(dims, diag)
-
-  logliks <- rep(0, max_iter)
 
   # different params based on model
   gamma <- 6
+
+  flat_draws <- simplify2array(data)
+
+  # E[X] = M + skew
+  mean_draws <- apply(flat_draws, 1:o, mean)
+  median_draws <- apply(flat_draws, 1:o, median)
+
+  mu <- median_draws
+  skew <- mean_draws - median_draws
+
+  est_sigmas <- lapply(dims, diag)
+
+  logliks <- rep(0, max_iter)
 
   for (t in 1:max_iter) {
     # Step 2: Update a, b, c depending on expected values

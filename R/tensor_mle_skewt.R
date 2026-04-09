@@ -15,15 +15,22 @@ tensor_mle_skewt <- function(data, max_iter, tol,
   n_star <- prod(dims)
 
   # Step 1: Initialize vals
-  mu <- simplify2array(data) |> apply(1:o, mean)
 
-  skew <- array(rnorm(n = n_star), dim = dims)
+  # different params based on model
+  nu <- 50
+
+  flat_draws <- simplify2array(data)
+
+  # E[X] = M + nu/(nu-2) * skew
+  mean_draws <- apply(flat_draws, 1:o, mean)
+  median_draws <- apply(flat_draws, 1:o, median)
+
+  mu <- median_draws
+
+  skew <- (nu-2)/nu * (mean_draws - median_draws)
 
   logliks <- rep(0, max_iter)
 
-  # s1 <- matrix(rnorm(4), nrow = 2); s2 <- diag(3); s3 <- matrix(rnorm(16), nrow = 4)
-  # s1 <- crossprod(s1, s1); s3 <- crossprod(s3, s3)
-  #
   est_sigmas <- lapply(dims, diag)
 
   for(k in 1:o) {
@@ -41,9 +48,6 @@ tensor_mle_skewt <- function(data, max_iter, tol,
 
     est_sigmas[[k]] <- tot_sum
   }
-
-  # different params based on model
-  nu <- 4
 
   for (t in 1:max_iter) {
     # Step 2: Update a, b, c depending on expected values
@@ -142,60 +146,66 @@ tensor_mle_skewt <- function(data, max_iter, tol,
       c = c,
       n = n)$root
 
-    if(new_nu < 2) new_nu <- 2
+    if(new_nu < 4) new_nu <- 4
+
+    cat("nu =", new_nu, "\n")
+
+    for (j in 1:o) {
+      inv_new_sigma <- lapply(new_sigmas, invert_safe) # compute sigmas
+
+      n_d <- dims[j]
+      other_modes <- (1:o)[-j]
+
+      first <- matrix(0, n_d, n_d)
+      x_sum  <- matrix(0, n_d, prod(dims[-j]))
+
+      skew_tmp <- new_skew # compute skew once for each dim
+
+      for (d in other_modes) { # multiply by inverse covars
+        skew_tmp <- n_prod(skew_tmp, inv_new_sigma[[d]], d)
+      }
+
+      flat_skew_tmp <- matricization(skew_tmp, j) # flatten the skews
+      flat_skew <- matricization(new_skew, j)
+
+      for (i in 1:n) {
+        xm <- data[[i]] - new_mu # take centered draw
+        flat_xm <- matricization(xm, j)
+
+        x_sum <- x_sum + flat_xm
+
+        xm_tmp <- xm
+        for (d in other_modes) { # multiply by inverse covars
+          xm_tmp <- n_prod(xm_tmp, inv_new_sigma[[d]], d)
+        }
+
+        flat_xm_tmp <- matricization(xm_tmp, j)
+
+        first <- first + b[i] * (flat_xm_tmp %*% t(flat_xm))
+      }
+
+      second <- flat_skew_tmp %*% t(x_sum)
+      third  <- x_sum %*% t(flat_skew_tmp)
+      fourth <- sum(a) * (flat_skew_tmp %*% t(flat_skew))
+
+      sigma_j <- n_d / (n * n_star) * (first - second - third + fourth)
+
+      new_sigmas[[j]] <- sigma_j
+    }
 
     scale_prod <- 1
 
-    for (j in 1:o) {
-      first <- 0
-      second <- 0
-      third <- 0
-      fourth <- 0
-
+    for (j in 1:(o-1)) { # force trace to be n_d for all sigmas except last
+      curr_sigma <- new_sigmas[[j]]
       n_d <- dims[j]
 
-      # covar estimate for mode j
-      sigma_j <- matrix(0, nrow = n_d, ncol = n_d)
+      tr_j <- sum(diag(curr_sigma))
 
-      # other modes
-      other_modes <- (1:o)[-j]
+      scale_curr <- tr_j / n_d
+      scale_prod <- scale_prod * scale_curr
 
-      # Build the whitening operator
-      inv_others <- diag(1)
-
-      for (d in rev(other_modes)) {
-        inv_others <- kronecker(inv_others, chol2inv(chol(new_sigmas[[d]])))
-      }
-
-      A_i <- matricization(new_skew, j)
-
-      for (i in 1:n) {
-        Xi_centered <- matricization(data[[i]] - new_mu, j)
-
-        first <- first + b[i] * (Xi_centered %*% inv_others %*% t(Xi_centered))
-
-        second <- second + A_i %*% inv_others %*% t(Xi_centered)
-
-        third <- third + Xi_centered %*% inv_others %*% t(A_i)
-
-        fourth <- fourth + a[i] * A_i %*% inv_others %*% t(A_i)
-      }
-
-      sigma_j <- n_d/(n * n_star) * (first - second - third + fourth)
-
-      scale_prod <- 1
-
-      if (j < o) {
-        c_d <- sigma_j[1, 1]
-
-        if (!is.finite(c_d) || c_d == 0) c_d <- 1
-
-        scale_prod <- scale_prod * c_d
-
-        sigma_j <- sigma_j / c_d
-      }
-
-      new_sigmas[[j]] <- sigma_j
+      curr_sigma <- curr_sigma / scale_curr
+      new_sigmas[[j]] <- curr_sigma
     }
 
     new_sigmas[[o]] <- new_sigmas[[o]] * scale_prod
@@ -218,17 +228,9 @@ tensor_mle_skewt <- function(data, max_iter, tol,
     logliks[t] <- total_loglik
 
     if(t >= 3) {
-      lt_after <- logliks[t]
-      lt <- logliks[t - 1]
-      lt_before <- logliks[t - 2]
+      ll_rel <- abs(logliks[t] - logliks[t - 1]) / (abs(logliks[t - 1]) + 1e-8)
 
-      aitken <- (lt_after - lt)/(lt - lt_before)
-
-      linf <- lt + 1/(1 - aitken) * (lt_after - lt)
-
-      converge <- abs(linf - lt_after)
-
-      if(converge < tol) {
+      if(ll_rel < tol) {
         if(!quiet) message("Converged at iteration ", t)
         break
       }

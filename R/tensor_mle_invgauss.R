@@ -169,12 +169,41 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
 
       sigma_j <- n_d / (n * n_star) * (first - second - third + fourth)
 
-      if (j < o) { # force trace to be n_d for all sigmas except last
-        sigma_j <- sigma_j / sum(diag(sigma_j)) * n_d
-      }
-
       new_sigmas[[j]] <- sigma_j
     }
+
+    scale_prod <- 1
+
+    for (j in 1:(o-1)) { # force trace to be n_d for all sigmas except last
+      curr_sigma <- new_sigmas[[j]]
+      n_d <- dims[j]
+
+      tr_j <- sum(diag(curr_sigma))
+
+      scale_curr <- tr_j / n_d
+      scale_prod <- scale_prod * scale_curr
+
+      curr_sigma <- curr_sigma / scale_curr
+      new_sigmas[[j]] <- curr_sigma
+    }
+
+    new_sigmas[[o]] <- new_sigmas[[o]] * scale_prod
+
+    #scale_prod <- 1
+    #
+    # for(j in 1:(o-1)) { # force trace to be n_d for all sigmas except last
+    #   curr_sigma <- new_sigmas[[j]]
+    #   n_d <- dims[o]
+    #
+    #   scale_curr <- sum(diag(curr_sigma)) * n_d
+    #   scale_prod <- scale_prod * scale_curr
+    #
+    #   curr_sigma <- curr_sigma / scale_curr
+    #
+    #   new_sigmas[[j]] <- curr_sigma
+    # }
+    #
+    # new_sigmas[[o]] <- new_sigmas[[o]] * scale_prod
 
     # update all parameters
     mu <- new_mu
@@ -194,48 +223,16 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
     logliks[t] <- total_loglik/n
 
     if(t >= 3) {
-      aitken <- (logliks[t] - logliks[t-1])/(logliks[t-1] - logliks[t-2])
+      ll_rel <- abs(logliks[t] - logliks[t - 1]) / (abs(logliks[t - 1]) + 1e-8)
 
-      ltplus <- logliks[t-1] + 1/(1-aitken) * (logliks[t] - logliks[t-1])
-      converge <- ltplus - logliks[t-1]
-
-      if(abs(converge) < tol) {
-        if(!quiet) message("Converged at iteration ", t)
+      if (ll_rel < tol) {
+        if (!quiet) message("Converged at iteration ", t)
         break
       }
-
-      # lt_after <- logliks[t]
-      # lt <- logliks[t - 1]
-      # lt_before <- logliks[t - 2]
-      #
-      # aitken <- (lt_after - lt)/(lt - lt_before)
-      #
-      # linf <- lt + 1/(1 - aitken) * (lt_after - lt)
-      #
-      # converge <- linf - lt_after
-      #print(logliks[t])
-
-      #converge <- logliks[t] - logliks[t-1]
     }
-    # if(t >= 3) {
-    #   aitken <- (logliks[t] - logliks[t-1])/(logliks[t-1] - logliks[t-2])
-    #
-    #   l_inf <- logliks[t-1] + (logliks[t] - logliks[t-1]) / (1 - aitken)
-    #   converge <- abs(l_inf - logliks[t])
-    #   #ltplus <- logliks[t-1] + 1/(1-aitken) * (logliks[t] - logliks[t-1])
-    #   #converge <- ltplus - logliks[t-1]
-    #
-    #   if(converge < tol) {
-    #     if(!quiet) message("Converged at iteration ", t)
-    #     break
-    #   }
-    #
+
     if (t %% 50 == 0 & !quiet) {
-      cat(sprintf(
-        "Iteration %d: criterion based on Aitken = %.3e\n",
-        t,
-        converge
-      ))
+      cat(sprintf("Iteration %d: criterion based on Aitken = %.3e\n", t, converge))
     }
   }
 
