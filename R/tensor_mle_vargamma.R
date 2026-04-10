@@ -28,16 +28,16 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
   mu <- median_draws
   skew <- mean_draws - median_draws
 
-  est_sigmas <- lapply(dims, diag)
+  sigmas <- lapply(dims, diag)
 
   logliks <- rep(0, max_iter)
 
   for (t in 1:max_iter) {
     # Step 2: Update a, b, c depending on expected values
     skew_compute <- skew
-    inv_sigma <- lapply(est_sigmas, invert_safe)
+    inv_sigma <- lapply(sigmas, invert_safe)
 
-    for (d in seq_along(est_sigmas)) {
+    for (d in seq_along(sigmas)) {
       skew_compute <- n_prod(skew_compute, inv_sigma[[d]], d)
     }
 
@@ -55,7 +55,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
 
       centered_compute <- center_draw
 
-      for (d in seq_along(est_sigmas)) {
+      for (d in seq_along(sigmas)) {
         centered_compute <- n_prod(centered_compute, inv_sigma[[d]], d)
       }
       delta_vals[i] <- sum(center_draw * centered_compute)
@@ -121,7 +121,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
     den_skew <- sum(a * mean(b)) - n
     new_skew <- num_skew / den_skew
 
-    new_sigmas <- est_sigmas
+    new_sigmas <- sigmas
 
     # update params based on model
     update_nu <- function(nu, b, c, n) {
@@ -137,56 +137,70 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
       a = a,
       c = c)$root
 
-    scale_prod <- 1
-
     for (j in 1:o) {
-      first <- 0
-      second <- 0
-      third <- 0
-      fourth <- 0
+      inv_new_sigma <- lapply(new_sigmas, invert_safe) # compute sigmas
 
       n_d <- dims[j]
-
-      # covar estimate for mode j
-      sigma_j <- matrix(0, nrow = n_d, ncol = n_d)
-
-      # other modes
       other_modes <- (1:o)[-j]
 
-      # Build the whitening operator
-      inv_others <- diag(1)
+      first <- matrix(0, n_d, n_d)
+      x_sum  <- matrix(0, n_d, prod(dims[-j]))
 
-      for (d in rev(other_modes)) {
-        inv_others <- kronecker(inv_others, invert_safe(new_sigmas[[d]]))
+      skew_tmp <- new_skew # compute skew once for each dim
+
+      for (d in other_modes) { # multiply by inverse covars
+        skew_tmp <- n_prod(skew_tmp, inv_new_sigma[[d]], d)
       }
 
-      A_i <- matricization(new_skew, j)
+      flat_skew_tmp <- matricization(skew_tmp, j) # flatten the skews
+      flat_skew <- matricization(new_skew, j)
 
       for (i in 1:n) {
-        Xi_centered <- matricization(data[[i]] - new_mu, j)
+        xm <- data[[i]] - new_mu # take centered draw
+        flat_xm <- matricization(xm, j)
 
-        first <- first + b[i] * (Xi_centered %*% inv_others %*% t(Xi_centered))
+        x_sum <- x_sum + flat_xm
 
-        second <- second + A_i %*% inv_others %*% t(Xi_centered)
+        xm_tmp <- xm
+        for (d in other_modes) { # multiply by inverse covars
+          xm_tmp <- n_prod(xm_tmp, inv_new_sigma[[d]], d)
+        }
 
-        third <- third + Xi_centered %*% inv_others %*% t(A_i)
+        flat_xm_tmp <- matricization(xm_tmp, j)
 
-        fourth <- fourth + a[i] * A_i %*% inv_others %*% t(A_i)
+        first <- first + b[i] * (flat_xm_tmp %*% t(flat_xm))
       }
+
+      second <- flat_skew_tmp %*% t(x_sum)
+      third  <- x_sum %*% t(flat_skew_tmp)
+      fourth <- sum(a) * (flat_skew_tmp %*% t(flat_skew))
 
       sigma_j <- n_d / (n * n_star) * (first - second - third + fourth)
-
-      if (j < o) {
-        sigma_j <- sigma_j / (sum(diag(sigma_j))) * n_d
-      }
 
       new_sigmas[[j]] <- sigma_j
     }
 
+    scale_prod <- 1
+
+    for (j in 1:(o-1)) { # force trace to be n_d for all sigmas except last
+      curr_sigma <- new_sigmas[[j]]
+      n_d <- dims[j]
+
+      tr_j <- sum(diag(curr_sigma))
+
+      scale_curr <- tr_j / n_d
+      scale_prod <- scale_prod * scale_curr
+
+      curr_sigma <- curr_sigma / scale_curr
+      new_sigmas[[j]] <- curr_sigma
+    }
+
+    new_sigmas[[o]] <- new_sigmas[[o]] * scale_prod
+
     # update all parameters
     mu <- new_mu
     skew <- new_skew
-    est_sigmas <- new_sigmas
+    sigmas <- new_sigmas
     gamma <- new_gamma
 
     # Step 5: Check convergence
@@ -195,40 +209,27 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
 
     for(i in 1:n) {
       total_loglik <- total_loglik +
-        dtvargamma(data[[i]], mu, skew, est_sigmas, gamma, log = TRUE)
+        dtvargamma(data[[i]], mu, skew, sigmas, gamma, log = TRUE)
     }
 
     logliks[t] <- total_loglik
 
     if(t >= 3) {
+      ll_rel <- abs(logliks[t] - logliks[t - 1]) / (abs(logliks[t - 1]) + 1e-8)
 
-      lt_after <- logliks[t]
-      lt <- logliks[t - 1]
-      lt_before <- logliks[t - 2]
-
-      aitken <- (lt_after - lt)/(lt - lt_before)
-
-      linf <- lt + 1/(1 - aitken) * (lt_after - lt)
-
-      converge <- abs(linf - lt_after)
-
-      if(converge < tol) {
-        if(!quiet) message("Converged at iteration ", t)
+      if (ll_rel < tol) {
+        if (!quiet) message("Converged at iteration ", t)
         break
       }
+    }
 
-      if (t %% 50 == 0 & !quiet) {
-        cat(sprintf(
-          "Iteration %d: mean relative change = %.3e\n",
-          t,
-          converge
-        ))
-      }
+    if (t %% 50 == 0 & !quiet) {
+      cat(sprintf("Iteration %d: criterion = %.3e\n", t, ll_rel))
     }
   }
 
   if(t == max_iter) message("Reached max iter ", max_iter)
 
-  list(mu = mu, skew = skew, sigmas = est_sigmas, gamma = gamma,
+  list(mu = mu, skew = skew, sigmas = sigmas, gamma = gamma,
        Ew = a, Einvw = b, Elogw = c)
 }

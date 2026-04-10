@@ -39,7 +39,13 @@ dtnorm <- function(x, mu = NULL, sigmas = NULL, log = FALSE) {
 
     xm_tmp <- n_prod(xm_tmp, curr_inv, d)
 
-    all_det <- all_det + (n_star / (2 * nrow(sigd))) * (2 * sum(log(det(sigd))))
+    det_sigd <- det(sigd)
+
+    if(det_sigd == 0) det_sigd <-1e-8
+
+    log_det <- log(det_sigd)
+
+    all_det <- all_det + (n_star / (2 * nrow(sigd))) * (2 * log_det)
   }
 
   xm_tmp <- as.numeric(xm_tmp)

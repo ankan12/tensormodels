@@ -30,7 +30,7 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
     stop("Invalid restriction: You must restrict at most number of dims - 1 scale parameters.")
   }
 
-  if(o == 1 && dims == 1) { # if univariate
+  if(o == 1 && dims == 1) { # univariate
     vector_data <- simplify2array(data)
     mu <- mean(vector_data)
     sigma <- var(vector_data)
@@ -38,7 +38,8 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
   }
 
   if(o == 1) { # multivariate
-    array_data <- simplify2array(aperm(data, c(2, 1)))
+    array_data <- aperm(simplify2array(data), c(2, 1))
+    mu <- apply(array_data, 2, mean)
     sigma <- cov(array_data) * (n - 1)/n
     return(list(mu = mu, sigmas = list(sigma)))
   }
@@ -118,23 +119,16 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
     logliks[t] <- total_loglik/n
 
     if(t >= 3) {
-      aitken <- (logliks[t] - logliks[t-1])/(logliks[t-1] - logliks[t-2])
+      ll_rel <- abs(logliks[t] - logliks[t - 1]) / (abs(logliks[t - 1]) + 1e-8)
 
-      ltplus <- logliks[t-1] + 1/(1-aitken) * (logliks[t] - logliks[t-1])
-      converge <- ltplus - logliks[t-1]
-
-      if(abs(converge) < tol) {
-        if(!quiet) message("Converged at iteration ", t)
+      if (ll_rel < tol) {
+        if (!quiet) message("Converged at iteration ", t)
         break
       }
+    }
 
-      if (t %% 50 == 0 & !quiet) {
-        cat(sprintf(
-          "Iteration %d: mean relative change = %.3e\n",
-          t,
-          converge
-        ))
-      }
+    if (t %% 50 == 0 & !quiet) {
+      cat(sprintf("Iteration %d: criterion = %.3e\n", t, ll_rel))
     }
   }
 

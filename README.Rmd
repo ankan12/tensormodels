@@ -166,6 +166,8 @@ Below is a simulation from a tensor variate normal of size $3 \times 4 \times
 2$.The covariance structure is specified with a list of matrices. 
 
 ```{r}
+mu_true <- array(1:24, dim = c(3, 4, 2))
+
 S1 <- crossprod(matrix(rnorm(9), nrow = 3))
 S2 <- crossprod(matrix(rnorm(16), nrow = 4))
 S3 <- crossprod(matrix(rnorm(4), nrow = 2))
@@ -243,39 +245,11 @@ kappa_true <- 2
 
 invgauss_draws <- rtinvgauss(n = 1e3, mu = mu_true, skew = skew_true, 
                              sigmas = list(S1, S2), kappa = kappa_true)
-
-# tibble(logliks) |> 
-#   mutate(row = row_number()) |> 
-#   ggplot() + 
-#   geom_point(aes(x = logliks, y = row)) +
-#   theme_minimal()
-# 
-# 
-# tibble(converge) |> 
-#   mutate(row = row_number()) |> 
-#   ggplot() + 
-#   geom_point(aes(x = row, y = converge)) +
-#   theme_minimal()
-# 
-# 
-# converge <- rep(0, 100)
-# 
-# logliks |> summary()
-# 
-# for(t in 3:100) {
-#     aitken <- (logliks[t] - logliks[t-1])/(logliks[t-1] - logliks[t-2])
-# 
-#     ltplus <- logliks[t-1] + 1/(1-aitken) * (logliks[t] - logliks[t-1])
-# 
-#     converge[t] <- ltplus - logliks[t-1]
-# }
-# 
-# converge |> table()
-
 ```
 
 
 ```{r}
+mu_true <- array(1:24, dim = c(3, 4, 2))
 skew_true <- array(seq(0, 4, length.out = 24), dim = c(3, 4, 2))
 kappa_true <- 2
 
@@ -285,24 +259,16 @@ invgauss_draws <- rtinvgauss(n = 1e3, mu = mu_true, skew = skew_true,
 
 
 ```{r}
-tic()
 invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss", 
                            quiet = FALSE, tol = 1e-3)
-toc()
 ```
 
 
+For the inverse gaussian distribution, the true mean $E[X] = \tensor{M} + \tensor{A}/\kappa$. We can compare the model's estimation for the mean with the true values. 
+
 ```{r}
-fit_mean <- invgauss_est$mu + invgauss_est$skew / invgauss_est$kappa
-
-true_mean <- mu_true + skew_true / kappa_true
-
-frob_norm_diff(fit_mean, true_mean)
-
-frob_norm_diff(invgauss_est$skew / invgauss_est$kappa,
-               skew_true / kappa_true)
-
-mean(invgauss_est$Ew)
+frob_norm_diff(with(invgauss_est, mu + skew/kappa),
+               mu_true + skew_true/kappa_true)
 ```
 
 
@@ -321,46 +287,6 @@ for(i in 1:2) {
 
 
 
-```{r}
-mu_true <- array(1:24, dim = c(3, 4, 2))
-skew_true <- array(rnorm(24), dim = c(3,4,2))
-kappa_true <- 2
-
-invgauss_draws <- rtinvgauss(n = 1e3, mu = mu_true, skew = skew_true, 
-                             sigmas = list(S1, S2, S3), kappa = kappa_true)
-
-invgauss_draws[[1]]
-```
-
-
-```{r}
-tic()
-invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss", 
-                           quiet = FALSE, tol = 1e-3)
-toc()
-
-# profvis::profvis({
-#   fit <- tensor_mle(data, max_iter = 100, model = "invgauss",
-#                      tol = 1e-6, quiet = TRUE)
-# })
-#250 seconds
-```
-
-
-```{r}
-invgauss_est$kappa
-
-frob_norm_diff(invgauss_est$mu, mu_true)
-frob_norm_diff(invgauss_est$skew, skew_true) 
-
-for(i in 1:3) {
-  true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
-  est_scaled <- invgauss_est$sigmas[[i]] / sum(diag(invgauss_est$sigmas[[i]]))
-  
-  print(frob_norm_diff(est_scaled, true_scaled))
-}
-```
-
 
 ## Tensor variate generalized hyperbolic
 
@@ -368,20 +294,32 @@ The density function of the generalized hyperbolic distribution is
 $$f(x) = (2\pi)^{-p*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p*/(2\pi)}\right) \exp\left\{-\frac{1}{2} (x-\mu)' \Sigma_{1:k}^{-1} (x-\mu\right\}$$
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$, $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
-The function `rtnorm()`{.R} simulates random draws from the tensor variate normal with a specified mean array mu and a list of covariance matrices called list_sigmas.
+The function `rtgenhyper()`{.R} simulates random draws from the tensor variate generalized hyperbolic with a specified mean array mu and a list of covariance matrices called list_sigmas.
 
 Since the univariate normal and matrix variate normal are simpler cases of the
 tensor variate normal, this function can simulate from them as well.  Here, we
 simulate random draws from a univariate normal with mean $-2$ and variance $4$.
 
 ```{r}
+lambda_true <- 2
+omega_true <- 2
+
 genhyper_draws <- rtgenhyper(n = 1e3, mu = mu_true, skew = skew_true,
                              sigmas = list(S1, S2, S3))
 ```
 
 
+
+For the generalized hyperbolic distribution, the true mean $E[X] = \tensor{M} + \frac{K_{\lambda + 1}(\omega)}{K_{\lambda}(\omega)} \tensor{A}$. We can compare the model's estimation for the mean with the true values. 
+
 ```{r}
 genhyper_est <- tensor_mle(genhyper_draws, model = "genhyper", quiet = FALSE)
+
+frob_norm_diff(
+  with(genhyper_est, mu + besselK(x = omega, nu = lambda + 1)/
+                          besselK(x = omega, nu = lambda) * skew),
+       mu_true + besselK(x = omega_true, nu = lambda_true + 1)/
+                 besselK(x = omega_true, nu = lambda_true) * skew_true)
 
 frob_norm_diff(genhyper_est$mu, mu_true)
 frob_norm_diff(genhyper_est$skew, skew_true)
@@ -400,7 +338,8 @@ genhyper_est$omega
 
 ## Tensor variate variance gamma
 ```{r}
-vargamma_draws <- rtvargamma(n = 1e3, mu = mu_true, sigmas = list(S1, S2, S3))
+vargamma_draws <- rtvargamma(n = 1e3, mu = mu_true, skew = skew_true,
+                             sigmas = list(S1, S2, S3))
 ```
 
 
@@ -408,8 +347,11 @@ vargamma_draws <- rtvargamma(n = 1e3, mu = mu_true, sigmas = list(S1, S2, S3))
 ```{r}
 vargamma_est <- tensor_mle(vargamma_draws, model = "vargamma", quiet = FALSE)
 
+frob_norm_diff(with(vargamma_est, mu + skew),
+               mu_true + skew_true)
+
 frob_norm_diff(vargamma_est$mu, mu_true)
-frob_norm_diff(vargamma_est$skew, array(1, dim = c(3, 4, 2)))
+frob_norm_diff(vargamma_est$skew, skew_true)
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -459,51 +401,44 @@ for(i in 1:3) {
 
 ## Assessing tensor variate normality
 
-<!-- We can use the Mahalanobis distance to assess the tensor variate normality. If -->
-<!-- we compute the distances and plot them, they should be distributed as -->
-<!-- approximately $\chi_{p}$ where $p$ is the product of all the modes of the draws. -->
+We can use the Mahalanobis distance to assess the tensor variate normality. If we compute the distances and plot them, they should be distributed as
+approximately $\chi_{p}$ where $p$ is the product of all the modes of the draws.
 
-<!-- ```{r} -->
-<!-- #| error: true -->
-<!-- centered_draws <- matrix_draws - array(rep(matrix_est$mu, each = n), dim = dim(matrix_draws)) -->
+```{r}
+A <- matrix(rnorm(6^2), 6, 6)
+s_vec <- crossprod(A)   # positive definite, general covariance
 
-<!-- inv_sqrt <- function(Sigma, tol = 1e-8) { -->
-<!--   # syemmetric matrix -->
-<!--   Sigma <- (Sigma + t(Sigma)) / 2 -->
+vec_draws <- rtnorm(n = 1e3, mu = 1:6, sigmas = list(s_vec))
 
-<!--   eig <- eigen(Sigma, symmetric = TRUE) -->
-<!--   vals <- pmax(eig$values, tol)  # positive eigenvalues -->
-<!--   V <- eig$vectors -->
+matrix_nocovar_draws <- lapply(1:1e3, function(i) {
+  array(vec_draws[[i]], dim = c(2, 3))
+})
+```
 
-<!--   Winv <- V %*% diag(1 / sqrt(vals), nrow = length(vals)) %*% t(V) -->
-<!--   Winv -->
-<!-- } -->
 
-<!-- D2 <- rep(0, n) -->
+```{r}
+plot_malanobis <- function(draws, title = "Dist") {
+  distances <- mahalanobis_dist(draws)
+  test <- mahalanobis_test(distances)
+  plot_dist(distances)
+  title(main = title)
+  with(test, mtext(text = sprintf("D = %.3f, p = %.3f", statistic, p.value)), 
+       side = 3, line = 1)
+}
+```
 
-<!-- inv_sigmas <- vector("list", length(matrix_est$sigmas)) -->
 
-<!-- for(k in 1:2) { -->
-<!--   inv_sigmas[[k]] <- inv_sqrt(matrix_est$sigmas[[k]]) -->
-<!-- } -->
+```{r}
+par(mfcol = c(1, 4))
+plot_malanobis(multivar_draws, title = "Multivar")
+plot_malanobis(matrix_draws, title = "Mat norm")
+plot_malanobis(matrix_nocovar_draws, title = "Mat no covar norm")
+plot_malanobis(tvn_draws, title = "Tensor norm")
+```
 
-<!-- for(i in 1:n) { -->
-<!--   Y <- centered_draws[i, , ] -->
-<!--   for(k in 1:2) { -->
-<!--     Y <- n_prod(Y, matrix_est$sigmas[[k]], k) -->
-<!--   } -->
-<!--   D2[i] <- sum(c(Y)^2) -->
-<!-- } -->
 
-<!-- sigma2_hat <- mean(D2) / 2 -->
-<!-- D2_std <- D2 / sigma2_hat     -->
 
-<!-- ggplot() + -->
-<!--   geom_histogram(aes(x = D2_std, y = after_stat(density)), color = "black", fill = "pink", bins = 30) +  -->
-<!--   geom_function(fun = dchisq, args = list(df = prod(dim(matrix_est$mu))), color = "red") + -->
-<!--   theme_minimal() +  -->
-<!--   labs(x = "Mahalanobis distance", y = "Density") -->
-<!-- ``` -->
+
 
 
 ## Tensor Variate Skewed T

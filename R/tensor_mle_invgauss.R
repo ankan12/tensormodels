@@ -232,7 +232,7 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
     }
 
     if (t %% 50 == 0 & !quiet) {
-      cat(sprintf("Iteration %d: criterion based on Aitken = %.3e\n", t, converge))
+      cat(sprintf("Iteration %d: criterion = %.3e\n", t, ll_rel))
     }
   }
 

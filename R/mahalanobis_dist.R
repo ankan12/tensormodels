@@ -1,6 +1,6 @@
 #' mahalanobis_dist
 #'
-#' Computes the vector and tensor Mahalanobis distance for draws using the MLE.
+#' Computes the vector and tensor Mahalanobis distance for data using the MLE.
 #'
 #' @param data A list of arrays containing the independent, identically distributed draws.
 #'
@@ -16,14 +16,14 @@
 #' @seealso [plot_dist()] to create a plot of the Malahanobis distances.
 #'
 #' @export
-mahalanobis_dist <- function(draws) {
-  n <- length(draws)
-  dim_draws <- dim(draws[[1]])
-  num_elem <- prod(dim_draws)
-  o <- length(dim_draws)
+mahalanobis_dist <- function(data) {
+  n <- length(data)
+  dims <- dim(data[[1]])
+  n_star <- prod(dims)
+  o <- length(dims)
 
   # compute tensor Mahalanobis first
-  sample_stats <- tensor_mle(draws, model = "normal") # compute MLE estimates
+  sample_stats <- tensor_mle(data, model = "normal") # compute MLE estimates
 
   sample_mean <- sample_stats$mu
 
@@ -32,7 +32,7 @@ mahalanobis_dist <- function(draws) {
   sigma_inv <- lapply(sample_stats$sigmas, invert_safe)
 
   for(i in 1:n) {
-    centered_curr <- draws[[i]] - sample_mean # center draws
+    centered_curr <- data[[i]] - sample_mean # center draws
 
     centered_multiply <- centered_curr
 
@@ -45,17 +45,20 @@ mahalanobis_dist <- function(draws) {
   }
 
   # transform to array of n draws
-  draws_array <- simplify2array(draws) |>
-    aperm(c(o+1, 1:o))
+  if(o == 1 && dims == 1) {
+    data_array <- simplify2array(data)
+  } else {
+    data_array <- simplify2array(data) |> aperm(c(o+1, 1:o))
+  }
 
   # compute vector Mahalanobis
-  vec_draws <-
-    matrix(data = draws_array, nrow = n, ncol = num_elem)
+  vec_data <-
+    matrix(data = data_array, nrow = n, ncol = n_star)
 
-  mu_vec <- apply(vec_draws, MARGIN = 2, FUN = mean)
+  mu_vec <- apply(vec_data, MARGIN = 2, FUN = mean)
 
-  vec_dist <- mahalanobis(vec_draws, center = mu_vec,
-                          cov = invert_safe(cov(vec_draws)), inverted = TRUE)
+  vec_dist <- mahalanobis(vec_data, center = mu_vec,
+                          cov = invert_safe(cov(vec_data)), inverted = TRUE)
 
   # scaling factor is divide by number of elements in a draw
   tensor_dist <- tensor_dist * mean(vec_dist) / mean(tensor_dist)

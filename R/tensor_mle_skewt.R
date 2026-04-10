@@ -148,8 +148,6 @@ tensor_mle_skewt <- function(data, max_iter, tol,
 
     if(new_nu < 4) new_nu <- 4
 
-    cat("nu =", new_nu, "\n")
-
     for (j in 1:o) {
       inv_new_sigma <- lapply(new_sigmas, invert_safe) # compute sigmas
 
@@ -236,7 +234,7 @@ tensor_mle_skewt <- function(data, max_iter, tol,
       }
     }
     if (t %% 50 == 0 & !quiet) {
-      cat(sprintf("Iteration %d: criterion based on Aitken = %.3e\n", t, converge))
+      cat(sprintf("Iteration %d: criterion = %.3e\n", t, ll_rel))
     }
   }
 

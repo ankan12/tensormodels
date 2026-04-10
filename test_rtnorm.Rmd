@@ -14,24 +14,21 @@ library(tidyverse)
 # Normal Dist Mahalanobis + KS
 
 ## Simulate matrix variate data
+
 ```{r}
 n <- 1e3
 
 s1 <- matrix(rnorm(4), nrow = 2) |> crossprod()
 s2 <- matrix(rnorm(9), nrow = 3) |> crossprod()
 
-# error if sigmas don't match mu
-
 # univar normal
-univarnorm_draws <- rtnorm(n, mu = 1:2, sigmas = list(s1))
-univar_distances <- mahalanobis_dist(univarnorm_draws)
+uvnorm_draws <- rtnorm(n, mu = 1, sigmas = list(4))
+univar_distances <- mahalanobis_dist(uvnorm_draws)
 
 # matrix normal
 matnorm_draws <- rtnorm(n, mu = matrix(1:6, nrow = 2),
                         sigmas = list(s1, s2))
 matnorm_distances <- mahalanobis_dist(matnorm_draws)
-
-tensor_mle(matnorm_draws, model = "normal", quiet = FALSE)
 
 # multivariate normal draws
 s_multivar <- matrix(rnorm(6*6), nrow = 6) |> crossprod()

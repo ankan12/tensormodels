@@ -236,29 +236,16 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
     logliks[t] <- total_loglik
 
     if(t >= 3) {
+      ll_rel <- abs(logliks[t] - logliks[t - 1]) / (abs(logliks[t - 1]) + 1e-8)
 
-      lt_after <- logliks[t]
-      lt <- logliks[t - 1]
-      lt_before <- logliks[t - 2]
-
-      aitken <- (lt_after - lt)/(lt - lt_before)
-
-      linf <- lt + 1/(1 - aitken) * (lt_after - lt)
-
-      converge <- abs(linf - lt_after)
-
-      if(converge < tol) {
-        if(!quiet) message("Converged at iteration ", t)
+      if (ll_rel < tol) {
+        if (!quiet) message("Converged at iteration ", t)
         break
       }
+    }
 
-      if (t %% 50 == 0 & !quiet) {
-        cat(sprintf(
-          "Iteration %d: mean relative change = %.3e\n",
-          t,
-          converge
-        ))
-      }
+    if (t %% 50 == 0 & !quiet) {
+      cat(sprintf("Iteration %d: criterion = %.3e\n", t, ll_rel))
     }
   }
 
