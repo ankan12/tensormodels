@@ -120,7 +120,7 @@ tensor_prod(A, x)
 
 The density function of the multilinear normal distribution
 is<sup>1</sup>
-$$f(x) = (2\pi)^{-p*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p*/(2\pi)}\right) \exp\left\{-\frac{1}{2} (x-\mu)' \Sigma_{1:k}^{-1} (x-\mu\right\}$$
+$$f(x) = (2\pi)^{-p*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p*/(2\pi)}\right) \exp\left\{-\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu)\right\}$$
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
 $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
@@ -134,13 +134,14 @@ well. Here, we simulate random draws from a univariate normal with mean
 $-2$ and variance $4$.
 
 ``` r
-univar_draws <- rtnorm(n = 1000, mu = -2, sigmas = 4)
+univar_draws <- rtnorm(n = 1000, mu = -2, 
+                       sigmas = list(matrix(4)))
 
 mean(simplify2array(univar_draws))
-#> [1] -2.09
+#> [1] -2.02
 
 var(simplify2array(univar_draws))
-#> [1] 3.85
+#> [1] 4.28
 ```
 
 We can also simulate random draws from a multivariate normal
@@ -151,19 +152,19 @@ S1 <- crossprod(matrix(data = c(1, 0.5, 0.5, 1), nrow = 2))
 
 (multivar_draws <- rtnorm(n = 5, mu = c(2, 3), sigmas = list(S1)))
 #> [[1]]
-#> [1] 3.67 4.54
+#> [1] 3.27 2.90
 #> 
 #> [[2]]
-#> [1] 0.904 3.369
+#> [1] 3.24 4.54
 #> 
 #> [[3]]
-#> [1] 4.22 3.66
+#> [1] 1.026 0.938
 #> 
 #> [[4]]
-#> [1] 2.97 2.91
+#> [1] 2.24 2.35
 #> 
 #> [[5]]
-#> [1] 2.31 2.68
+#> [1] 2.08 3.73
 ```
 
 And now we simulate from the matrix variate normal of size $2 \times 3$.
@@ -173,9 +174,9 @@ By default, the covariance matrices will be the identity.
 matrix_draws <- rtnorm(n = 1e3, mu = matrix(1:6, nrow = 2, ncol = 3))
 
 matrix_draws[[1]]
-#>      [,1] [,2] [,3]
-#> [1,] 1.77 4.40 6.46
-#> [2,] 1.42 6.06 5.34
+#>       [,1] [,2] [,3]
+#> [1,] 0.459 3.50 4.19
+#> [2,] 1.687 2.74 4.96
 ```
 
 Below is a simulation from a tensor variate normal of size
@@ -195,17 +196,17 @@ tvn_draws <- rtnorm(n = 1e3, mu = mu_true,
 tvn_draws[[1]]
 #> , , 1
 #> 
-#>       [,1]   [,2]  [,3]  [,4]
-#> [1,]  2.97 -0.438 11.08  9.79
-#> [2,] -2.70 10.831  1.61 12.03
-#> [3,]  2.00 13.279  2.83 13.55
+#>       [,1] [,2] [,3]  [,4]
+#> [1,] 0.686 4.38 9.39  8.19
+#> [2,] 1.202 1.88 8.96 11.30
+#> [3,] 2.942 5.02 7.71 13.10
 #> 
 #> , , 2
 #> 
-#>      [,1] [,2] [,3] [,4]
-#> [1,] 12.9 15.0 19.4 22.0
-#> [2,] 11.9 15.1 21.0 20.8
-#> [3,] 15.2 20.8 18.3 26.1
+#>       [,1]  [,2] [,3] [,4]
+#> [1,]  5.00 -2.48 13.3 21.0
+#> [2,]  9.47 10.08 32.6 14.9
+#> [3,] 19.29 28.14 27.5 23.3
 ```
 
 # Estimation
@@ -218,11 +219,11 @@ return a list containing the MLE for the mean and covariance matrices.
 ``` r
 (univarnorm_est <- tensor_mle(draws = univar_draws, model = "normal"))
 #> $mu
-#> [1] -2.09
+#> [1] -2.02
 #> 
 #> $sigmas
 #> $sigmas[[1]]
-#> [1] 3.85
+#> [1] 4.28
 ```
 
 Here, the mean matrix from the draws above has values 1 through 6. The
@@ -233,19 +234,19 @@ matrix_est <- tensor_mle(matrix_draws, model = "normal")
 
 matrix_est$mu
 #>       [,1] [,2] [,3]
-#> [1,] 0.986 2.99 5.02
-#> [2,] 2.000 4.05 5.96
+#> [1,] 0.981 3.01 4.99
+#> [2,] 2.025 3.98 5.99
 matrix_est$sigmas |> lapply(round, 3)
 #> [[1]]
 #>        [,1]   [,2]
-#> [1,]  0.968 -0.014
-#> [2,] -0.014  1.032
+#> [1,]  1.001 -0.005
+#> [2,] -0.005  0.999
 #> 
 #> [[2]]
 #>        [,1]   [,2]   [,3]
-#> [1,]  1.004  0.009 -0.008
-#> [2,]  0.009  1.009 -0.007
-#> [3,] -0.008 -0.007  1.027
+#> [1,]  1.073 -0.034 -0.002
+#> [2,] -0.034  1.026 -0.037
+#> [3,] -0.002 -0.037  1.016
 ```
 
 This function works for tensor-valued data.
@@ -254,7 +255,7 @@ This function works for tensor-valued data.
 tensor_est <- tensor_mle(draws = tvn_draws, model = "normal")
 
 frob_norm_diff(tensor_est$mu, mu_true)
-#> [1] 0.00843
+#> [1] 0.0125
 
 true_sigmas <- list(S1, S2, S3)
 
@@ -264,9 +265,9 @@ for(i in 1:3) {
   
   print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
 }
-#> [1] 0.00889
-#> [1] 0.0266
-#> [1] 0.00672
+#> [1] 0.0142
+#> [1] 0.0239
+#> [1] 0.00424
 ```
 
 # Other models
@@ -278,7 +279,7 @@ The density function of the normal inverse Gaussian distribution is
 $$f_{\text{TVNIG}}(\mathcal{X}|\textbf{V}) =
 \frac{2 \exp\left\{\text{vec}(\mathcal{X} - \mathcal{M})^{T} \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A} + \kappa) \right\}}{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}}} \left(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1}{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^2}\right)^{-\frac{1 + n^{*}}{4}}$$
 
-$$\quad K_{- \frac{1 + n^{*}}{2}} \left(\sqrt{[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}}) + \kappa^{2}] \left[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1\right]\right)$$
+$$\quad K_{- \frac{1 + n^{*}}{2}} \left(\sqrt{[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^{2}] \left[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1\right]\right)$$
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
 $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
@@ -302,13 +303,13 @@ skew_true <- array(seq(0, 4, length.out = 24), dim = c(3, 4, 2))
 kappa_true <- 2
 
 invgauss_draws <- rtinvgauss(n = 1e3, mu = mu_true, skew = skew_true, 
-                             sigmas = list(S1, S2), kappa = kappa_true)
+                             sigmas = list(S1, S2, S3), kappa = kappa_true)
 ```
 
 ``` r
 invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss", 
                            quiet = FALSE, tol = 1e-3)
-#> Converged at iteration 6
+#> Converged at iteration 40
 ```
 
 For the inverse gaussian distribution, the true mean
@@ -318,16 +319,16 @@ estimation for the mean with the true values.
 ``` r
 frob_norm_diff(with(invgauss_est, mu + skew/kappa),
                mu_true + skew_true/kappa_true)
-#> [1] 0.00522
+#> [1] 0.00538
 ```
 
 ``` r
 frob_norm_diff(invgauss_est$mu, mu_true)
-#> [1] 0.01
+#> [1] 0.0162
 frob_norm_diff(invgauss_est$skew, skew_true)
-#> [1] 0.726
+#> [1] 0.669
 invgauss_est$kappa
-#> [1] 0.656
+#> [1] 0.752
 
 for(i in 1:2) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -335,8 +336,8 @@ for(i in 1:2) {
   
   print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
 }
-#> [1] 0.00901
-#> [1] 0.0214
+#> [1] 0.00724
+#> [1] 0.00767
 ```
 
 ## Tensor variate generalized hyperbolic
@@ -369,19 +370,19 @@ We can compare the model’s estimation for the mean with the true values.
 
 ``` r
 genhyper_est <- tensor_mle(genhyper_draws, model = "genhyper", quiet = FALSE)
-#> Converged at iteration 5
+#> Converged at iteration 10
 
 frob_norm_diff(
   with(genhyper_est, mu + besselK(x = omega, nu = lambda + 1)/
                           besselK(x = omega, nu = lambda) * skew),
        mu_true + besselK(x = omega_true, nu = lambda_true + 1)/
                  besselK(x = omega_true, nu = lambda_true) * skew_true)
-#> [1] 0.00731
+#> [1] 0.0132
 
 frob_norm_diff(genhyper_est$mu, mu_true)
-#> [1] 0.0369
+#> [1] 0.0603
 frob_norm_diff(genhyper_est$skew, skew_true)
-#> [1] 0.805
+#> [1] 0.842
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -389,14 +390,14 @@ for(i in 1:3) {
   
   print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
 }
-#> [1] 0.00549
-#> [1] 0.0304
-#> [1] 0.0119
+#> [1] 0.0066
+#> [1] 0.0275
+#> [1] 0.0866
 
 genhyper_est$lambda
-#> [1] 2.51
+#> [1] 2.1
 genhyper_est$omega
-#> [1] 0.425
+#> [1] 0.31
 ```
 
 ## Tensor variate variance gamma
@@ -408,16 +409,16 @@ vargamma_draws <- rtvargamma(n = 1e3, mu = mu_true, skew = skew_true,
 
 ``` r
 vargamma_est <- tensor_mle(vargamma_draws, model = "vargamma", quiet = FALSE)
-#> Converged at iteration 4
+#> Converged at iteration 8
 
 frob_norm_diff(with(vargamma_est, mu + skew),
                mu_true + skew_true)
-#> [1] 0.0931
+#> [1] 0.107
 
 frob_norm_diff(vargamma_est$mu, mu_true)
-#> [1] 0.00705
+#> [1] 0.0104
 frob_norm_diff(vargamma_est$skew, skew_true)
-#> [1] 0.695
+#> [1] 0.781
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -425,12 +426,12 @@ for(i in 1:3) {
   
   print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
 }
-#> [1] 0.0188
-#> [1] 0.0182
-#> [1] 0.0319
+#> [1] 0.00856
+#> [1] 0.0229
+#> [1] 0.0625
 
 vargamma_est$gamma
-#> [1] 0.495
+#> [1] 0.299
 ```
 
 ## Tensor variate skewed t
@@ -454,11 +455,11 @@ skewt_draws <- rtskewt(n = 1e3, mu = mu_true, skew = skew_true,
 ``` r
 skewt_est <- tensor_mle(skewt_draws, model = "skewt",
                         quiet = FALSE, tol = 1e-3)
-#> Converged at iteration 10
+#> Converged at iteration 19
 
 frob_norm_diff(with(skewt_est, mu + (nu)/(nu-2) * skew),
                mu_true + nu_true / (nu_true - 2) * skew_true)
-#> [1] 0.00835
+#> [1] 0.0186
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -466,9 +467,9 @@ for(i in 1:3) {
   
   print(frob_norm_diff(est_scaled, true_scaled))
 }
-#> [1] 0.00632
-#> [1] 0.00912
-#> [1] 0.0107
+#> [1] 0.00502
+#> [1] 0.00582
+#> [1] 0.00821
 ```
 
 ## Assessing tensor variate normality
@@ -510,15 +511,134 @@ plot_malanobis(tvn_draws, title = "Tensor norm")
 
 <img src="man/figures/README-unnamed-chunk-26-1.png" width="100%" />
 
+We are also interested in performing a likelihood ratio test. We are
+curious if one of the covariance matrices might be the identity matrix.
+Thus, we run the algorithm and restrict these matrices.
+
+For a restriction set $\mathcal{R} \subset \{1,\ldots,D\}$, the
+restricted model fixes $\Sigma_r = I_{n_r}$ for every
+$r \in \mathcal{R}$, while all other covariance matrices are estimated.
+The likelihood ratio test compares
+
+$$H_0: \Sigma_r = I_{n_r} \ \forall r \in \mathcal{R} \quad \text{vs.} \quad H_A: \Sigma_r \neq I_{n_r} \ \text{for at least one } r \in \mathcal{R}.$$
+
+The test statistic is
+
+$$2\{\ell(\hat\theta_{\mathrm{full}}) - \ell(\hat\theta_{\mathcal{R}})\}
+\sim \chi^2_{\nu_{\mathcal{R}}}, \quad \nu_{\mathcal{R}} = \sum_{r \in \mathcal{R}} \left\{\frac{n_r(n_r+1)}{2} - 1\right\}$$
+
+If the $p$-value is large, then we fail to reject the null hypothesis
+and conclude the restricted model fits the data as well as the
+unrestricted model. If the $p$-value is small, we reject the null
+hypothesis, which states the unrestricted model has a significantly
+better fit than the restricted model.
+
+``` r
+true_str <- kronecker(S3, S2) |> kronecker(S1)
+  
+test_restrict <- function(draws, restrict) {
+  curr_restrict <- tensor_mle(draws, restrict = restrict, model = "normal")
+  
+  if(is.null(restrict)) restrict <- "None"
+
+  curr_str <- with(curr_restrict, kronecker(sigmas[[3]], sigmas[[2]]) |>
+                                  kronecker(sigmas[[1]]))
+
+  tibble(frob_error = frob_norm_diff(curr_str, true_str),
+         loglik = curr_restrict$loglik,
+         k = curr_restrict$k,
+         BIC = curr_restrict$BIC,
+         restrict = paste(restrict, collapse = ", "))
+}
+
+(res <- map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
+        draws = tvn_draws, test_restrict))
+#> # A tibble: 7 × 5
+#>   frob_error loglik     k   BIC restrict
+#>        <dbl>  <dbl> <dbl> <dbl> <chr>   
+#> 1     0.0415  -13.3    41  310. None    
+#> 2     0.725   -52.0    36  353. 1       
+#> 3     0.673   -56.6    32  334. 2       
+#> 4     0.977  -249.     39  767. 3       
+#> 5     0.860   -95.1    27  377. 1, 2    
+#> 6     0.989  -283.     34  800. 1, 3    
+#> 7     0.987  -287.     30  781. 2, 3
+```
+
+``` r
+lrt_test <- function(draws, restrict) {
+  full_model <- tensor_mle(draws, model = "normal")
+  restrict_model <- tensor_mle(draws, model = "normal", restrict = restrict)
+  
+  pval <- pchisq(2 * (full_model$loglik - restrict_model$loglik), 
+                 df = full_model$k - restrict_model$k, lower.tail = FALSE)
+  
+  tibble(restrict = paste(restrict, collapse = ", "), 
+         pval = pval)
+}
+
+map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
+        draws = tvn_draws, lrt_test)
+#> # A tibble: 7 × 2
+#>   restrict      pval
+#>   <chr>        <dbl>
+#> 1 ""       1   e+  0
+#> 2 "1"      2.75e- 15
+#> 3 "2"      7.56e- 15
+#> 4 "3"      6.10e-103
+#> 5 "1, 2"   1.34e- 27
+#> 6 "1, 3"   3.71e-112
+#> 7 "2, 3"   2.87e-110
+```
+
+``` r
+true_str <- kronecker(S3, diag(4)) |> kronecker(S1)
+
+second_identity <- rtnorm(n = 1e3, mu = mu_true, 
+                          sigmas = list(S1, diag(4), S3))
+
+map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)), 
+        draws = second_identity, test_restrict)
+#> # A tibble: 7 × 5
+#>   frob_error loglik     k   BIC restrict
+#>        <dbl>  <dbl> <dbl> <dbl> <chr>   
+#> 1     0.0508  -16.3    41  316. None    
+#> 2     0.725   -54.7    36  358. 1       
+#> 3     0.0375  -16.3    32  254. 2       
+#> 4     0.878   -39.3    39  348. 3       
+#> 5     0.724   -54.8    27  296. 1, 2    
+#> 6     0.944   -77.8    34  390. 1, 3    
+#> 7     0.878   -39.3    30  286. 2, 3
+
+map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
+        draws = second_identity, lrt_test)
+#> # A tibble: 7 × 2
+#>   restrict     pval
+#>   <chr>       <dbl>
+#> 1 ""       1   e+ 0
+#> 2 "1"      3.57e-15
+#> 3 "2"      1.00e+ 0
+#> 4 "3"      1.02e-10
+#> 5 "1, 2"   9.98e-11
+#> 6 "1, 3"   1.72e-23
+#> 7 "2, 3"   3.14e- 6
+```
+
 ## Tensor Variate Skewed T
 
 ``` r
-tibble(skew25 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 0.25, nu = 6)),
-       skew50 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 0.5, nu = 6)),
-       skew0 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 0, nu = 6)),
-       skew1 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 6)),
-       skew5 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 5, nu = 6)),
-       skew10 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 10, nu = 6))) |>
+tibble(skew25 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), 
+                               skew = matrix(0.25, nrow = 2, ncol = 3), nu = 6)),
+       skew50 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), 
+                               skew = matrix(0.5, nrow = 2, ncol = 3), nu = 6)),
+       skew0 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), 
+                              skew = matrix(0, nrow = 2, ncol = 3), nu = 6)),
+       skew1 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), 
+                              skew = matrix(1, nrow = 2, ncol = 3), nu = 6)),
+       skew5 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), 
+                              skew = matrix(5, nrow = 2, ncol = 3), nu = 6)),
+       skew10 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), 
+                               skew = matrix(10, nrow = 2, ncol = 3), nu = 6))) |>
   pivot_longer(cols = everything()) |> 
   mutate(name = factor(name, levels = c("skew0", "skew1", 
                                      "skew5", "skew10", "skew25", "skew50"))) |> 
@@ -529,16 +649,22 @@ tibble(skew25 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew
 #> `stat_bin()` using `bins = 30`. Pick better value `binwidth`.
 ```
 
-<img src="man/figures/README-unnamed-chunk-27-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-30-1.png" width="100%" />
 
 ``` r
 
-tibble(nu05 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 0.5)),
-       nu1 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 1)),
-       nu5 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 5)),
-       nu10 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 10)),
-       nu20 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 20)),
-       nu50 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew = 1, nu = 50))) |>
+tibble(nu05 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), 
+                             skew = matrix(1, nrow = 2, ncol = 3), nu = 0.5)),
+       nu1 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), 
+                            skew = matrix(1, nrow = 2, ncol = 3), nu = 1)),
+       nu5 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), 
+                            skew = matrix(1, nrow = 2, ncol = 3), nu = 5)),
+       nu10 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), 
+                             skew = matrix(1, nrow = 2, ncol = 3), nu = 10)),
+       nu20 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), 
+                             skew = matrix(1, nrow = 2, ncol = 3), nu = 20)),
+       nu50 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), 
+                             skew = matrix(1, nrow = 2, ncol = 3), nu = 50))) |>
   pivot_longer(cols = everything()) |>
   mutate(name = factor(name, levels = c("nu05", "nu1", "nu5", "nu10", "nu20", "nu50"))) |> 
   ggplot() +
@@ -548,7 +674,7 @@ tibble(nu05 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew =
 #> `stat_bin()` using `bins = 30`. Pick better value `binwidth`.
 ```
 
-<img src="man/figures/README-unnamed-chunk-27-2.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-30-2.png" width="100%" />
 
 ## Installation
 

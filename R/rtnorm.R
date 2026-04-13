@@ -36,14 +36,7 @@
 #' @export
 rtnorm <- function(n, mu = 0, sigmas = list(matrix(1))) {
   dims <- dim(mu)
-
-  # mu was a scalar
-  if(is.null(dims)) dims <- length(mu)
-
-  # no sigmas provided, use identity
-  if (length(sigmas) == 1 && nrow(sigmas[[1]]) == 1 && sigmas[[1]] == 1) {
-    sigmas <- lapply(dims, diag)
-  }
+  sigmas <- .prepare_sigmas(sigmas, dims)
 
   d <- length(dims)
 

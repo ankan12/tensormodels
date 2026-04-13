@@ -18,9 +18,17 @@
 #'            sigmas = list(matrix(1)), lambda = 2, omega = 2)
 #' @export
 dtgenhyper <- function(x, mu, skew, sigmas, lambda, omega, log = FALSE) {
-  d <- dim(x)
-  o <- length(d)
-  n_star <- prod(d)
+  dims <- dim(x)
+  o <- length(dims)
+  n_star <- prod(dims)
+
+  .validate_same_dims(mu, dims, "mu")
+  .validate_same_dims(skew, dims, "skew")
+  sigmas <- .prepare_sigmas(sigmas, dims)
+
+  x <- array(x, dim = dims)
+  mu <- array(mu, dim = dims)
+  skew <- array(skew, dim = dims)
 
   all_det <- 0
 
@@ -30,13 +38,13 @@ dtgenhyper <- function(x, mu, skew, sigmas, lambda, omega, log = FALSE) {
   ve_xm <- matrix(c(x - mu), nrow = n_star)
   ve_skew <- matrix(c(skew), nrow = n_star)
 
-  for(d in 1:o) {
-    sigd <- sigmas[[d]]
+  for(k in 1:o) {
+    sigd <- sigmas[[k]]
 
     curr_inv <- invert_safe(sigd)
 
-    xm_tmp <- n_prod(xm_tmp, curr_inv, d)
-    skew_tmp <- n_prod(skew_tmp, curr_inv, d)
+    xm_tmp <- n_prod(xm_tmp, curr_inv, k)
+    skew_tmp <- n_prod(skew_tmp, curr_inv, k)
 
     all_det <- all_det + (n_star/(2 * nrow(sigd))) * log(det(sigd))
   }

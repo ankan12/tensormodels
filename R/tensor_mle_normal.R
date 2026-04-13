@@ -91,7 +91,10 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
 
       sigma_j <- sigma_j * n_d / (n * n_star)
 
-      if(j < o) { # force trace to be n_d
+      if(j %in% restrict) {
+        sigma_j <- diag(n_d)
+      }
+      else if(j < o) { # force trace to be n_d
         sigma_j <- sigma_j / sum(diag(sigma_j)) * n_d
       }
 
@@ -134,5 +137,12 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
 
   if(t == max_iter) message("Reached max iter ", max_iter)
 
-  list(mu = mu, sigmas = sigmas)
+  k <- n_star + sum((dims * (dims+1))/2) - (o - 1)
+
+  for(r in restrict) {
+    k <- k - (dims[r] * (dims[r] + 1))/2 + 1
+  }
+
+  list(mu = mu, sigmas = sigmas, loglik = logliks[t],
+       k = k, BIC = k * log(n) - 2 * logliks[t])
 }

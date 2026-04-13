@@ -16,15 +16,15 @@
 #'        sigmas = lapply(c(2, 3), diag))
 #' @export
 dtnorm <- function(x, mu = NULL, sigmas = NULL, log = FALSE) {
-  d <- dim(x)
-  o <- length(d)
-  n_star <- prod(d)
+  dims <- dim(x)
+  o <- length(dims)
+  n_star <- prod(dims)
 
-  if(is.null(d)) {
-    d <- 1
-    o <- 1
-    n_star <- length(x)
-  }
+  .validate_same_dims(mu, dims, "mu")
+  sigmas <- .prepare_sigmas(sigmas, dims)
+
+  x <- array(x, dim = dims)
+  mu <- array(mu, dim = dims)
 
   all_det <- 0
 
@@ -32,12 +32,12 @@ dtnorm <- function(x, mu = NULL, sigmas = NULL, log = FALSE) {
 
   ve_xm <- matrix(c(x - mu), nrow = n_star)
 
-  for (d in length(sigmas):1) {
-    sigd <- sigmas[[d]]
+  for (k in length(sigmas):1) {
+    sigd <- sigmas[[k]]
 
     curr_inv <- invert_safe(sigd)
 
-    xm_tmp <- n_prod(xm_tmp, curr_inv, d)
+    xm_tmp <- n_prod(xm_tmp, curr_inv, k)
 
     det_sigd <- det(sigd)
 

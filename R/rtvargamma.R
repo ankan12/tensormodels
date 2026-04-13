@@ -18,19 +18,11 @@
 
 rtvargamma <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, scale = 2) {
   dims <- dim(mu)
-
-  # mu was a scalar
-  if(is.vector(mu)) dims <- 1
-
-  # no sigmas provided, use identity
-  if (length(sigmas) == 1 && nrow(sigmas[[1]]) == 1 && sigmas[[1]] == 1) {
-    sigmas <- lapply(dims, diag)
-  }
+  .validate_same_dims(skew, dims, "skew", "mu")
+  sigmas <- .prepare_sigmas(sigmas, dims)
 
   # draw tensor variate normals
   tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
-
-  #all_dim <- dim(tensor_norms)
 
   # generate gamma draws
   gammas <- rgamma(n = n, shape = scale, rate = scale)
