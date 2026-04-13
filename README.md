@@ -137,10 +137,10 @@ $-2$ and variance $4$.
 univar_draws <- rtnorm(n = 1000, mu = -2, sigmas = 4)
 
 mean(simplify2array(univar_draws))
-#> [1] -2.06
+#> [1] -2.09
 
 var(simplify2array(univar_draws))
-#> [1] 3.65
+#> [1] 3.85
 ```
 
 We can also simulate random draws from a multivariate normal
@@ -151,19 +151,19 @@ S1 <- crossprod(matrix(data = c(1, 0.5, 0.5, 1), nrow = 2))
 
 (multivar_draws <- rtnorm(n = 5, mu = c(2, 3), sigmas = list(S1)))
 #> [[1]]
-#> [1] 2.78 3.72
+#> [1] 3.67 4.54
 #> 
 #> [[2]]
-#> [1] 1.90 4.26
+#> [1] 0.904 3.369
 #> 
 #> [[3]]
-#> [1] 0.90 2.59
+#> [1] 4.22 3.66
 #> 
 #> [[4]]
-#> [1] 1.29 1.80
+#> [1] 2.97 2.91
 #> 
 #> [[5]]
-#> [1] 0.42 1.45
+#> [1] 2.31 2.68
 ```
 
 And now we simulate from the matrix variate normal of size $2 \times 3$.
@@ -173,9 +173,9 @@ By default, the covariance matrices will be the identity.
 matrix_draws <- rtnorm(n = 1e3, mu = matrix(1:6, nrow = 2, ncol = 3))
 
 matrix_draws[[1]]
-#>        [,1] [,2] [,3]
-#> [1,] -0.884 2.03 6.46
-#> [2,]  3.457 5.42 6.96
+#>      [,1] [,2] [,3]
+#> [1,] 1.77 4.40 6.46
+#> [2,] 1.42 6.06 5.34
 ```
 
 Below is a simulation from a tensor variate normal of size
@@ -195,17 +195,17 @@ tvn_draws <- rtnorm(n = 1e3, mu = mu_true,
 tvn_draws[[1]]
 #> , , 1
 #> 
-#>       [,1] [,2]  [,3] [,4]
-#> [1,] 0.768 3.15  8.02 8.77
-#> [2,] 1.019 2.38 12.15 5.77
-#> [3,] 1.327 6.57  8.09 9.30
+#>       [,1]   [,2]  [,3]  [,4]
+#> [1,]  2.97 -0.438 11.08  9.79
+#> [2,] -2.70 10.831  1.61 12.03
+#> [3,]  2.00 13.279  2.83 13.55
 #> 
 #> , , 2
 #> 
 #>      [,1] [,2] [,3] [,4]
-#> [1,] 12.7 14.6 20.3 20.6
-#> [2,] 12.7 13.5 24.0 17.6
-#> [3,] 13.1 19.4 18.9 21.8
+#> [1,] 12.9 15.0 19.4 22.0
+#> [2,] 11.9 15.1 21.0 20.8
+#> [3,] 15.2 20.8 18.3 26.1
 ```
 
 # Estimation
@@ -218,11 +218,11 @@ return a list containing the MLE for the mean and covariance matrices.
 ``` r
 (univarnorm_est <- tensor_mle(draws = univar_draws, model = "normal"))
 #> $mu
-#> [1] -2.06
+#> [1] -2.09
 #> 
 #> $sigmas
 #> $sigmas[[1]]
-#> [1] 3.65
+#> [1] 3.85
 ```
 
 Here, the mean matrix from the draws above has values 1 through 6. The
@@ -233,19 +233,19 @@ matrix_est <- tensor_mle(matrix_draws, model = "normal")
 
 matrix_est$mu
 #>       [,1] [,2] [,3]
-#> [1,] 0.973 2.97 4.94
-#> [2,] 1.994 4.06 6.01
+#> [1,] 0.986 2.99 5.02
+#> [2,] 2.000 4.05 5.96
 matrix_est$sigmas |> lapply(round, 3)
 #> [[1]]
-#>       [,1]  [,2]
-#> [1,] 0.974 0.046
-#> [2,] 0.046 1.026
+#>        [,1]   [,2]
+#> [1,]  0.968 -0.014
+#> [2,] -0.014  1.032
 #> 
 #> [[2]]
-#>       [,1]   [,2]   [,3]
-#> [1,] 0.974  0.019  0.027
-#> [2,] 0.019  1.020 -0.024
-#> [3,] 0.027 -0.024  1.024
+#>        [,1]   [,2]   [,3]
+#> [1,]  1.004  0.009 -0.008
+#> [2,]  0.009  1.009 -0.007
+#> [3,] -0.008 -0.007  1.027
 ```
 
 This function works for tensor-valued data.
@@ -254,7 +254,7 @@ This function works for tensor-valued data.
 tensor_est <- tensor_mle(draws = tvn_draws, model = "normal")
 
 frob_norm_diff(tensor_est$mu, mu_true)
-#> [1] 0.00808
+#> [1] 0.00843
 
 true_sigmas <- list(S1, S2, S3)
 
@@ -264,9 +264,9 @@ for(i in 1:3) {
   
   print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
 }
-#> [1] 0.0023
-#> [1] 0.0186
-#> [1] 0.000139
+#> [1] 0.00889
+#> [1] 0.0266
+#> [1] 0.00672
 ```
 
 # Other models
@@ -308,7 +308,7 @@ invgauss_draws <- rtinvgauss(n = 1e3, mu = mu_true, skew = skew_true,
 ``` r
 invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss", 
                            quiet = FALSE, tol = 1e-3)
-#> Converged at iteration 7
+#> Converged at iteration 6
 ```
 
 For the inverse gaussian distribution, the true mean
@@ -318,16 +318,16 @@ estimation for the mean with the true values.
 ``` r
 frob_norm_diff(with(invgauss_est, mu + skew/kappa),
                mu_true + skew_true/kappa_true)
-#> [1] 0.00384
+#> [1] 0.00522
 ```
 
 ``` r
 frob_norm_diff(invgauss_est$mu, mu_true)
-#> [1] 0.0123
+#> [1] 0.01
 frob_norm_diff(invgauss_est$skew, skew_true)
-#> [1] 0.727
+#> [1] 0.726
 invgauss_est$kappa
-#> [1] 0.639
+#> [1] 0.656
 
 for(i in 1:2) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -335,8 +335,8 @@ for(i in 1:2) {
   
   print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
 }
-#> [1] 0.00788
-#> [1] 0.0173
+#> [1] 0.00901
+#> [1] 0.0214
 ```
 
 ## Tensor variate generalized hyperbolic
@@ -369,19 +369,19 @@ We can compare the model’s estimation for the mean with the true values.
 
 ``` r
 genhyper_est <- tensor_mle(genhyper_draws, model = "genhyper", quiet = FALSE)
-#> Converged at iteration 7
+#> Converged at iteration 5
 
 frob_norm_diff(
   with(genhyper_est, mu + besselK(x = omega, nu = lambda + 1)/
                           besselK(x = omega, nu = lambda) * skew),
        mu_true + besselK(x = omega_true, nu = lambda_true + 1)/
                  besselK(x = omega_true, nu = lambda_true) * skew_true)
-#> [1] 0.00977
+#> [1] 0.00731
 
 frob_norm_diff(genhyper_est$mu, mu_true)
-#> [1] 0.0683
+#> [1] 0.0369
 frob_norm_diff(genhyper_est$skew, skew_true)
-#> [1] 0.745
+#> [1] 0.805
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -389,14 +389,14 @@ for(i in 1:3) {
   
   print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
 }
-#> [1] 0.0177
-#> [1] 0.0551
-#> [1] 0.00518
+#> [1] 0.00549
+#> [1] 0.0304
+#> [1] 0.0119
 
 genhyper_est$lambda
-#> [1] 2.61
+#> [1] 2.51
 genhyper_est$omega
-#> [1] 0.613
+#> [1] 0.425
 ```
 
 ## Tensor variate variance gamma
@@ -408,16 +408,16 @@ vargamma_draws <- rtvargamma(n = 1e3, mu = mu_true, skew = skew_true,
 
 ``` r
 vargamma_est <- tensor_mle(vargamma_draws, model = "vargamma", quiet = FALSE)
-#> Converged at iteration 10
+#> Converged at iteration 4
 
 frob_norm_diff(with(vargamma_est, mu + skew),
                mu_true + skew_true)
-#> [1] 0.0869
+#> [1] 0.0931
 
 frob_norm_diff(vargamma_est$mu, mu_true)
-#> [1] 0.0105
+#> [1] 0.00705
 frob_norm_diff(vargamma_est$skew, skew_true)
-#> [1] 0.655
+#> [1] 0.695
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -425,12 +425,12 @@ for(i in 1:3) {
   
   print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
 }
-#> [1] 0.00429
-#> [1] 0.0174
-#> [1] 0.00285
+#> [1] 0.0188
+#> [1] 0.0182
+#> [1] 0.0319
 
 vargamma_est$gamma
-#> [1] 0.572
+#> [1] 0.495
 ```
 
 ## Tensor variate skewed t
@@ -454,34 +454,11 @@ skewt_draws <- rtskewt(n = 1e3, mu = mu_true, skew = skew_true,
 ``` r
 skewt_est <- tensor_mle(skewt_draws, model = "skewt",
                         quiet = FALSE, tol = 1e-3)
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4 
-#> nu = 4
-#> Converged at iteration 23
+#> Converged at iteration 10
 
 frob_norm_diff(with(skewt_est, mu + (nu)/(nu-2) * skew),
                mu_true + nu_true / (nu_true - 2) * skew_true)
-#> [1] 0.00729
+#> [1] 0.00835
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -489,82 +466,49 @@ for(i in 1:3) {
   
   print(frob_norm_diff(est_scaled, true_scaled))
 }
-#> [1] 0.0104
-#> [1] 0.016
-#> [1] 0.000481
+#> [1] 0.00632
+#> [1] 0.00912
+#> [1] 0.0107
 ```
 
 ## Assessing tensor variate normality
 
-<!-- We can use the Mahalanobis distance to assess the tensor variate normality. If -->
+We can use the Mahalanobis distance to assess the tensor variate
+normality. If we compute the distances and plot them, they should be
+distributed as approximately $\chi_{p}$ where $p$ is the product of all
+the modes of the draws.
 
-<!-- we compute the distances and plot them, they should be distributed as -->
+``` r
+A <- matrix(rnorm(6^2), 6, 6)
+s_vec <- crossprod(A)   # positive definite, general covariance
 
-<!-- approximately $\chi_{p}$ where $p$ is the product of all the modes of the draws. -->
+vec_draws <- rtnorm(n = 1e3, mu = 1:6, sigmas = list(s_vec))
 
-<!-- ```{r} -->
+matrix_nocovar_draws <- lapply(1:1e3, function(i) {
+  array(vec_draws[[i]], dim = c(2, 3))
+})
+```
 
-<!-- #| error: true -->
+``` r
+plot_malanobis <- function(draws, title = "Dist") {
+  distances <- mahalanobis_dist(draws)
+  test <- mahalanobis_test(distances)
+  plot_dist(distances)
+  title(main = title)
+  with(test, mtext(text = sprintf("D = %.3f, p = %.3f", statistic, p.value)), 
+       side = 3, line = 1)
+}
+```
 
-<!-- centered_draws <- matrix_draws - array(rep(matrix_est$mu, each = n), dim = dim(matrix_draws)) -->
+``` r
+par(mfcol = c(1, 4))
+plot_malanobis(multivar_draws, title = "Multivar")
+plot_malanobis(matrix_draws, title = "Mat norm")
+plot_malanobis(matrix_nocovar_draws, title = "Mat no covar norm")
+plot_malanobis(tvn_draws, title = "Tensor norm")
+```
 
-<!-- inv_sqrt <- function(Sigma, tol = 1e-8) { -->
-
-<!--   # syemmetric matrix -->
-
-<!--   Sigma <- (Sigma + t(Sigma)) / 2 -->
-
-<!--   eig <- eigen(Sigma, symmetric = TRUE) -->
-
-<!--   vals <- pmax(eig$values, tol)  # positive eigenvalues -->
-
-<!--   V <- eig$vectors -->
-
-<!--   Winv <- V %*% diag(1 / sqrt(vals), nrow = length(vals)) %*% t(V) -->
-
-<!--   Winv -->
-
-<!-- } -->
-
-<!-- D2 <- rep(0, n) -->
-
-<!-- inv_sigmas <- vector("list", length(matrix_est$sigmas)) -->
-
-<!-- for(k in 1:2) { -->
-
-<!--   inv_sigmas[[k]] <- inv_sqrt(matrix_est$sigmas[[k]]) -->
-
-<!-- } -->
-
-<!-- for(i in 1:n) { -->
-
-<!--   Y <- centered_draws[i, , ] -->
-
-<!--   for(k in 1:2) { -->
-
-<!--     Y <- n_prod(Y, matrix_est$sigmas[[k]], k) -->
-
-<!--   } -->
-
-<!--   D2[i] <- sum(c(Y)^2) -->
-
-<!-- } -->
-
-<!-- sigma2_hat <- mean(D2) / 2 -->
-
-<!-- D2_std <- D2 / sigma2_hat     -->
-
-<!-- ggplot() + -->
-
-<!--   geom_histogram(aes(x = D2_std, y = after_stat(density)), color = "black", fill = "pink", bins = 30) +  -->
-
-<!--   geom_function(fun = dchisq, args = list(df = prod(dim(matrix_est$mu))), color = "red") + -->
-
-<!--   theme_minimal() +  -->
-
-<!--   labs(x = "Mahalanobis distance", y = "Density") -->
-
-<!-- ``` -->
+<img src="man/figures/README-unnamed-chunk-26-1.png" width="100%" />
 
 ## Tensor Variate Skewed T
 
@@ -585,7 +529,7 @@ tibble(skew25 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew
 #> `stat_bin()` using `bins = 30`. Pick better value `binwidth`.
 ```
 
-<img src="man/figures/README-unnamed-chunk-24-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-27-1.png" width="100%" />
 
 ``` r
 
@@ -604,7 +548,7 @@ tibble(nu05 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3), skew =
 #> `stat_bin()` using `bins = 30`. Pick better value `binwidth`.
 ```
 
-<img src="man/figures/README-unnamed-chunk-24-2.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-27-2.png" width="100%" />
 
 ## Installation
 
