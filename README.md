@@ -53,14 +53,14 @@ options(digits = 3)
 
 ## n-mode prod
 
-The $n$-mode matrix product of a tensor
-$\mathcal{A} \in \mathbb{k}^{I_1 \times I_2 \times ... \times I_n}$ with
-a matrix $\textbf{U} \in \mathbb{k}^{J \times I_n}$  
+The $n$-mode matrix product of an $O$th order tensor
+$\mathcal{A} \in \mathbb{k}^{I_1 \times I_2 \times \dots \times I_{n} \times \dots \times I_{O}}$
+with a matrix $\textbf{U} \in \mathbb{k}^{J \times I_n}$  
 is
-$$(\mathcal{A} \times_n \textbf{U}) \in \mathbb{k}^{I_1 \times ... \times I_{n-1} \times J \times I_{n+1} \times ... \times I_N}$$
+$$(\mathcal{A} \times_n \textbf{U}) \in \mathbb{k}^{I_1 \times \dots \times I_{n-1} \times J \times I_{n+1} \times \dots \times I_{O}}$$
 with entries
-$$(\mathcal{A} \times_n \textbf{U})_{i_1, ..., i_{n-1}, j, i_{n+1}, ... I_N} = \sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_N} u_{j, i_n}.$$
-The tensor and matrix share one mode in common, denoted here as $I_n$.
+$$(\mathcal{A} \times_n \textbf{U})_{i_1, \dots, i_{n-1}, j, i_{n+1}, \dots i_{O}} = \sum_{i_n = 1}^{I_{N}} a_{i_{1}, i_{2}, \dots, i_{O}} u_{j, i_n}.$$
+The tensor and matrix share one mode in common, denoted here as $I_{n}$.
 This operation is also called the tensor times matrix product.
 
 The n-mode product between a tensor and a matrix can be computed with
@@ -80,8 +80,19 @@ n_prod(a, x, 1)
 
 ## nm-mode prod
 
-The nm-mode product between a tensor and a tensor can be computed with
-`nm_prod()`.
+The $nm$-mode product between a tensor and a tensor can be computed with
+`nm_prod()`. The $nm$-mode matrix product of an $O$-th order tensor
+$\mathcal{A} \in \mathbb{k}^{I_{1} \times I_{2} \times \dots \times I_{n} \times \dots \times I_{O}}$
+with a $P$-th order tensor
+$\textbf{U} \in \mathbb{k}^{J_{1} \times {J_2} \times \dots \times J_{m} = I_{n} \dots \times J_{P}}$  
+is
+$$(\mathcal{A} \sideset{_{n}}{_{m}}{\mathop{\boldsymbol{\times}}} \mathcal{U}) \in \mathbb{k}^{I_1 \times \dots \times I_{n-1} \times I_{n+1} \times \dots \times I_{O} \times J_{1} \times \dots \times J_{m-1} \times J_{m+1} \times \dots \times J_{P}}$$
+with entries
+$$(\mathcal{A} \sideset{_{n}}{_{m}}{\mathop{\boldsymbol{\times}}} \mathcal{U})_{i_1, \dots, i_{n-1}, k, i_{n+1}, \dots I_{O}, j_{1}, \dots, j_{m-1}, j_{m+1}, \dots j_{P}} = \sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_{n}, \dots i_N} u_{j_{1}, j_{2}, \dots i_n, \dots j_{P}}.$$
+
+The $n$th mode of the first tensor matches the $m$th mode of the second
+tensor, denoted here as $I_{n} = J_{m}$. This operation is also called
+the tensor times tensor product.
 
 ``` r
 A <- matrix(c(1, 2, 3, 4), nrow = 2)
@@ -96,7 +107,16 @@ nm_prod(A, x, 1, 1)
 ## [Tensor product](https://en.wikipedia.org/wiki/Tensor_product)
 
 The tensor product between a tensor and a tensor can be computed with
-`tensor_prod()`.
+`tensor_prod()`. Take 2 tensors
+$\mathcal{A} \in \mathbb{k}^{I_{1} \times I_{2} \times \dots \times I_{O}}$
+and
+$\mathcal{U} \in \mathbb{k}^{J_{1} \times J_{2} \times \dots \times J_{P}}$
+
+Then the tensor product is
+$$(\mathcal{A} \otimes \mathcal{B}) \in \mathbb{k}^{I_{1} \times I_{2} \dots \times I_{O} \times J_{1} \times \dots \times J_{P}}$$
+with entries
+
+$$(\mathcal{A} \otimes \mathcal{U})_{i_1, \dots, i_{O}, j_{1}, \dots, j_{P}} = a_{i_1, i_2, \dots, i_{o}} u_{j_{1}, j_{2}, \dots \dots j_{p}}.$$
 
 ``` r
 A <- matrix(c(1, 2, 3, 4), nrow = 2)
@@ -145,26 +165,31 @@ var(simplify2array(univar_draws))
 ```
 
 We can also simulate random draws from a multivariate normal
-distribution by specifying a mean vector and the covariance matrix.
+distribution by specifying a mean vector and the covariance matrix. The
+dimensions of the draws are dependent on the $\mu$ provided and the
+corresponding covariance matrices $\mathbf{\Sigma}$ must conform to the
+$\mu$ provided.
 
 ``` r
 S1 <- crossprod(matrix(data = c(1, 0.5, 0.5, 1), nrow = 2))
 
-(multivar_draws <- rtnorm(n = 5, mu = c(2, 3), sigmas = list(S1)))
+multivar_draws <- rtnorm(n = 1000, mu = c(2, 3), sigmas = list(S1))
+
+multivar_draws[1:5]
 #> [[1]]
-#> [1] 3.27 2.90
+#> [1] 3.268930 3.420696
 #> 
 #> [[2]]
-#> [1] 3.24 4.54
+#> [1] 3.243178 2.705054
 #> 
 #> [[3]]
-#> [1] 1.026 0.938
+#> [1] 1.026441 3.307681
 #> 
 #> [[4]]
-#> [1] 2.24 2.35
+#> [1] 2.235605 3.536821
 #> 
 #> [[5]]
-#> [1] 2.08 3.73
+#> [1] 2.077587 3.024604
 ```
 
 And now we simulate from the matrix variate normal of size $2 \times 3$.
@@ -215,6 +240,9 @@ tvn_draws[[1]]
 
 The package supports MLE estimation. Given an array of draws, it will
 return a list containing the MLE for the mean and covariance matrices.
+Earlier, we generated univariate normal draws with $\mu = 2$ and
+$\sigma^{2} = 4.$ Calling the function `tensor_mle()` will return MLEs
+similar to the true results.
 
 ``` r
 (univarnorm_est <- tensor_mle(draws = univar_draws, model = "normal"))
@@ -226,16 +254,33 @@ return a list containing the MLE for the mean and covariance matrices.
 #> [1] 4.28
 ```
 
-Here, the mean matrix from the draws above has values 1 through 6. The
-covariance matrices are the identity matrices by default.
+The multivariate normal draws had a mean vector of
+$\begin{pmatrix} 2 \\ 3 \end{pmatrix}$ and a covariance matrix
+$\begin{pmatrix} 1.25 & 1 \\ 1 & 1.25 \end{pmatrix}.$
+
+``` r
+(multivarnorm_est <- tensor_mle(draws = multivar_draws, model = "normal"))
+#> $mu
+#> [1] 1.981819 2.995725
+#> 
+#> $sigmas
+#> $sigmas[[1]]
+#>          [,1]     [,2]
+#> [1,] 1.350600 1.098575
+#> [2,] 1.098575 1.371289
+```
+
+For the matrix variate draws, the mean matrix was
+$\begin{pmatrix} 1 & 3 & 5 \\ 2 & 4 & 6 \end{pmatrix}$ and the
+covariance matrices were the identity.
 
 ``` r
 matrix_est <- tensor_mle(matrix_draws, model = "normal")
 
 matrix_est$mu
-#>       [,1] [,2] [,3]
-#> [1,] 0.981 3.01 4.99
-#> [2,] 2.025 3.98 5.99
+#>           [,1]     [,2]     [,3]
+#> [1,] 0.9814778 3.011375 4.988384
+#> [2,] 2.0250889 3.977172 5.985084
 matrix_est$sigmas |> lapply(round, 3)
 #> [[1]]
 #>        [,1]   [,2]
@@ -249,13 +294,23 @@ matrix_est$sigmas |> lapply(round, 3)
 #> [3,] -0.002 -0.037  1.016
 ```
 
-This function works for tensor-valued data.
+The `tensor_mle()` function also works for tensor-valued data. The
+function `frob_norm_diff()` computes the relative difference in the
+Frobenius norm between the true and simulated values. It can be
+interpreted as the percent error in reconstructing the true parameters.
+
+Also, note that there is nonidentifiability in the scaling of the
+covariance matrices. Given the tensor variate normal draws, we know the
+kronecker of all of the covariances, but not the scaling of each one. To
+compare the true and estimated covariance matrices, we first trace
+normalization. This removes arbitrary scale differences while preserving
+the relative covariance structure within each mode.
 
 ``` r
 tensor_est <- tensor_mle(draws = tvn_draws, model = "normal")
 
 frob_norm_diff(tensor_est$mu, mu_true)
-#> [1] 0.0125
+#> [1] 0.01245579
 
 true_sigmas <- list(S1, S2, S3)
 
@@ -263,39 +318,74 @@ for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
   est_scaled <- tensor_est$sigmas[[i]] / sum(diag(tensor_est$sigmas[[i]]))
   
-  print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
+  print(frob_norm_diff(est_scaled, true_scaled))
 }
-#> [1] 0.0142
-#> [1] 0.0239
-#> [1] 0.00424
+#> [1] 0.01420978
+#> [1] 0.02393396
+#> [1] 0.004243311
 ```
 
 # Other models
+
+To generate tensor variate skewed distributions, we will use the normal
+variance mean mixture model An $r$-dimensional random vector $x$ is a
+normal variance-mean mixture with mixing distribution $F$ if, for a
+given $u \ge 0$ that follows a probability distribution $F$ on
+$[0, \infty)$, $x|u \sim N_r(\mu + u \beta, u \Sigma)$.
+$\Sigma \mathbb{R}^{r \times r}$ is a constant, positive-definite matrix
+and $\mu \in \mathbb{R}^{r}$ and $\beta \in \mathbb{R}^{r}$ are constant
+vectors.
+
+We state that $x$ is a normal variance-mean mixture with position $\mu$,
+drift $\beta$, structure matrix $\Sigma$, and mixing distribution $F.$
+Different mixing distributions lead to different distributions. For
+example, if $F$, the mixing distribution, is the generalized inverse
+Gaussian distribution GIG($\lambda, \delta^2, \kappa^2$) then the
+resulting distribution of $x$ is a generalized hyperbolic distribution.
+
+In the tensor variate case, the normal variance mean mixture model is an
+efficient way to introduce skewness. A random tensor $\mathcal{X}$ can
+be written as
+$\mathcal{X} = \mathcal{M} + \textbf{W} \mathcal{A} + \sqrt{\textbf{W}} \mathcal{V}.$
 
 ## Tensor variate normal inverse Gaussian
 
 The density function of the normal inverse Gaussian distribution is
 
-$$f_{\text{TVNIG}}(\mathcal{X}|\textbf{V}) =
-\frac{2 \exp\left\{\text{vec}(\mathcal{X} - \mathcal{M})^{T} \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A} + \kappa) \right\}}{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}}} \left(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1}{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^2}\right)^{-\frac{1 + n^{*}}{4}}$$
+$$
+f_{\text{TVNIG}}(\mathcal{X}|\mathbf{V}) =
+\frac{
+2 \exp\left\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
+\bigotimes_{d=1}^{D} \Sigma_{d}^{-1}
+\text{vec}(\mathcal{A} + \kappa) \right\}
+}{
+(2\pi)^{\frac{n^{*}}{2}}
+\prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}}
+}
+\left(
+\frac{
+\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1
+}{
+\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^2
+}
+\right)^{-\frac{1 + n^{*}}{4}}
+$$
 
-$$\quad K_{- \frac{1 + n^{*}}{2}} \left(\sqrt{[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^{2}] \left[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1\right]\right)$$
-where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
+$$
+\quad K_{- \frac{1 + n^{*}}{2}}
+\left(
+\sqrt{
+\left[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^{2}\right]
+\left[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1\right]
+}
+\right)
+$$ where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
 $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
 The function `rtinvgauss()` simulates random draws from the tensor
 variate normal inverse Gaussian with a specified mean array mu, a list
 of covariance matrices, a skew array, and $\kappa$ which describes the
 shape of the inverse Gaussian distribution
-
-``` r
-mu_true <- array(1:12, dim = c(3, 4))
-skew_true <- array(seq(0, 4, length.out = 12), dim = c(3, 4))
-kappa_true <- 2
-
-invgauss_draws <- rtinvgauss(n = 1e3, mu = mu_true, skew = skew_true, 
-                             sigmas = list(S1, S2), kappa = kappa_true)
-```
 
 ``` r
 mu_true <- array(1:24, dim = c(3, 4, 2))
@@ -309,7 +399,7 @@ invgauss_draws <- rtinvgauss(n = 1e3, mu = mu_true, skew = skew_true,
 ``` r
 invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss", 
                            quiet = FALSE, tol = 1e-3)
-#> Converged at iteration 40
+#> Converged at iteration 38
 ```
 
 For the inverse gaussian distribution, the true mean
@@ -319,31 +409,31 @@ estimation for the mean with the true values.
 ``` r
 frob_norm_diff(with(invgauss_est, mu + skew/kappa),
                mu_true + skew_true/kappa_true)
-#> [1] 0.00538
+#> [1] 0.007352156
 ```
 
 ``` r
 frob_norm_diff(invgauss_est$mu, mu_true)
-#> [1] 0.0162
+#> [1] 0.02084271
 frob_norm_diff(invgauss_est$skew, skew_true)
-#> [1] 0.669
+#> [1] 0.6864024
 invgauss_est$kappa
-#> [1] 0.752
+#> [1] 0.7421025
 
 for(i in 1:2) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
   est_scaled <- invgauss_est$sigmas[[i]] / sum(diag(invgauss_est$sigmas[[i]]))
   
-  print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
+  print(frob_norm_diff(est_scaled, true_scaled))
 }
-#> [1] 0.00724
-#> [1] 0.00767
+#> [1] 0.007377177
+#> [1] 0.0231902
 ```
 
 ## Tensor variate generalized hyperbolic
 
 The density function of the generalized hyperbolic distribution is
-$$f(x) = (2\pi)^{-p*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p*/(2\pi)}\right) \exp\left\{-\frac{1}{2} (x-\mu)' \Sigma_{1:k}^{-1} (x-\mu\right\}$$
+$$f(x) = (2\pi)^{-p*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p*/(2\pi)}\right) \exp\left\{-\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu)\right\}$$
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
 $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
@@ -377,27 +467,27 @@ frob_norm_diff(
                           besselK(x = omega, nu = lambda) * skew),
        mu_true + besselK(x = omega_true, nu = lambda_true + 1)/
                  besselK(x = omega_true, nu = lambda_true) * skew_true)
-#> [1] 0.0132
+#> [1] 0.01085541
 
 frob_norm_diff(genhyper_est$mu, mu_true)
-#> [1] 0.0603
+#> [1] 0.06370603
 frob_norm_diff(genhyper_est$skew, skew_true)
-#> [1] 0.842
+#> [1] 0.7820682
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
   est_scaled <- genhyper_est$sigmas[[i]] / sum(diag(genhyper_est$sigmas[[i]]))
   
-  print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
+  print(frob_norm_diff(est_scaled, true_scaled))
 }
-#> [1] 0.0066
-#> [1] 0.0275
-#> [1] 0.0866
+#> [1] 0.008885785
+#> [1] 0.02211281
+#> [1] 0.03516079
 
 genhyper_est$lambda
-#> [1] 2.1
+#> [1] 2.420612
 genhyper_est$omega
-#> [1] 0.31
+#> [1] 0.472649
 ```
 
 ## Tensor variate variance gamma
@@ -409,29 +499,29 @@ vargamma_draws <- rtvargamma(n = 1e3, mu = mu_true, skew = skew_true,
 
 ``` r
 vargamma_est <- tensor_mle(vargamma_draws, model = "vargamma", quiet = FALSE)
-#> Converged at iteration 8
+#> Converged at iteration 9
 
 frob_norm_diff(with(vargamma_est, mu + skew),
                mu_true + skew_true)
-#> [1] 0.107
+#> [1] 0.1067642
 
 frob_norm_diff(vargamma_est$mu, mu_true)
-#> [1] 0.0104
+#> [1] 0.008586225
 frob_norm_diff(vargamma_est$skew, skew_true)
-#> [1] 0.781
+#> [1] 0.7938061
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
   est_scaled <- vargamma_est$sigmas[[i]] / sum(diag(vargamma_est$sigmas[[i]]))
   
-  print(frob_norm(true_scaled - est_scaled) / frob_norm(true_scaled))
+  print(frob_norm_diff(est_scaled, true_scaled))
 }
-#> [1] 0.00856
-#> [1] 0.0229
-#> [1] 0.0625
+#> [1] 0.003589467
+#> [1] 0.02887445
+#> [1] 0.05187227
 
 vargamma_est$gamma
-#> [1] 0.299
+#> [1] 0.2919051
 ```
 
 ## Tensor variate skewed t
@@ -455,11 +545,11 @@ skewt_draws <- rtskewt(n = 1e3, mu = mu_true, skew = skew_true,
 ``` r
 skewt_est <- tensor_mle(skewt_draws, model = "skewt",
                         quiet = FALSE, tol = 1e-3)
-#> Converged at iteration 19
+#> Converged at iteration 14
 
 frob_norm_diff(with(skewt_est, mu + (nu)/(nu-2) * skew),
                mu_true + nu_true / (nu_true - 2) * skew_true)
-#> [1] 0.0186
+#> [1] 0.006734747
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -467,9 +557,9 @@ for(i in 1:3) {
   
   print(frob_norm_diff(est_scaled, true_scaled))
 }
-#> [1] 0.00502
-#> [1] 0.00582
-#> [1] 0.00821
+#> [1] 0.008311569
+#> [1] 0.01218265
+#> [1] 0.005317086
 ```
 
 ## Assessing tensor variate normality
@@ -504,6 +594,8 @@ plot_malanobis <- function(draws, title = "Dist") {
 ``` r
 par(mfcol = c(1, 4))
 plot_malanobis(multivar_draws, title = "Multivar")
+#> Warning in ks.test.default(vec, tensor): p-value will be approximate in the
+#> presence of ties
 plot_malanobis(matrix_draws, title = "Mat norm")
 plot_malanobis(matrix_nocovar_draws, title = "Mat no covar norm")
 plot_malanobis(tvn_draws, title = "Tensor norm")
@@ -602,13 +694,13 @@ map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
 #> # A tibble: 7 × 5
 #>   frob_error loglik     k   BIC restrict
 #>        <dbl>  <dbl> <dbl> <dbl> <chr>   
-#> 1     0.0508  -16.3    41  316. None    
-#> 2     0.725   -54.7    36  358. 1       
-#> 3     0.0375  -16.3    32  254. 2       
-#> 4     0.878   -39.3    39  348. 3       
+#> 1     0.0406  -16.3    41  316. None    
+#> 2     0.725   -54.8    36  358. 1       
+#> 3     0.0282  -16.3    32  254. 2       
+#> 4     0.878   -38.3    39  346. 3       
 #> 5     0.724   -54.8    27  296. 1, 2    
-#> 6     0.944   -77.8    34  390. 1, 3    
-#> 7     0.878   -39.3    30  286. 2, 3
+#> 6     0.944   -76.6    34  388. 1, 3    
+#> 7     0.878   -38.3    30  284. 2, 3
 
 map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
         draws = second_identity, lrt_test)
@@ -616,12 +708,12 @@ map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
 #>   restrict     pval
 #>   <chr>       <dbl>
 #> 1 ""       1   e+ 0
-#> 2 "1"      3.57e-15
+#> 2 "1"      3.61e-15
 #> 3 "2"      1.00e+ 0
-#> 4 "3"      1.02e-10
-#> 5 "1, 2"   9.98e-11
-#> 6 "1, 3"   1.72e-23
-#> 7 "2, 3"   3.14e- 6
+#> 4 "3"      2.88e-10
+#> 5 "1, 2"   1.01e-10
+#> 6 "1, 3"   5.59e-23
+#> 7 "2, 3"   7.20e- 6
 ```
 
 ## Tensor Variate Skewed T
