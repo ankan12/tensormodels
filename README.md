@@ -53,13 +53,17 @@ options(digits = 3)
 
 ## n-mode prod
 
-The $n$-mode matrix product of an $O$th order tensor
+The $n$-mode matrix product of an $O$-th order tensor
 $\mathcal{A} \in \mathbb{k}^{I_1 \times I_2 \times \dots \times I_{n} \times \dots \times I_{O}}$
 with a matrix $\textbf{U} \in \mathbb{k}^{J \times I_n}$  
 is
+
 $$(\mathcal{A} \times_n \textbf{U}) \in \mathbb{k}^{I_1 \times \dots \times I_{n-1} \times J \times I_{n+1} \times \dots \times I_{O}}$$
+
 with entries
+
 $$(\mathcal{A} \times_n \textbf{U})_{i_1, \dots, i_{n-1}, j, i_{n+1}, \dots i_{O}} = \sum_{i_n = 1}^{I_{N}} a_{i_{1}, i_{2}, \dots, i_{O}} u_{j, i_n}.$$
+
 The tensor and matrix share one mode in common, denoted here as $I_{n}$.
 This operation is also called the tensor times matrix product.
 
@@ -84,15 +88,18 @@ The $nm$-mode product between a tensor and a tensor can be computed with
 `nm_prod()`. The $nm$-mode matrix product of an $O$-th order tensor
 $\mathcal{A} \in \mathbb{k}^{I_{1} \times I_{2} \times \dots \times I_{n} \times \dots \times I_{O}}$
 with a $P$-th order tensor
-$\textbf{U} \in \mathbb{k}^{J_{1} \times {J_2} \times \dots \times J_{m} = I_{n} \dots \times J_{P}}$  
+$\textbf{U} \in \mathbb{k}^{J_{1} \times {J_2} \times \dots \times J_{m} = I_{n} \dots \times J_{P}}$
 is
+
 $$(\mathcal{A} \sideset{_{n}}{_{m}}{\mathop{\boldsymbol{\times}}} \mathcal{U}) \in \mathbb{k}^{I_1 \times \dots \times I_{n-1} \times I_{n+1} \times \dots \times I_{O} \times J_{1} \times \dots \times J_{m-1} \times J_{m+1} \times \dots \times J_{P}}$$
+
 with entries
+
 $$(\mathcal{A} \sideset{_{n}}{_{m}}{\mathop{\boldsymbol{\times}}} \mathcal{U})_{i_1, \dots, i_{n-1}, k, i_{n+1}, \dots I_{O}, j_{1}, \dots, j_{m-1}, j_{m+1}, \dots j_{P}} = \sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_{n}, \dots i_N} u_{j_{1}, j_{2}, \dots i_n, \dots j_{P}}.$$
 
-The $n$th mode of the first tensor matches the $m$th mode of the second
-tensor, denoted here as $I_{n} = J_{m}$. This operation is also called
-the tensor times tensor product.
+The $n$-th mode of the first tensor matches the $m$-th mode of the
+second tensor, denoted here as $I_{n} = J_{m}$. This operation is also
+called the tensor times tensor product.
 
 ``` r
 A <- matrix(c(1, 2, 3, 4), nrow = 2)
@@ -140,7 +147,9 @@ tensor_prod(A, x)
 
 The density function of the multilinear normal distribution
 is<sup>1</sup>
-$$f(x) = (2\pi)^{-p*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p*/(2\pi)}\right) \exp\left\{-\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu)\right\}$$
+
+$$f(x) = (2\pi)^{-p^{*}/2} \biggl(\prod_{i=1}^{k} |\Sigma_i|^{-p^{*}/(2\pi)}\biggr) \exp\biggl\{ -\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu) \biggr\}$$
+
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
 $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
@@ -255,8 +264,8 @@ similar to the true results.
 ```
 
 The multivariate normal draws had a mean vector of
-$\begin{pmatrix} 2 \\ 3 \end{pmatrix}$ and a covariance matrix
-$\begin{pmatrix} 1.25 & 1 \\ 1 & 1.25 \end{pmatrix}.$
+$\begin{pmatrix} 2 \\\\ 3 \end{pmatrix}$ and a covariance matrix
+$\begin{pmatrix} 1.25 & 1 \\\\ 1 & 1.25 \end{pmatrix}.$
 
 ``` r
 (multivarnorm_est <- tensor_mle(draws = multivar_draws, model = "normal"))
@@ -271,7 +280,7 @@ $\begin{pmatrix} 1.25 & 1 \\ 1 & 1.25 \end{pmatrix}.$
 ```
 
 For the matrix variate draws, the mean matrix was
-$\begin{pmatrix} 1 & 3 & 5 \\ 2 & 4 & 6 \end{pmatrix}$ and the
+$\begin{pmatrix} 1 & 3 & 5 \\\\ 2 & 4 & 6 \end{pmatrix}$ and the
 covariance matrices were the identity.
 
 ``` r
@@ -350,36 +359,19 @@ $\mathcal{X} = \mathcal{M} + \textbf{W} \mathcal{A} + \sqrt{\textbf{W}} \mathcal
 
 ## Tensor variate normal inverse Gaussian
 
+For the tensor variate normal inverse Gaussian distribution, we let
+$W \sim \operatorname{IG}(1, \kappa)$.
+
 The density function of the normal inverse Gaussian distribution is
 
-$$
-f_{\text{TVNIG}}(\mathcal{X}|\mathbf{V}) =
-\frac{
-2 \exp\left\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
-\bigotimes_{d=1}^{D} \Sigma_{d}^{-1}
-\text{vec}(\mathcal{A} + \kappa) \right\}
-}{
-(2\pi)^{\frac{n^{*}}{2}}
-\prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}}
-}
-\left(
-\frac{
-\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1
-}{
-\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^2
-}
-\right)^{-\frac{1 + n^{*}}{4}}
-$$
+$$f_{\text{TVNIG}}(\mathcal{X}|\mathbf{V}) = \frac{2 \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T} \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A} + \kappa) \biggr\}
+}{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}}}
+\biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1}
+{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^2} \biggr)^{-\frac{1 + n^{*}}{4}}$$
 
-$$
-\quad K_{- \frac{1 + n^{*}}{2}}
-\left(
-\sqrt{
-\left[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^{2}\right]
-\left[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1\right]
-}
-\right)
-$$ where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
+$$\quad K_{- \frac{1 + n^{*}}{2}} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^{2}\Bigr] \Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1\Bigr]} \biggr)$$
+
+where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
 $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
 The function `rtinvgauss()` simulates random draws from the tensor
@@ -432,8 +424,18 @@ for(i in 1:2) {
 
 ## Tensor variate generalized hyperbolic
 
+For the tensor variate generalized hyperbolic distribution, we let
+$W \sim I(\omega, 1, \lambda)$.
+
 The density function of the generalized hyperbolic distribution is
-$$f(x) = (2\pi)^{-p*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p*/(2\pi)}\right) \exp\left\{-\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu)\right\}$$
+
+$$f_{\text{TVGH}}(\mathcal{X}|\mathbf{V}) = \frac{\exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
+\bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}{(2\pi)^{\frac{n^{*}}{2}}
+\prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} K_{\lambda}(\omega)} \biggl(
+\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega}{
+\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega} \biggr)^{\frac{\lambda - n^{*}/2}{2}}$$
+
+$$\quad K_{\lambda - n^{*}/2} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega\Bigr] \Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega\Bigr]}\biggr)$$
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
 $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
@@ -492,6 +494,17 @@ genhyper_est$omega
 
 ## Tensor variate variance gamma
 
+For the tensor variate variance gamma distribution, we let
+$W \sim \operatorname{Gamma}(\gamma, \gamma)$.
+
+The density function of the variance gamma distribution is
+
+$$f_{\text{TVVG}}(\mathcal{X}|\mathbf{V}) = \frac{2\gamma^{\gamma} \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T} \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}{ (2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} \Gamma(\gamma)}
+\biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})}{
+\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 2\gamma} \biggr)^{\frac{\gamma - n^{*}/2}{2}}$$
+
+$$\quad K_{\gamma - n^{*}/2} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 2\gamma\Bigr]\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})} \biggr)$$
+
 ``` r
 vargamma_draws <- rtvargamma(n = 1e3, mu = mu_true, skew = skew_true,
                              sigmas = list(S1, S2, S3))
@@ -525,6 +538,18 @@ vargamma_est$gamma
 ```
 
 ## Tensor variate skewed t
+
+For the tensor variate skewed t distribution, we let
+$W \sim \operatorname{Inv\text{-}Gamma}(\nu/2, \nu/2)$.
+
+The density function of the skewed t distribution is
+
+$$f_{\text{TVST}}(\mathcal{X}|\mathbf{V}) = \frac{2\bigl(\frac{\nu}{2}\bigr)^{\nu/2} \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T} \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} \Gamma\bigl(\frac{\nu}{2}\bigr)}
+\biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \nu}{
+\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})} \biggr)^{-\frac{\nu + n^{*}}{4}}$$
+
+$$\quad K_{-\frac{\nu + n^{*}}{2}} \biggl(\sqrt{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})
+\Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \nu\Bigr]} \biggr)$$
 
 ``` r
 nu_true <- 20
@@ -564,10 +589,36 @@ for(i in 1:3) {
 
 ## Assessing tensor variate normality
 
-We can use the Mahalanobis distance to assess the tensor variate
-normality. If we compute the distances and plot them, they should be
-distributed as approximately $\chi_{p}$ where $p$ is the product of all
-the modes of the draws.
+We assess tensor variate normality by comparing two Mahalanobis squared
+distances for each draw. For a vectorized draw $\text{vec}(\mathcal{X}_{i})$,
+the multivariate Mahalanobis distance is
+
+$$D(\mathcal{X}_{i}, \boldsymbol{\mu}, \boldsymbol{\Sigma}) = \bigl\{\text{vec}(\mathcal{X}_{i}) - \boldsymbol{\mu}\bigr\}^{T} \boldsymbol{\Sigma}^{-1} \bigl\{\text{vec}(\mathcal{X}_{i}) - \boldsymbol{\mu}\bigr\}.$$
+
+where $\boldsymbol{\mu} = \text{vec}(\mathcal{M})$. If $\mathcal{X}$
+follows an order-$D$ tensor variate normal distribution, then
+$\text{vec}(\mathcal{X})$ follows a multivariate normal distribution
+with mean $\text{vec}(\mathcal{M})$ and covariance matrix
+$\boldsymbol{\Sigma}_{D} \otimes \cdots \otimes \boldsymbol{\Sigma}_{1}$.
+This is why we can vectorize the tensor draws and compare the
+multivariate Mahalanobis distances to the tensor variate Mahalanobis
+distances. For a third-order tensor, the tensor variate Mahalanobis
+distance is
+
+$$D_{T}(\mathcal{X}_{i}, \mathcal{M}, \boldsymbol{\Sigma}_{1}, \boldsymbol{\Sigma}_{2}, \boldsymbol{\Sigma}_{3}) = \text{vec}(\mathcal{X}_{i} - \mathcal{M})^{T}(\boldsymbol{\Sigma}_{1}^{-1} \otimes \boldsymbol{\Sigma}_{2}^{-1} \otimes \boldsymbol{\Sigma}_{3}^{-1})\text{vec}(\mathcal{X}_{i} - \mathcal{M}).$$
+
+More generally, for an order-$D$ tensor we replace the covariance matrix
+with the Kronecker product of the mode-specific covariance matrices. If
+a tensor normal covariance structure is present, then the multivariate
+and tensor variate distances should be close to one another. Following
+the matrix variate normality paper, this can be visualized with a
+distance-distance plot: when the tensor normal structure is appropriate,
+the distances lie close to the reference line; when the Kronecker
+product structure is absent, the distances diverge.
+
+The function `mahalanobis_dist()` computes both distances using fitted
+MLEs, and `mahalanobis_test()` performs a two-sample
+Kolmogorov-Smirnov test to compare their empirical distributions.
 
 ``` r
 A <- matrix(rnorm(6^2), 6, 6)
@@ -617,7 +668,7 @@ $$H_0: \Sigma_r = I_{n_r} \ \forall r \in \mathcal{R} \quad \text{vs.} \quad H_A
 The test statistic is
 
 $$2\{\ell(\hat\theta_{\mathrm{full}}) - \ell(\hat\theta_{\mathcal{R}})\}
-\sim \chi^2_{\nu_{\mathcal{R}}}, \quad \nu_{\mathcal{R}} = \sum_{r \in \mathcal{R}} \left\{\frac{n_r(n_r+1)}{2} - 1\right\}$$
+\sim \chi^2_{\nu_{\mathcal{R}}}, \quad \nu_{\mathcal{R}} = \sum_{r \in \mathcal{R}} \biggl\{\frac{n_r(n_r+1)}{2} - 1\biggr\}$$
 
 If the $p$-value is large, then we fail to reject the null hypothesis
 and conclude the restricted model fits the data as well as the
@@ -790,10 +841,11 @@ line-spacing="2">
 <div id="ref-tensornormprop" class="csl-entry">
 
 <span class="csl-left-margin">1.
-</span><span class="csl-right-inline">Ohlson, M., Rauf Ahmad, M. & von
-Rosen, D. [The multilinear normal distribution: Introduction and some
-basic properties](https://doi.org/10.1016/j.jmva.2011.05.015). *Journal
-of Multivariate Analysis* **113**, 37–47 (2013).</span>
+</span><span class="csl-right-inline"><span class="nocase">Ohlson, M.,
+Rauf Ahmad, M. & von Rosen, D.</span> [The multilinear normal
+distribution: Introduction and some basic
+properties](https://doi.org/10.1016/j.jmva.2011.05.015). *Journal of
+Multivariate Analysis* **113**, 37–47 (2013).</span>
 
 </div>
 
