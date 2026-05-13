@@ -49,6 +49,24 @@ old_digits <- getOption("digits")
 options(digits = 3)
 ```
 
+## Tensor draw format
+
+In this package, a sample of tensor-valued data is represented as a list
+of $n$ draws, where each element of the list is one tensor observation,
+rather than as a single stacked tensor with an additional mode of size
+$n$. This makes it clear that the sample size indexes observations and
+is not itself part of the tensor structure. It also works naturally
+with simulation, estimation, and iteration in R, where many functions
+already return or operate on lists.
+
+The main advantage of this choice is that each draw can be handled
+directly as one observation without having to separate the sampling
+dimension from the tensor modes. It also avoids ambiguity between the
+order of a tensor and the number of observed draws. A drawback is that
+some array operations are less convenient than when data are stored in
+one $(O+1)$-th order tensor, so functions such as `simplify2array()`
+may still be useful when a stacked representation is needed.
+
 # Operations
 
 ## n-mode prod
@@ -303,10 +321,9 @@ matrix_est$sigmas |> lapply(round, 3)
 #> [3,] -0.002 -0.037  1.016
 ```
 
-The `tensor_mle()` function also works for tensor-valued data. The
-function `frob_norm_diff()` computes the relative difference in the
-Frobenius norm between the true and simulated values. It can be
-interpreted as the percent error in reconstructing the true parameters.
+The `tensor_mle()` function also works for tensor-valued data. Below,
+we compare the estimated and true values using the mean squared error
+(MSE).
 
 Also, note that there is nonidentifiability in the scaling of the
 covariance matrices. Given the tensor variate normal draws, we know the
@@ -318,8 +335,8 @@ the relative covariance structure within each mode.
 ``` r
 tensor_est <- tensor_mle(draws = tvn_draws, model = "normal")
 
-frob_norm_diff(tensor_est$mu, mu_true)
-#> [1] 0.01245579
+mean((tensor_est$mu - mu_true)^2)
+#> [1] 0.009266418
 
 true_sigmas <- list(S1, S2, S3)
 
@@ -327,11 +344,11 @@ for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
   est_scaled <- tensor_est$sigmas[[i]] / sum(diag(tensor_est$sigmas[[i]]))
   
-  print(frob_norm_diff(est_scaled, true_scaled))
+  print(mean((est_scaled - true_scaled)^2))
 }
-#> [1] 0.01420978
-#> [1] 0.02393396
-#> [1] 0.004243311
+#> [1] 9.295722e-06
+#> [1] 4.470407e-05
+#> [1] 1.500983e-06
 ```
 
 # Other models
@@ -396,19 +413,19 @@ invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss",
 
 For the inverse gaussian distribution, the true mean
 $E[X] = \mathcal{M} + \mathcal{A}/\kappa$. We can compare the model’s
-estimation for the mean with the true values.
+estimation for the mean with the true values using MSE.
 
 ``` r
-frob_norm_diff(with(invgauss_est, mu + skew/kappa),
-               mu_true + skew_true/kappa_true)
-#> [1] 0.007352156
+mean((with(invgauss_est, mu + skew/kappa) -
+        (mu_true + skew_true/kappa_true))^2)
+#> [1] 0.0002815123
 ```
 
 ``` r
-frob_norm_diff(invgauss_est$mu, mu_true)
-#> [1] 0.02084271
-frob_norm_diff(invgauss_est$skew, skew_true)
-#> [1] 0.6864024
+mean((invgauss_est$mu - mu_true)^2)
+#> [1] 0.1006889
+mean((invgauss_est$skew - skew_true)^2)
+#> [1] 0.6173558
 invgauss_est$kappa
 #> [1] 0.7421025
 
@@ -416,10 +433,10 @@ for(i in 1:2) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
   est_scaled <- invgauss_est$sigmas[[i]] / sum(diag(invgauss_est$sigmas[[i]]))
   
-  print(frob_norm_diff(est_scaled, true_scaled))
+  print(mean((est_scaled - true_scaled)^2))
 }
-#> [1] 0.007377177
-#> [1] 0.0231902
+#> [1] 8.742185e-06
+#> [1] 3.968699e-05
 ```
 
 ## Tensor variate generalized hyperbolic
@@ -458,33 +475,35 @@ genhyper_draws <- rtgenhyper(n = 1e3, mu = mu_true, skew = skew_true,
 
 For the generalized hyperbolic distribution, the true mean
 $E[X] = \mathcal{M} + \frac{K_{\lambda + 1}(\omega)}{K_{\lambda}(\omega)} \mathcal{A}$.
-We can compare the model’s estimation for the mean with the true values.
+We can compare the model’s estimation for the mean with the true values
+using MSE.
 
 ``` r
 genhyper_est <- tensor_mle(genhyper_draws, model = "genhyper", quiet = FALSE)
 #> Converged at iteration 10
 
-frob_norm_diff(
+mean((
   with(genhyper_est, mu + besselK(x = omega, nu = lambda + 1)/
-                          besselK(x = omega, nu = lambda) * skew),
-       mu_true + besselK(x = omega_true, nu = lambda_true + 1)/
-                 besselK(x = omega_true, nu = lambda_true) * skew_true)
-#> [1] 0.01085541
+                    besselK(x = omega, nu = lambda) * skew) -
+    (mu_true + besselK(x = omega_true, nu = lambda_true + 1)/
+       besselK(x = omega_true, nu = lambda_true) * skew_true)
+  )^2)
+#> [1] 0.0006161589
 
-frob_norm_diff(genhyper_est$mu, mu_true)
-#> [1] 0.06370603
-frob_norm_diff(genhyper_est$skew, skew_true)
-#> [1] 0.7820682
+mean((genhyper_est$mu - mu_true)^2)
+#> [1] 0.9404605
+mean((genhyper_est$skew - skew_true)^2)
+#> [1] 0.8004998
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
   est_scaled <- genhyper_est$sigmas[[i]] / sum(diag(genhyper_est$sigmas[[i]]))
   
-  print(frob_norm_diff(est_scaled, true_scaled))
+  print(mean((est_scaled - true_scaled)^2))
 }
-#> [1] 0.008885785
-#> [1] 0.02211281
-#> [1] 0.03516079
+#> [1] 1.268605e-05
+#> [1] 3.610402e-05
+#> [1] 0.0001174092
 
 genhyper_est$lambda
 #> [1] 2.420612
@@ -514,24 +533,23 @@ vargamma_draws <- rtvargamma(n = 1e3, mu = mu_true, skew = skew_true,
 vargamma_est <- tensor_mle(vargamma_draws, model = "vargamma", quiet = FALSE)
 #> Converged at iteration 9
 
-frob_norm_diff(with(vargamma_est, mu + skew),
-               mu_true + skew_true)
-#> [1] 0.1067642
+mean((with(vargamma_est, mu + skew) - (mu_true + skew_true))^2)
+#> [1] 0.05944153
 
-frob_norm_diff(vargamma_est$mu, mu_true)
-#> [1] 0.008586225
-frob_norm_diff(vargamma_est$skew, skew_true)
-#> [1] 0.7938061
+mean((vargamma_est$mu - mu_true)^2)
+#> [1] 0.01708016
+mean((vargamma_est$skew - skew_true)^2)
+#> [1] 0.8261067
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
   est_scaled <- vargamma_est$sigmas[[i]] / sum(diag(vargamma_est$sigmas[[i]]))
   
-  print(frob_norm_diff(est_scaled, true_scaled))
+  print(mean((est_scaled - true_scaled)^2))
 }
-#> [1] 0.003589467
-#> [1] 0.02887445
-#> [1] 0.05187227
+#> [1] 2.068968e-06
+#> [1] 6.179259e-05
+#> [1] 0.000250726
 
 vargamma_est$gamma
 #> [1] 0.2919051
@@ -572,19 +590,19 @@ skewt_est <- tensor_mle(skewt_draws, model = "skewt",
                         quiet = FALSE, tol = 1e-3)
 #> Converged at iteration 14
 
-frob_norm_diff(with(skewt_est, mu + (nu)/(nu-2) * skew),
-               mu_true + nu_true / (nu_true - 2) * skew_true)
-#> [1] 0.006734747
+mean((with(skewt_est, mu + (nu)/(nu-2) * skew) -
+        (mu_true + nu_true / (nu_true - 2) * skew_true))^2)
+#> [1] 0.0005612264
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
   est_scaled <- skewt_est$sigmas[[i]] / sum(diag(skewt_est$sigmas[[i]]))
   
-  print(frob_norm_diff(est_scaled, true_scaled))
+  print(mean((est_scaled - true_scaled)^2))
 }
-#> [1] 0.008311569
-#> [1] 0.01218265
-#> [1] 0.005317086
+#> [1] 4.447815e-06
+#> [1] 6.457394e-05
+#> [1] 2.242578e-07
 ```
 
 ## Assessing tensor variate normality
@@ -687,7 +705,7 @@ test_restrict <- function(draws, restrict) {
   curr_str <- with(curr_restrict, kronecker(sigmas[[3]], sigmas[[2]]) |>
                                   kronecker(sigmas[[1]]))
 
-  tibble(frob_error = frob_norm_diff(curr_str, true_str),
+  tibble(mse = mean((curr_str - true_str)^2),
          loglik = curr_restrict$loglik,
          k = curr_restrict$k,
          BIC = curr_restrict$BIC,
@@ -697,7 +715,7 @@ test_restrict <- function(draws, restrict) {
 (res <- map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
         draws = tvn_draws, test_restrict))
 #> # A tibble: 7 × 5
-#>   frob_error loglik     k   BIC restrict
+#>       mse loglik     k   BIC restrict
 #>        <dbl>  <dbl> <dbl> <dbl> <chr>   
 #> 1     0.0415  -13.3    41  310. None    
 #> 2     0.725   -52.0    36  353. 1       
@@ -743,7 +761,7 @@ second_identity <- rtnorm(n = 1e3, mu = mu_true,
 map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)), 
         draws = second_identity, test_restrict)
 #> # A tibble: 7 × 5
-#>   frob_error loglik     k   BIC restrict
+#>       mse loglik     k   BIC restrict
 #>        <dbl>  <dbl> <dbl> <dbl> <chr>   
 #> 1     0.0406  -16.3    41  316. None    
 #> 2     0.725   -54.8    36  358. 1       

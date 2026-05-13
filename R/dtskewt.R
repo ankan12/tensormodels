@@ -16,7 +16,7 @@
 #' dtskewt(array(1), mu = 0, skew = array(1), sigmas = list(matrix(1)), nu = 2)
 #' @export
 dtskewt <- function(x, mu, skew, sigmas, nu, log = FALSE) {
-  dims <- dim(x)
+  dims <- .tensor_dims(x)
   o <- length(dims)
   n_star <- prod(dims)
 
@@ -53,7 +53,6 @@ dtskewt <- function(x, mu, skew, sigmas, nu, log = FALSE) {
   rho <- sum(skew_tmp * ve_skew)
   delta <- sum(xm_tmp * ve_xm)
   xm_skew <- sum(xm_tmp * ve_skew)
-
   y <- sqrt(rho * (delta + nu))
 
   loglik <-

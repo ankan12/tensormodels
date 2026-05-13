@@ -35,7 +35,7 @@
 #' @seealso [tucker()] to create the list of cores from the Tucker decomposition.
 #' @export
 rtnorm <- function(n, mu = 0, sigmas = list(matrix(1))) {
-  dims <- dim(mu)
+  dims <- .tensor_dims(mu)
   sigmas <- .prepare_sigmas(sigmas, dims)
 
   d <- length(dims)

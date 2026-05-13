@@ -18,7 +18,7 @@
 #'            sigmas = list(matrix(1)), lambda = 2, omega = 2)
 #' @export
 dtgenhyper <- function(x, mu, skew, sigmas, lambda, omega, log = FALSE) {
-  dims <- dim(x)
+  dims <- .tensor_dims(x)
   o <- length(dims)
   n_star <- prod(dims)
 

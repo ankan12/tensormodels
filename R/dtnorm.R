@@ -16,7 +16,7 @@
 #'        sigmas = lapply(c(2, 3), diag))
 #' @export
 dtnorm <- function(x, mu = NULL, sigmas = NULL, log = FALSE) {
-  dims <- dim(x)
+  dims <- .tensor_dims(x)
   o <- length(dims)
   n_star <- prod(dims)
 

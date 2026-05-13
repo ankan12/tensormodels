@@ -21,7 +21,7 @@
 
 rtgenhyper <- function(n, mu = 0, skew = 1, sigmas = list(matrix(1)),
                        lambda = 2, omega = 2) {
-  dims <- dim(mu)
+  dims <- .tensor_dims(mu)
   .validate_same_dims(skew, dims, "skew", "mu")
   sigmas <- .prepare_sigmas(sigmas, dims)
 
@@ -29,7 +29,7 @@ rtgenhyper <- function(n, mu = 0, skew = 1, sigmas = list(matrix(1)),
   tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
 
   # generate inv GIG
-  inv_gig <- rgig(n = n, lambda = lambda, chi = omega, psi = 2)
+  inv_gig <- rgig(n, lambda = lambda, chi = omega, psi = omega)
 
   genhyper_draws <- vector("list", n)
 

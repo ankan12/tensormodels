@@ -17,7 +17,7 @@
 #' dtinvgauss(array(1), mu = 0, skew = array(1), sigmas = list(matrix(1)), kappa = 2)
 #' @export
 dtinvgauss <- function(x, mu, skew, sigmas, kappa, log = FALSE) {
-  dims <- dim(x)
+  dims <- .tensor_dims(x)
   o <- length(dims)
   n_star <- prod(dims)
 

@@ -6,7 +6,23 @@
 #'
 #' @noRd
 tensor_mle_skewt <- function(data, max_iter, tol,
-                             quiet = TRUE, restrict) {
+                             quiet = TRUE, restrict,
+                             penalize_nu = FALSE, nu_prior_shape = 2,
+                             nu_prior_rate = 0.05) {
+  if (!is.logical(penalize_nu) || length(penalize_nu) != 1 ||
+      is.na(penalize_nu)) {
+    stop("penalize_nu must be TRUE or FALSE.")
+  }
+
+  if (!is.numeric(nu_prior_shape) || length(nu_prior_shape) != 1 ||
+      is.na(nu_prior_shape) || nu_prior_shape <= 1) {
+    stop("nu_prior_shape must be a number greater than 1.")
+  }
+
+  if (!is.numeric(nu_prior_rate) || length(nu_prior_rate) != 1 ||
+      is.na(nu_prior_rate) || nu_prior_rate <= 0) {
+    stop("nu_prior_rate must be a positive number.")
+  }
 
   # get dim of input
   n <- length(data)
@@ -29,7 +45,8 @@ tensor_mle_skewt <- function(data, max_iter, tol,
 
   skew <- (nu-2)/nu * (mean_draws - median_draws)
 
-  logliks <- rep(0, max_iter)
+  logliks <- rep(NA_real_, max_iter)
+  pen_logliks <- rep(NA_real_, max_iter)
 
   est_sigmas <- lapply(dims, diag)
 
@@ -135,16 +152,37 @@ tensor_mle_skewt <- function(data, max_iter, tol,
     new_sigmas <- est_sigmas
 
     # update params based on model
-    update_nu <- function(nu, b, c, n) {
-      log(nu / 2) + 1 - digamma(nu / 2) - 1 / n * sum(b + c)
+    if(penalize_nu) { # shifted gamma prior on nu - 4
+      update_nu <- function(nu, b, c, n,
+                            nu_prior_shape, nu_prior_rate) {
+        score <- log(nu / 2) + 1 - digamma(nu / 2) - mean(b + c)
+
+        penalty_deriv <- nu_prior_rate -
+          (nu_prior_shape - 1) / (nu - 4)
+
+        score - penalty_deriv
+      }
+    }
+
+    else { # regular equation
+      update_nu <- function(nu, b, c, n,
+                            nu_prior_shape = NULL, nu_prior_rate = NULL) {
+        log(nu / 2) + 1 - digamma(nu / 2) - mean(b + c)
+      }
     }
 
     new_nu <- uniroot(
       update_nu,
-      interval = c(1e-3, 1e3),
+      interval = if(penalize_nu) {
+        c(4 + 1e-6, 1e3)
+      } else {
+        c(1e-3, 1e3)
+      },
       b = b,
       c = c,
-      n = n)$root
+      n = n,
+      nu_prior_shape = nu_prior_shape,
+      nu_prior_rate = nu_prior_rate)$root
 
     if(new_nu < 4) new_nu <- 4
 
@@ -223,12 +261,20 @@ tensor_mle_skewt <- function(data, max_iter, tol,
         dtskewt(data[[i]], mu, skew, est_sigmas, nu, log = TRUE)
     }
 
+    penalty <- 0
+    if(penalize_nu) {
+      penalty <- nu_prior_rate * (nu - 4) -
+        (nu_prior_shape - 1) * log(nu - 4)
+    }
+
     logliks[t] <- total_loglik
+    pen_logliks[t] <- total_loglik - penalty
 
     if(t >= 3) {
-      ll_rel <- abs(logliks[t] - logliks[t - 1]) / (abs(logliks[t - 1]) + 1e-8)
+      ll_rel <- abs(pen_logliks[t] - pen_logliks[t - 1]) /
+        (abs(pen_logliks[t - 1]) + 1e-8)
 
-      if(ll_rel < tol) {
+      if(is.finite(ll_rel) && ll_rel < tol) {
         if(!quiet) message("Converged at iteration ", t)
         break
       }
@@ -244,5 +290,7 @@ tensor_mle_skewt <- function(data, max_iter, tol,
 
   list(mu = mu, skew = skew, sigmas = est_sigmas, nu = nu,
        Ew = a, Einvw = b, Elogw = c,
-       loglik = logliks[t], BIC = k * log(n) - 2 * logliks[t])
+       loglik = logliks[t], penalty = logliks[t] - pen_logliks[t],
+       pen_loglik = pen_logliks[t],
+       BIC = k * log(n) - 2 * logliks[t])
 }

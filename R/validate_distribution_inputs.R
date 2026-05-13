@@ -1,6 +1,19 @@
 .tensor_dims <- function(x) {
   dims <- dim(x)
-  if(is.null(dims)) length(x) else dims
+  if(is.null(dims)) {
+    return(length(x))
+  }
+
+  # Treat one-row/one-column matrices as one-mode multivariate objects.
+  if(length(dims) == 2 && any(dims == 1)) {
+    return(max(dims))
+  }
+
+  dims
+}
+
+.normalize_dims <- function(dims) {
+  if(is.null(dims)) 1L else dims
 }
 
 .is_default_sigmas <- function(sigmas) {
@@ -13,6 +26,8 @@
 }
 
 .validate_sigmas <- function(sigmas, dims) {
+  dims <- .normalize_dims(dims)
+
   if(!is.list(sigmas) || length(sigmas) != length(dims)) {
     stop("sigmas must be a list with one covariance matrix for each dimension.")
   }
@@ -32,6 +47,8 @@
 }
 
 .prepare_sigmas <- function(sigmas, dims) {
+  dims <- .normalize_dims(dims)
+
   if(.is_default_sigmas(sigmas)) {
     sigmas <- lapply(dims, diag)
   }

@@ -10,7 +10,10 @@ tensor_mle(
   tol = 0.01,
   quiet = TRUE,
   model,
-  restrict = NULL
+  restrict = NULL,
+  penalize_nu = FALSE,
+  nu_prior_shape = 2,
+  nu_prior_rate = 0.05
 )
 }
 \arguments{
@@ -24,6 +27,13 @@ that converge.}
 
 \item{model}{Specify the distribution of draws. Must be one of normal, skewt,
 vargamma, invgauss, or gen hyper}
+
+\item{penalize_nu}{Logical. For the skewt model, should a shifted gamma
+prior penalty be applied to the degrees of freedom?}
+
+\item{nu_prior_shape, nu_prior_rate}{Shape and rate for the shifted gamma
+prior \code{nu - 4 ~ Gamma(shape, rate)} used when \code{penalize_nu}
+is \code{TRUE}.}
 }
 \value{
 A list containing the estimated mean array and the list of covariance

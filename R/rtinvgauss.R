@@ -19,7 +19,7 @@
 
 
 rtinvgauss <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, kappa = 2) {
-  dims <- dim(mu)
+  dims <- .tensor_dims(mu)
   .validate_same_dims(skew, dims, "skew", "mu")
   sigmas <- .prepare_sigmas(sigmas, dims)
 
