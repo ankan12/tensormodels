@@ -173,11 +173,7 @@ tensor_mle_skewt <- function(data, max_iter, tol,
 
     new_nu <- uniroot(
       update_nu,
-      interval = if(penalize_nu) {
-        c(4 + 1e-6, 1e3)
-      } else {
-        c(1e-3, 1e3)
-      },
+      interval = c(1e-3, 1e3),
       b = b,
       c = c,
       n = n,
@@ -271,8 +267,14 @@ tensor_mle_skewt <- function(data, max_iter, tol,
     pen_logliks[t] <- total_loglik - penalty
 
     if(t >= 3) {
-      ll_rel <- abs(pen_logliks[t] - pen_logliks[t - 1]) /
-        (abs(pen_logliks[t - 1]) + 1e-8)
+      if(penalize_nu) {
+        ll_rel <- abs(pen_logliks[t] - pen_logliks[t - 1]) /
+                  (abs(pen_logliks[t - 1]) + 1e-8)
+      }
+      else {
+        ll_rel <- abs(logliks[t] - logliks[t - 1]) /
+                  (abs(logliks[t - 1]) + 1e-8)
+      }
 
       if(is.finite(ll_rel) && ll_rel < tol) {
         if(!quiet) message("Converged at iteration ", t)

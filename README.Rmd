@@ -808,6 +808,8 @@ s2 <- crossprod(matrix(rnorm(9), nrow = 3))
 ```
 
 
+
+If I try to get the MLEs of $\nu$ and skew for the skewt distribution, they are very inaccurate. I especially notice that under some conditions, the EM algorithm drags the value of $\nu$ to its smallest value possible, which is 4. 
 ```{r}
 rand_draws <-
   rtskewt(n = 1e3, mu = matrix(1:6, nrow = 2, ncol = 3), 
@@ -816,19 +818,31 @@ rand_draws <-
 
 res <- tensor_mle(rand_draws, model = "skewt")
 
-pen_res <- tensor_mle(rand_draws, model = "skewt", penalize_nu = TRUE,
-                      nu_prior_shape = 3, nu_prior_rate = 0.05)
-
-pen_res$nu
-
 res$nu
+res$loglik
 ```
 
 
 ```{r}
+rand_draws <-
+  rtskewt(n = 1e3, mu = matrix(1:6, nrow = 2, ncol = 3), 
+          sigmas = list(s1, s2), 
+          skew = matrix(seq(1, 3.5, by = 0.5), nrow = 2, ncol = 3),
+          nu = 50)
+
+res <- tensor_mle(rand_draws, model = "skewt")
+
+res$nu
+res$loglik
+```
+
+
+I read a paper discussing the penalized likelihood for skewed distributions. This made me consider if a penalization would help. I asked Codex for a suggestion and it wrote code for a gamma penalty. Since I want $\nu > 4$, it set $(\nu - 4) \sim \text{Gamma}(a, b)$. Then its log likelihood is $(a-1) \log(\nu - 4) - b(\nu - 4)$. Depending on the shape of the penalty, this leads to a different estimate of nu. We can compare the log likelihoods for each. 
+
+```{r}
 prior_grid <- expand.grid(
-  nu_prior_shape = c(1.25, 1.5, 2, 3),
-  nu_prior_rate = c(0.025, 0.05, 0.1)
+  nu_prior_shape = c(1.5, 2, 3),
+  nu_prior_rate = c(0.025, 0.05, 0.1, 0.2)
 )
 
 prior_grid$prior_mode <- with(
@@ -853,6 +867,7 @@ fits <- apply(prior_grid, 1, function(p) {
   )
 })
 
+res$loglik
 
 cbind(prior_grid, t(fits)) |> as_tibble() |> arrange(loglik) |> View()
 ```
