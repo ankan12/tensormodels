@@ -5,25 +5,8 @@
 #'   covariance matrices, and nu.
 #'
 #' @noRd
-tensor_mle_skewt <- function(data, max_iter, tol,
-                             quiet = TRUE, restrict,
-                             penalize_nu = FALSE, nu_prior_shape = 2,
-                             nu_prior_rate = 0.05) {
-  if (!is.logical(penalize_nu) || length(penalize_nu) != 1 ||
-      is.na(penalize_nu)) {
-    stop("penalize_nu must be TRUE or FALSE.")
-  }
-
-  if (!is.numeric(nu_prior_shape) || length(nu_prior_shape) != 1 ||
-      is.na(nu_prior_shape) || nu_prior_shape <= 1) {
-    stop("nu_prior_shape must be a number greater than 1.")
-  }
-
-  if (!is.numeric(nu_prior_rate) || length(nu_prior_rate) != 1 ||
-      is.na(nu_prior_rate) || nu_prior_rate <= 0) {
-    stop("nu_prior_rate must be a positive number.")
-  }
-
+tensor_mle_skewt <- function(data, max_iter = 1e3, tol = 1e-6,
+                             quiet = TRUE, restrict) {
   # get dim of input
   n <- length(data)
   dims <- dim(data[[1]])
@@ -33,7 +16,7 @@ tensor_mle_skewt <- function(data, max_iter, tol,
   # Step 1: Initialize vals
 
   # different params based on model
-  nu <- 50
+  nu <- 20
 
   flat_draws <- simplify2array(data)
 
@@ -45,33 +28,37 @@ tensor_mle_skewt <- function(data, max_iter, tol,
 
   skew <- (nu-2)/nu * (mean_draws - median_draws)
 
+  res_normal <- tensor_mle(data, model = "normal")
+
   logliks <- rep(NA_real_, max_iter)
   pen_logliks <- rep(NA_real_, max_iter)
 
-  est_sigmas <- lapply(dims, diag)
+  sigmas <- res_normal$sigmas
 
-  for(k in 1:o) {
-    tot_sum <- 0
+  #sigmas <- lapply(dims, diag)
 
-    for(i in 1:n) {
-        curr_unfold <- matricization(data[[i]] - mu, k)
-
-        tot_sum <- tot_sum + (curr_unfold %*% t(curr_unfold))
-    }
-
-    tot_sum <- tot_sum * dims[k]/(n * n_star)
-
-    tot_sum <- tot_sum/(sum(diag(tot_sum))) * dims[k]
-
-    est_sigmas[[k]] <- tot_sum
-  }
+  # for(k in 1:o) {
+  #   tot_sum <- 0
+  #
+  #   for(i in 1:n) {
+  #       curr_unfold <- matricization(data[[i]] - mu, k)
+  #
+  #       tot_sum <- tot_sum + (curr_unfold %*% t(curr_unfold))
+  #   }
+  #
+  #   tot_sum <- tot_sum * dims[k]/(n * n_star)
+  #
+  #   tot_sum <- tot_sum/(sum(diag(tot_sum))) * dims[k]
+  #
+  #   sigmas[[k]] <- tot_sum
+  # }
 
   for (t in 1:max_iter) {
     # Step 2: Update a, b, c depending on expected values
     skew_compute <- skew
-    inv_sigma <- lapply(est_sigmas, invert_safe)
+    inv_sigma <- lapply(sigmas, invert_safe)
 
-    for (d in seq_along(est_sigmas)) {
+    for (d in seq_along(sigmas)) {
       skew_compute <- n_prod(skew_compute, inv_sigma[[d]], d)
     }
 
@@ -84,7 +71,7 @@ tensor_mle_skewt <- function(data, max_iter, tol,
 
       centered_compute <- center_draw
 
-      for (d in seq_along(est_sigmas)) {
+      for (d in seq_along(sigmas)) {
         centered_compute <- n_prod(centered_compute, inv_sigma[[d]], d)
       }
       delta_vals[i] <- sum(center_draw * centered_compute)
@@ -98,6 +85,7 @@ tensor_mle_skewt <- function(data, max_iter, tol,
       nu = param_vals + 1,
       expon.scaled = TRUE
     )
+
     k_lambda <- besselK(
       x = sqrt(rho * delta_vals),
       nu = param_vals,
@@ -149,26 +137,10 @@ tensor_mle_skewt <- function(data, max_iter, tol,
     den_skew <- sum(a * mean(b)) - n
     new_skew <- num_skew / den_skew
 
-    new_sigmas <- est_sigmas
+    new_sigmas <- sigmas
 
-    # update params based on model
-    if(penalize_nu) { # shifted gamma prior on nu - 4
-      update_nu <- function(nu, b, c, n,
-                            nu_prior_shape, nu_prior_rate) {
-        score <- log(nu / 2) + 1 - digamma(nu / 2) - mean(b + c)
-
-        penalty_deriv <- nu_prior_rate -
-          (nu_prior_shape - 1) / (nu - 4)
-
-        score - penalty_deriv
-      }
-    }
-
-    else { # regular equation
-      update_nu <- function(nu, b, c, n,
-                            nu_prior_shape = NULL, nu_prior_rate = NULL) {
-        log(nu / 2) + 1 - digamma(nu / 2) - mean(b + c)
-      }
+    update_nu <- function(nu, b, c, n) {
+      log(nu / 2) + 1 - digamma(nu / 2) - mean(b + c)
     }
 
     new_nu <- uniroot(
@@ -176,11 +148,9 @@ tensor_mle_skewt <- function(data, max_iter, tol,
       interval = c(1e-3, 1e3),
       b = b,
       c = c,
-      n = n,
-      nu_prior_shape = nu_prior_shape,
-      nu_prior_rate = nu_prior_rate)$root
+      n = n)$root
 
-    if(new_nu < 4) new_nu <- 4
+    #if(new_nu < 4) new_nu <- 4
 
     for (j in 1:o) {
       inv_new_sigma <- lapply(new_sigmas, invert_safe) # compute sigmas
@@ -245,7 +215,7 @@ tensor_mle_skewt <- function(data, max_iter, tol,
     # update all parameters
     mu <- new_mu
     skew <- new_skew
-    est_sigmas <- new_sigmas
+    sigmas <- new_sigmas
     nu <- new_nu
 
     # Step 5: Check convergence
@@ -254,27 +224,14 @@ tensor_mle_skewt <- function(data, max_iter, tol,
 
     for(i in 1:n) {
       total_loglik <- total_loglik +
-        dtskewt(data[[i]], mu, skew, est_sigmas, nu, log = TRUE)
-    }
-
-    penalty <- 0
-    if(penalize_nu) {
-      penalty <- nu_prior_rate * (nu - 4) -
-        (nu_prior_shape - 1) * log(nu - 4)
+        dtskewt(data[[i]], mu, skew, sigmas, nu, log = TRUE)
     }
 
     logliks[t] <- total_loglik
-    pen_logliks[t] <- total_loglik - penalty
 
     if(t >= 3) {
-      if(penalize_nu) {
-        ll_rel <- abs(pen_logliks[t] - pen_logliks[t - 1]) /
-                  (abs(pen_logliks[t - 1]) + 1e-8)
-      }
-      else {
-        ll_rel <- abs(logliks[t] - logliks[t - 1]) /
-                  (abs(logliks[t - 1]) + 1e-8)
-      }
+      ll_rel <- abs(logliks[t] - logliks[t - 1]) /
+                (abs(logliks[t - 1]) + 1e-8)
 
       if(is.finite(ll_rel) && ll_rel < tol) {
         if(!quiet) message("Converged at iteration ", t)
@@ -290,9 +247,10 @@ tensor_mle_skewt <- function(data, max_iter, tol,
 
   k <- n_star + sum((dims * (dims+1))/2) - (o - 1) + 1
 
-  list(mu = mu, skew = skew, sigmas = est_sigmas, nu = nu,
+  list(mu = mu, skew = skew, sigmas = sigmas, nu = nu,
        Ew = a, Einvw = b, Elogw = c,
-       loglik = logliks[t], penalty = logliks[t] - pen_logliks[t],
-       pen_loglik = pen_logliks[t],
+       loglik = logliks[t],
+       k = k,
+       AIC = 2 * k - 2 * logliks[t],
        BIC = k * log(n) - 2 * logliks[t])
 }

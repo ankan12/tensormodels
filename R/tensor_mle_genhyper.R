@@ -236,7 +236,8 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
     logliks[t] <- total_loglik
 
     if(t >= 3) {
-      ll_rel <- abs(logliks[t] - logliks[t - 1]) / (abs(logliks[t - 1]) + 1e-8)
+      ll_rel <- abs(logliks[t] - logliks[t - 1]) /
+                (abs(logliks[t - 1]) + 1e-8)
 
       if (ll_rel < tol) {
         if (!quiet) message("Converged at iteration ", t)
@@ -251,7 +252,13 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
 
   if(t == max_iter) message("Reached max iter ", max_iter)
 
+  k <- n_star + sum((dims * (dims+1))/2) - (o - 1) + 2
+
   list(mu = mu, skew = skew, sigmas = sigmas,
        lambda = lambda, omega = omega,
-       Ew = a, Einvw = b, Elogw = c)
+       Ew = a, Einvw = b, Elogw = c,
+       loglik = logliks[t],
+       k = k,
+       AIC = 2 * k - 2 * logliks[t],
+       BIC = k * log(n) - 2 * logliks[t])
 }

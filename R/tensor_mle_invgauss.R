@@ -220,7 +220,7 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
         dtinvgauss(data[[i]], mu, skew, sigmas, kappa, log = TRUE)
     }
 
-    logliks[t] <- total_loglik/n
+    logliks[t] <- total_loglik
 
     if(t >= 3) {
       ll_rel <- abs(logliks[t] - logliks[t - 1]) / (abs(logliks[t - 1]) + 1e-8)
@@ -242,5 +242,8 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
 
   list(mu = mu, skew = skew, sigmas = sigmas, kappa = kappa,
        Ew = a, Einvw = b, Elogw = c,
-       loglik = logliks[t], BIC = k * log(n) - 2 * logliks[t])
+       loglik = logliks[t],
+       k = k,
+       AIC = 2 * k - 2 * logliks[t],
+       BIC = k * log(n) - 2 * logliks[t])
 }

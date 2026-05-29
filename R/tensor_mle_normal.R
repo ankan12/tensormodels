@@ -34,14 +34,36 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
     vector_data <- simplify2array(data)
     mu <- mean(vector_data)
     sigma <- var(vector_data)
-    return(list(mu = mu, sigmas = list(sigma)))
+    total_loglik <- sum(dnorm(vector_data, mean = mu, sd = sqrt(sigma), log = TRUE))
+    k <- 2
+    return(list(
+      mu = mu,
+      sigmas = list(sigma),
+      loglik = total_loglik,
+      k = k,
+      AIC = 2 * k - 2 * total_loglik,
+      BIC = k * log(n) - 2 * total_loglik
+    ))
   }
 
   if(o == 1) { # multivariate
     array_data <- aperm(simplify2array(data), c(2, 1))
     mu <- apply(array_data, 2, mean)
     sigma <- cov(array_data) * (n - 1)/n
-    return(list(mu = mu, sigmas = list(sigma)))
+    total_loglik <- sum(vapply(
+      data,
+      function(x) dtnorm(x, mu, list(sigma), log = TRUE),
+      numeric(1)
+    ))
+    k <- dims + dims * (dims + 1)/2
+    return(list(
+      mu = mu,
+      sigmas = list(sigma),
+      loglik = total_loglik,
+      k = k,
+      AIC = 2 * k - 2 * total_loglik,
+      BIC = k * log(n) - 2 * total_loglik
+    ))
   }
 
   mu <- apply(simplify2array(data), 1:o, mean)
@@ -119,7 +141,7 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
                       dtnorm(data[[i]], mu, sigmas, log = TRUE)
     }
 
-    logliks[t] <- total_loglik/n
+    logliks[t] <- total_loglik
 
     if(t >= 3) {
       ll_rel <- abs(logliks[t] - logliks[t - 1]) / (abs(logliks[t - 1]) + 1e-8)
@@ -144,5 +166,7 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
   }
 
   list(mu = mu, sigmas = sigmas, loglik = logliks[t],
-       k = k, BIC = k * log(n) - 2 * logliks[t])
+       k = k,
+       AIC = 2 * k - 2 * logliks[t],
+       BIC = k * log(n) - 2 * logliks[t])
 }

@@ -300,7 +300,7 @@ invgauss_draws <- rtinvgauss(n = 1e3, mu = mu_true, skew = skew_true,
 
 ```{r}
 invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss", 
-                           quiet = FALSE, tol = 1e-3)
+                           quiet = FALSE)
 ```
 
 
@@ -408,10 +408,10 @@ $$
 $$
 
 ```{r}
+
 vargamma_draws <- rtvargamma(n = 1e3, mu = mu_true, skew = skew_true,
                              sigmas = list(S1, S2, S3))
 ```
-
 
 
 ```{r}
@@ -468,7 +468,7 @@ skewt_draws <- rtskewt(n = 1e3, mu = mu_true, skew = skew_true,
 
 ```{r}
 skewt_est <- tensor_mle(skewt_draws, model = "skewt",
-                        quiet = FALSE, tol = 1e-3)
+                        quiet = FALSE)
 
 mean((with(skewt_est, mu + (nu)/(nu-2) * skew) -
         (mu_true + nu_true / (nu_true - 2) * skew_true))^2)
@@ -479,14 +479,6 @@ for(i in 1:3) {
   
   print(mean((est_scaled - true_scaled)^2))
 }
-```
-
-
-```{r}
-dtskewt(skewt_draws[[1]], mu_true, skew_true,
-        true_sigmas, nu_true)
-
-with(skewt_est, dtskewt(skewt_draws[[1]], mu, skew, sigmas, nu))
 ```
 
 
@@ -648,89 +640,6 @@ tibble(nu05 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3),
   theme_minimal()
 ```
 
-If we only look at skewed \(t\) draws, then \(\nu\) and the skew array can be weakly identified. In a small sample, a larger value of \(\nu\) can be offset by a slightly larger skew term, producing nearly the same sample log-likelihood.
-
-```{r}
-set.seed(99)
-
-mu_true <- matrix(0, nrow = 2, ncol = 3)
-sigmas_true <- list(diag(2), diag(3))
-skew_true <- matrix(1, nrow = 2, ncol = 3)
-nu_true <- 20
-
-skewt_draws <- rtskewt(n = 1e3, mu = mu_true,
-                       skew = skew_true,
-                       sigmas = sigmas_true,
-                       nu = nu_true)
-```
-
-
-```{r}
-total_lik <- function(nu_val) {
-
-  lik <- 0
-  
-  for(i in 1:1e3) {
-    x <- skewt_draws[[i]]
-    lik <- lik +  dtskewt(x, mu_true, skew_true, sigmas_true, 
-                                      nu_val, log = TRUE)
-  }
-  
-  tibble(nu = nu_val, lik = lik)
-}
-
-vals <- map_dfr(seq(10, 50, by = 5), total_lik)
-
-vals |> 
-  ggplot() +
-  geom_point(aes(x = nu, y = lik)) +
-  geom_vline(xintercept = nu_true, color = "red", lty = 2) +
-  theme_minimal() +
-  labs(title = "nu estimate with perfect parameters")
-```
-
-
-```{r}
-total_lik_fixed_skew <- function(nu_val, skew_val) {
-  lik <- 0
-
-  for (i in 1:1e3) {
-    x <- skewt_draws[[i]]
-    lik <- lik + dtskewt(
-      x, mu_true, skew_val, sigmas_true,
-      nu_val, log = TRUE
-    )
-  }
-
-  tibble(nu = nu_val, lik = lik)
-}
-
-best_nu_given_skew <- function(skew_mult,
-                               nu_grid = seq(5, 50, by = 1)) {
-  skew_val <- skew_true * skew_mult
-
-  vals <- map_dfr(nu_grid, total_lik_fixed_skew, skew_val = skew_val)
-
-  vals |>
-    mutate(skew_mult = skew_mult,
-           best_nu = nu[which.max(lik)],
-           max_lik = max(lik))
-}
-
-nu_bias <- map_dfr(c(0.6, 0.8, 1, 1.2, 1.4), best_nu_given_skew)
-
-nu_bias |>
-  distinct(skew_mult, best_nu, max_lik) |>
-  ggplot() +
-  geom_point(aes(x = skew_mult, y = best_nu), size = 2) +
-  geom_hline(yintercept = nu_true, color = "red", lty = 2) +
-  theme_minimal() +
-  labs(x = "skew multiplier",
-       y = "best nu",
-       title = "Best nu shifts when skew is fixed incorrectly")
-```
-
-
 Suppose \(X_{n \times p} \sim N_{np}(0, \Sigma_1, \Sigma_2)\). A natural question is whether the usual sample covariance of the rows can estimate \(\Sigma_2\), and whether the sample covariance of the columns can estimate \(\Sigma_1\).
 
 If we compute the usual row covariance
@@ -802,202 +711,52 @@ In this table, `s2_error` measures how close `var(X)` is to the shape of \(\Sigm
 
 
 
-```{r}
-s1 <- crossprod(matrix(rnorm(4), nrow = 2))
-s2 <- crossprod(matrix(rnorm(9), nrow = 3))
-```
 
-
-
-If I try to get the MLEs of $\nu$ and skew for the skewt distribution, they are very inaccurate. I especially notice that under some conditions, the EM algorithm drags the value of $\nu$ to its smallest value possible, which is 4. 
-```{r}
-rand_draws <-
-  rtskewt(n = 1e3, mu = matrix(1:6, nrow = 2, ncol = 3), 
-          sigmas = list(s1, s2), skew = matrix(1, nrow = 2, ncol = 3),
-          nu = 20)
-
-res <- tensor_mle(rand_draws, model = "skewt")
-
-res$nu
-res$loglik
-```
 
 
 ```{r}
-rand_draws <-
-  rtskewt(n = 1e3, mu = matrix(1:6, nrow = 2, ncol = 3), 
-          sigmas = list(s1, s2), 
-          skew = matrix(seq(1, 3.5, by = 0.5), nrow = 2, ncol = 3),
-          nu = 50)
-
-res <- tensor_mle(rand_draws, model = "skewt")
-
-res$nu
-res$loglik
-```
-
-
-I read a paper discussing the penalized likelihood for skewed distributions. This made me consider if a penalization would help. I asked Codex for a suggestion and it wrote code for a gamma penalty. Since I want $\nu > 4$, it set $(\nu - 4) \sim \text{Gamma}(a, b)$. Then its log likelihood is $(a-1) \log(\nu - 4) - b(\nu - 4)$. Depending on the shape of the penalty, this leads to a different estimate of nu. We can compare the log likelihoods for each. 
-
-```{r}
-prior_grid <- expand.grid(
-  nu_prior_shape = c(1.5, 2, 3),
-  nu_prior_rate = c(0.025, 0.05, 0.1, 0.2)
-)
-
-prior_grid$prior_mode <- with(
-  prior_grid,
-  4 + (nu_prior_shape - 1) / nu_prior_rate
-)
-
-fits <- apply(prior_grid, 1, function(p) {
-  fit <- tensor_mle(
-    rand_draws,
-    model = "skewt",
-    penalize_nu = TRUE,
-    nu_prior_shape = as.numeric(p["nu_prior_shape"]),
-    nu_prior_rate = as.numeric(p["nu_prior_rate"])
-  )
-
-  c(
-    nu_hat = fit$nu,
-    loglik = fit$loglik,
-    penalty = fit$penalty,
-    pen_loglik = fit$pen_loglik
-  )
-})
-
-res$loglik
-
-cbind(prior_grid, t(fits)) |> as_tibble() |> arrange(loglik) |> View()
-```
-
-
-```{r}
-nu_grid <- seq(4.01, 100, length.out = 200)
-
-profile <- sapply(nu_grid, function(nu_val) {
-  sum(vapply(rand_draws, function(x) {
-    dtskewt(
-      x,
-      mu = res$mu,
-      skew = res$skew,
-      sigmas = res$sigmas,
-      nu = nu_val,
-      log = TRUE
-    )
-  }, numeric(1)))
-})
-
-plot(nu_grid, profile, type = "l")
-abline(v = res$nu, col = "red", lty = 2)
-```
-
-
-```{r}
-true_mu <- matrix(1:6, nrow = 2, ncol = 3)
-true_skew <- matrix(1, nrow = 2, ncol = 3)
-true_sigmas <- list(s1, s2)
-
-profile_true <- sapply(nu_grid, function(nu_val) {
-  sum(vapply(rand_draws, function(x) {
-    dtskewt(
-      x,
-      mu = true_mu,
-      skew = true_skew,
-      sigmas = true_sigmas,
-      nu = nu_val,
-      log = TRUE
-    )
-  }, numeric(1)))
-})
-
-loglik <- 0
-
-for(i in 1:1e2) {
-  loglik <- loglik + dtskewt(rand_draws[[i]], true_mu, 
-                             true_skew, true_sigmas, res$nu, log = TRUE)
+make_skew <- function(dims, strength = 1) {
+  A <- array(rnorm(prod(dims)), dim = dims)
+  A / sqrt(sum(A^2)) * strength
 }
-
-loglik
-
-
-nu_grid
-
-plot(nu_grid, profile_true, type = "l")
-abline(v = 50, col = "blue", lty = 2)
-abline(v = res$nu, col = "red", lty = 2)
 ```
 
 
 ```{r}
-nu_grid <- seq(4.01, 100, length.out = 200)
+model_compare <- function(iter) {
+  s1 <- crossprod(matrix(rnorm(4), nrow = 2))
+  s2 <- crossprod(matrix(rnorm(9), nrow = 3))
+  s3 <- crossprod(matrix(rnorm(16), nrow = 4))
 
-profile_at_fit <- sapply(nu_grid, function(nu_val) {
-  sum(vapply(rand_draws, function(x) {
-    dtskewt(
-      x,
-      mu = res$mu,
-      skew = res$skew,
-      sigmas = res$sigmas,
-      nu = nu_val,
-      log = TRUE
-    )
-  }, numeric(1)))
-})
+  skew_true <- make_skew(dims = c(2, 3, 4), strength = 1.5)
+  
+  draws <- rtskewt(n = 1e3, mu = array(1:24, dim = c(2, 3, 4)), 
+                   sigmas = list(s1, s2, s3), skew = skew_true,
+                   nu = 30)
+  
+  res_normal <- tensor_mle(draws, model = "normal", quiet = FALSE)
+  res_skewt <- tensor_mle(draws, model = "skewt", quiet = FALSE)
+  res_vargam <- tensor_mle(draws, model = "vargamma", quiet = FALSE)
+  res_invgauss <- tensor_mle(draws, model = "invgauss", quiet = FALSE)
+  res_genhyper <- tensor_mle(draws, model = "genhyper", quiet = FALSE)
 
-profile_at_truth <- sapply(nu_grid, function(nu_val) {
-  sum(vapply(rand_draws, function(x) {
-    dtskewt(
-      x,
-      mu = matrix(1:6, nrow = 2, ncol = 3),
-      skew = matrix(1, nrow = 2, ncol = 3),
-      sigmas = list(s1, s2),
-      nu = nu_val,
-      log = TRUE
-    )
-  }, numeric(1)))
-})
-
-plot(nu_grid, profile_at_truth, type = "l", col = "blue",
-     xlab = expression(nu), ylab = "profile log-likelihood")
-lines(nu_grid, profile_at_fit, col = "red")
-abline(v = 50, col = "blue", lty = 2)
-abline(v = res$nu, col = "red", lty = 2)
-
-legend("bottomright",
-       legend = c("true mu/skew/sigmas", "fitted mu/skew/sigmas"),
-       col = c("blue", "red"),
-       lty = 1,
-       bty = "n")
-```
-
-
-```{r}
-ll_fit <- sum(vapply(rand_draws, function(x) {
-  dtskewt(x, res$mu, res$skew, res$sigmas, res$nu, log = TRUE)
-}, numeric(1)))
-
-ll_truth <- sum(vapply(rand_draws, function(x) {
-  dtskewt(
-    x,
-    mu = matrix(1:6, nrow = 2, ncol = 3),
-    skew = matrix(1, nrow = 2, ncol = 3),
-    sigmas = list(s1, s2),
-    nu = 50,
-    log = TRUE
+  all_mod <- 
+    tibble(model = c("Normal", "Skewt", "Vargamma", "Invgauss", "Genhyper"),
+    loglik = c(res_normal$loglik, res_skewt$loglik,
+               res_vargam$loglik, res_invgauss$loglik, res_genhyper$loglik),
+    k = c(res_normal$k, res_skewt$k,
+          res_vargam$k, res_invgauss$k, res_genhyper$k),
+    AIC = c(res_normal$AIC, res_skewt$AIC,
+            res_vargam$AIC, res_invgauss$AIC, res_genhyper$AIC),
+    BIC = c(res_normal$BIC, res_skewt$BIC,
+            res_vargam$BIC, res_invgauss$BIC, res_genhyper$BIC)
   )
-}, numeric(1)))
-
-c(ll_fit = ll_fit, ll_truth = ll_truth)
-
-ll_truth_best_nu <- max(profile_true)
-
-c(
-  ll_fit = ll_fit,
-  ll_truth_nu50 = ll_truth,
-  ll_truth_best_nu = ll_truth_best_nu
-)
+  
+  all_mod
+  # return best model by BIC
+  # tibble(iter = iter, 
+  #        res = all_mod |> arrange(BIC) |> slice_head(n=1) |> pull(model))
+}
 ```
 
 
