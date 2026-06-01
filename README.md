@@ -166,7 +166,12 @@ tensor_prod(A, x)
 The density function of the multilinear normal distribution
 is<sup>1</sup>
 
-$$f(x) = (2\pi)^{-p^{*}/2} \biggl(\prod_{i=1}^{k} |\Sigma_i|^{-p^{*}/(2\pi)}\biggr) \exp\biggl\{ -\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu) \biggr\}$$
+$$
+f(x) =
+(2\pi)^{-p^{*}/2}
+\biggl(\prod_{i=1}^{k} |\Sigma_i|^{-p^{*}/(2p_i)}\biggr)
+\exp\biggl\{ -\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu) \biggr\}
+$$
 
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
 $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
@@ -381,12 +386,20 @@ $W \sim \operatorname{IG}(1, \kappa)$.
 
 The density function of the normal inverse Gaussian distribution is
 
-$$f_{\text{TVNIG}}(\mathcal{X}|\mathbf{V}) = \frac{2 \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T} \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A} + \kappa) \biggr\}
-}{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}}}
+$$
+\begin{aligned}
+f_{\text{TVNIG}}(\mathcal{X}|\mathbf{V})
+&= \frac{2 \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
+\bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A}) + \kappa \biggr\}}
+{(2\pi)^{\frac{n^{*}+1}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}}} \\
+&\quad \times
 \biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1}
-{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^2} \biggr)^{-\frac{1 + n^{*}}{4}}$$
-
-$$\quad K_{- \frac{1 + n^{*}}{2}} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^{2}\Bigr] \Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1\Bigr]} \biggr)$$
+{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^2} \biggr)^{-\frac{1 + n^{*}}{4}} \\
+&\quad \times
+K_{-\frac{1 + n^{*}}{2}} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^{2}\Bigr]
+\Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1\Bigr]} \biggr).
+\end{aligned}
+$$
 
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
 $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
@@ -446,13 +459,20 @@ $W \sim I(\omega, 1, \lambda)$.
 
 The density function of the generalized hyperbolic distribution is
 
-$$f_{\text{TVGH}}(\mathcal{X}|\mathbf{V}) = \frac{\exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
-\bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}{(2\pi)^{\frac{n^{*}}{2}}
-\prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} K_{\lambda}(\omega)} \biggl(
-\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega}{
-\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega} \biggr)^{\frac{\lambda - n^{*}/2}{2}}$$
-
-$$\quad K_{\lambda - n^{*}/2} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega\Bigr] \Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega\Bigr]}\biggr)$$
+$$
+\begin{aligned}
+f_{\text{TVGH}}(\mathcal{X}|\mathbf{V})
+&= \frac{\exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
+\bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}
+{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} K_{\lambda}(\omega)} \\
+&\quad \times
+\biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega}
+{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega} \biggr)^{\frac{\lambda - n^{*}/2}{2}} \\
+&\quad \times
+K_{\lambda - n^{*}/2} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega\Bigr]
+\Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega\Bigr]}\biggr).
+\end{aligned}
+$$
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
 $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
@@ -518,11 +538,20 @@ $W \sim \operatorname{Gamma}(\gamma, \gamma)$.
 
 The density function of the variance gamma distribution is
 
-$$f_{\text{TVVG}}(\mathcal{X}|\mathbf{V}) = \frac{2\gamma^{\gamma} \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T} \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}{ (2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} \Gamma(\gamma)}
-\biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})}{
-\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 2\gamma} \biggr)^{\frac{\gamma - n^{*}/2}{2}}$$
-
-$$\quad K_{\gamma - n^{*}/2} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 2\gamma\Bigr]\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})} \biggr)$$
+$$
+\begin{aligned}
+f_{\text{TVVG}}(\mathcal{X}|\mathbf{V})
+&= \frac{2\gamma^{\gamma} \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
+\bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}
+{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} \Gamma(\gamma)} \\
+&\quad \times
+\biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})}
+{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 2\gamma} \biggr)^{\frac{\gamma - n^{*}/2}{2}} \\
+&\quad \times
+K_{\gamma - n^{*}/2} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 2\gamma\Bigr]
+\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})} \biggr).
+\end{aligned}
+$$
 
 ``` r
 vargamma_draws <- rtvargamma(n = 1e3, mu = mu_true, skew = skew_true,
@@ -562,12 +591,20 @@ $W \sim \operatorname{Inv\text{-}Gamma}(\nu/2, \nu/2)$.
 
 The density function of the skewed t distribution is
 
-$$f_{\text{TVST}}(\mathcal{X}|\mathbf{V}) = \frac{2\bigl(\frac{\nu}{2}\bigr)^{\nu/2} \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T} \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} \Gamma\bigl(\frac{\nu}{2}\bigr)}
-\biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \nu}{
-\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})} \biggr)^{-\frac{\nu + n^{*}}{4}}$$
-
-$$\quad K_{-\frac{\nu + n^{*}}{2}} \biggl(\sqrt{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})
-\Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \nu\Bigr]} \biggr)$$
+$$
+\begin{aligned}
+f_{\text{TVST}}(\mathcal{X}|\mathbf{V})
+&= \frac{2\bigl(\frac{\nu}{2}\bigr)^{\nu/2} \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
+\bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}
+{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} \Gamma\bigl(\frac{\nu}{2}\bigr)} \\
+&\quad \times
+\biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \nu}
+{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})} \biggr)^{-\frac{\nu + n^{*}}{4}} \\
+&\quad \times
+K_{-\frac{\nu + n^{*}}{2}} \biggl(\sqrt{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})
+\Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \nu\Bigr]} \biggr).
+\end{aligned}
+$$
 
 ``` r
 nu_true <- 20

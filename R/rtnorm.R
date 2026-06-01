@@ -2,7 +2,7 @@
 #'
 #' Simulates random draws from the tensor variate normal distribution.
 #' The density function of the multilinear normal distribution is
-#' \deqn{f(x) = (2\pi)^{-p*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p*/(2\pi)}\right) \exp\left\{-\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu)\right\}}
+#' \deqn{f(x) = (2\pi)^{-p^*/2} \left(\prod_{i=1}^{k} |\Sigma_i|^{-p^*/(2p_i)}\right) \exp\left\{-\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu)\right\}}
 #'
 #' @param n An integer stating the sample size.
 #' @param mu An array containing the mean values of and dims of each draw.

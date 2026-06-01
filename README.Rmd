@@ -141,7 +141,12 @@ tensor_prod(A, x)
 
 The density function of the multilinear normal distribution is @tensornormprop
 
-$$f(x) = (2\pi)^{-p^{*}/2} \biggl(\prod_{i=1}^{k} |\Sigma_i|^{-p^{*}/(2\pi)}\biggr) \exp\biggl\{ -\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu) \biggr\}$$
+$$
+f(x) =
+(2\pi)^{-p^{*}/2}
+\biggl(\prod_{i=1}^{k} |\Sigma_i|^{-p^{*}/(2p_i)}\biggr)
+\exp\biggl\{ -\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu) \biggr\}
+$$
 
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$, $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
@@ -273,14 +278,18 @@ For the tensor variate normal inverse Gaussian distribution, we let $W \sim \ope
 The density function of the normal inverse Gaussian distribution is
 
 $$
-f_{\text{TVNIG}}(\mathcal{X}|\mathbf{V}) = \frac{2 \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T} \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A} + \kappa) \biggr\}
-}{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}}}
+\begin{aligned}
+f_{\text{TVNIG}}(\mathcal{X}|\mathbf{V})
+&= \frac{2 \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
+\bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A}) + \kappa \biggr\}}
+{(2\pi)^{\frac{n^{*}+1}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}}} \\
+&\quad \times
 \biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1}
-{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^2} \biggr)^{-\frac{1 + n^{*}}{4}}
-$$ 
-
-$$
-\quad K_{- \frac{1 + n^{*}}{2}} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^{2}\Bigr] \Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1\Bigr]} \biggr)
+{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^2} \biggr)^{-\frac{1 + n^{*}}{4}} \\
+&\quad \times
+K_{-\frac{1 + n^{*}}{2}} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^{2}\Bigr]
+\Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1\Bigr]} \biggr).
+\end{aligned}
 $$
 
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$, $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
@@ -335,15 +344,18 @@ For the tensor variate generalized hyperbolic distribution, we let $W \sim I(\om
 The density function of the generalized hyperbolic distribution is
 
 $$
-f_{\text{TVGH}}(\mathcal{X}|\mathbf{V}) = \frac{\exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
-\bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}{(2\pi)^{\frac{n^{*}}{2}}
-\prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} K_{\lambda}(\omega)} \biggl(
-\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega}{
-\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega} \biggr)^{\frac{\lambda - n^{*}/2}{2}}
-$$
-
-$$
-\quad K_{\lambda - n^{*}/2} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega\Bigr] \Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega\Bigr]}\biggr)
+\begin{aligned}
+f_{\text{TVGH}}(\mathcal{X}|\mathbf{V})
+&= \frac{\exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
+\bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}
+{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} K_{\lambda}(\omega)} \\
+&\quad \times
+\biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega}
+{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega} \biggr)^{\frac{\lambda - n^{*}/2}{2}} \\
+&\quad \times
+K_{\lambda - n^{*}/2} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega\Bigr]
+\Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega\Bigr]}\biggr).
+\end{aligned}
 $$
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$, $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
@@ -393,22 +405,26 @@ genhyper_est$omega
 
 ## Tensor variate variance gamma
 
-For the tensor variate variance gamma distribution, we let $W \sim \operatorname{Gamma}(\gamma, \gamma)$.
+For the tensor variate variance gamma distribution, we let $W \sim \text{Gamma}(\gamma, \gamma)$.
 
 The density function of the variance gamma distribution is
 
 $$
-f_{\text{TVVG}}(\mathcal{X}|\mathbf{V}) = \frac{2\gamma^{\gamma} \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T} \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}{ (2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} \Gamma(\gamma)}
-\biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})}{
-\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 2\gamma} \biggr)^{\frac{\gamma - n^{*}/2}{2}}
-$$
-
-$$
-\quad K_{\gamma - n^{*}/2} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 2\gamma\Bigr]\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})} \biggr)
+\begin{aligned}
+f_{\text{TVVG}}(\mathcal{X}|\mathbf{V})
+&= \frac{2\gamma^{\gamma} \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
+\bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}
+{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} \Gamma(\gamma)} \\
+&\quad \times
+\biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})}
+{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 2\gamma} \biggr)^{\frac{\gamma - n^{*}/2}{2}} \\
+&\quad \times
+K_{\gamma - n^{*}/2} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 2\gamma\Bigr]
+\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})} \biggr).
+\end{aligned}
 $$
 
 ```{r}
-
 vargamma_draws <- rtvargamma(n = 1e3, mu = mu_true, skew = skew_true,
                              sigmas = list(S1, S2, S3))
 ```
@@ -439,14 +455,18 @@ For the tensor variate skewed t distribution, we let $W \sim \operatorname{Inv\t
 The density function of the skewed t distribution is
 
 $$
-f_{\text{TVST}}(\mathcal{X}|\mathbf{V}) = \frac{2\bigl(\frac{\nu}{2}\bigr)^{\nu/2} \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T} \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} \Gamma\bigl(\frac{\nu}{2}\bigr)}
-\biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \nu}{
-\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})} \biggr)^{-\frac{\nu + n^{*}}{4}}
-$$
-
-$$
-\quad K_{-\frac{\nu + n^{*}}{2}} \biggl(\sqrt{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})
-\Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \nu\Bigr]} \biggr)
+\begin{aligned}
+f_{\text{TVST}}(\mathcal{X}|\mathbf{V})
+&= \frac{2\bigl(\frac{\nu}{2}\bigr)^{\nu/2} \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
+\bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}
+{(2\pi)^{\frac{n^{*}}{2}} \prod_{d=1}^{D} |\Sigma_{d}|^{\frac{n^{*}}{2n_{d}}} \Gamma\bigl(\frac{\nu}{2}\bigr)} \\
+&\quad \times
+\biggl(\frac{\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \nu}
+{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})} \biggr)^{-\frac{\nu + n^{*}}{4}} \\
+&\quad \times
+K_{-\frac{\nu + n^{*}}{2}} \biggl(\sqrt{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})
+\Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \nu\Bigr]} \biggr).
+\end{aligned}
 $$
 
 ```{r}
@@ -732,7 +752,7 @@ model_compare <- function(iter) {
   
   draws <- rtskewt(n = 1e3, mu = array(1:24, dim = c(2, 3, 4)), 
                    sigmas = list(s1, s2, s3), skew = skew_true,
-                   nu = 30)
+                   nu = 40)
   
   res_normal <- tensor_mle(draws, model = "normal", quiet = FALSE)
   res_skewt <- tensor_mle(draws, model = "skewt", quiet = FALSE)

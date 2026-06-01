@@ -17,18 +17,35 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
 
   # different params based on model
   kappa <- 2
-
   flat_draws <- simplify2array(data)
 
-  # E[X] = M + 1/kappa * skew
-  mean_draws <- apply(flat_draws, 1:o, mean)
-  median_draws <- apply(flat_draws, 1:o, median)
+  res_normal <- tensor_mle_normal(
+    data,
+    max_iter = max_iter,
+    tol = tol,
+    quiet = TRUE,
+    restrict = NULL
+  )
 
-  mu <- median_draws
+  mu <- res_normal$mu
+  sigmas <- res_normal$sigmas
 
-  skew <- kappa * (mean_draws - median_draws)
+  inv_sigma_start <- lapply(sigmas, invert_safe)
 
-  sigmas <- lapply(dims, diag)
+  precision_resids <- lapply(data, function(x) {
+    centered <- x - mu
+
+    for (d in seq_along(inv_sigma_start)) {
+      centered <- n_prod(centered, inv_sigma_start[[d]], d)
+    }
+
+    centered
+  })
+
+  precision_resids <- simplify2array(precision_resids)
+
+  # Use the median shift of precision-weighted residuals to seed skewness.
+  skew <- -apply(precision_resids, 1:o, median)
 
   logliks <- rep(0, max_iter)
 

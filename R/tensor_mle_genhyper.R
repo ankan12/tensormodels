@@ -23,17 +23,33 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
   R_lambda <- besselK(x = omega, nu = lambda + 1, expon.scaled = TRUE) /
               besselK(x = omega, nu = lambda, expon.scaled = TRUE)
 
-  flat_draws <- simplify2array(data)
+  res_normal <- tensor_mle_normal(
+    data,
+    max_iter = max_iter,
+    tol = tol,
+    quiet = TRUE,
+    restrict = NULL
+  )
 
-  # E[X] = M + K_{lambda+1}(omega)/K_{lambda}(omega) * skew
-  mean_draws <- apply(flat_draws, 1:o, mean)
-  median_draws <- apply(flat_draws, 1:o, median)
+  mu <- res_normal$mu
+  sigmas <- res_normal$sigmas
 
-  mu <- median_draws
+  inv_sigma_start <- lapply(sigmas, invert_safe)
 
-  skew <- (mean_draws - median_draws)/R_lambda
+  precision_resids <- lapply(data, function(x) {
+    centered <- x - mu
 
-  sigmas <- lapply(dims, diag)
+    for (d in seq_along(inv_sigma_start)) {
+      centered <- n_prod(centered, inv_sigma_start[[d]], d)
+    }
+
+    centered
+  })
+
+  precision_resids <- simplify2array(precision_resids)
+
+  # Use the median shift of precision-weighted residuals to seed skewness.
+  skew <- -apply(precision_resids, 1:o, median)
 
   logliks <- rep(0, max_iter)
 

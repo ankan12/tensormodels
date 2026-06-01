@@ -19,16 +19,33 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
   # different params based on model
   gamma <- 6
 
-  flat_draws <- simplify2array(data)
+  res_normal <- tensor_mle_normal(
+    data,
+    max_iter = max_iter,
+    tol = tol,
+    quiet = TRUE,
+    restrict = NULL
+  )
 
-  # E[X] = M + skew
-  mean_draws <- apply(flat_draws, 1:o, mean)
-  median_draws <- apply(flat_draws, 1:o, median)
+  mu <- res_normal$mu
+  sigmas <- res_normal$sigmas
 
-  mu <- median_draws
-  skew <- mean_draws - median_draws
+  inv_sigma_start <- lapply(sigmas, invert_safe)
 
-  sigmas <- lapply(dims, diag)
+  precision_resids <- lapply(data, function(x) {
+    centered <- x - mu
+
+    for (d in seq_along(inv_sigma_start)) {
+      centered <- n_prod(centered, inv_sigma_start[[d]], d)
+    }
+
+    centered
+  })
+
+  precision_resids <- simplify2array(precision_resids)
+
+  # Use the median shift of precision-weighted residuals to seed skewness.
+  skew <- -apply(precision_resids, 1:o, median)
 
   logliks <- rep(0, max_iter)
 
