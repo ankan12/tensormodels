@@ -308,8 +308,7 @@ invgauss_draws <- rtinvgauss(n = 1e3, mu = mu_true, skew = skew_true,
 
 
 ```{r}
-invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss", 
-                           quiet = FALSE)
+invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss")
 ```
 
 
@@ -366,9 +365,9 @@ tensor variate normal, this function can simulate from them as well.  Here, we
 simulate random draws from a univariate normal with mean $-2$ and variance $4$.
 
 ```{r}
-lambda_true <- 2
-omega_true <- 2
-
+lambda_true <- 10
+omega_true <- 12
+ 
 genhyper_draws <- rtgenhyper(n = 1e3, mu = mu_true, skew = skew_true,
                              sigmas = list(S1, S2, S3),
                              lambda = lambda_true, omega = omega_true)
@@ -379,7 +378,7 @@ genhyper_draws <- rtgenhyper(n = 1e3, mu = mu_true, skew = skew_true,
 For the generalized hyperbolic distribution, the true mean $E[X] = \tensor{M} + \frac{K_{\lambda + 1}(\omega)}{K_{\lambda}(\omega)} \tensor{A}$. We can compare the model's estimation for the mean with the true values using MSE. 
 
 ```{r}
-genhyper_est <- tensor_mle(genhyper_draws, model = "genhyper", quiet = FALSE)
+genhyper_est <- tensor_mle(genhyper_draws, model = "genhyper", quiet = FALSE, tol = 1e-5)
 
 mean((
   with(genhyper_est, mu + besselK(x = omega, nu = lambda + 1)/

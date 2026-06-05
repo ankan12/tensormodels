@@ -20,49 +20,51 @@ tensor_mle_skewt <- function(data, max_iter = 1e3, tol = 1e-6,
 
   flat_draws <- simplify2array(data)
 
-  res_normal <- tensor_mle(data, model = "normal")
+  mean_draws <- apply(flat_draws, 1:o, mean)
+  median_draws <- apply(flat_draws, 1:o, median)
+  # res_normal <- tensor_mle(data, model = "normal")
+  #
+  # mu <- res_normal$mu
+  # sigmas <- res_normal$sigmas
+  #
+  # inv_sigma_start <- lapply(sigmas, invert_safe)
+  #
+  # precision_resids <- lapply(data, function(x) {
+  #   centered <- x - mu
+  #
+  #   for (d in seq_along(inv_sigma_start)) {
+  #     centered <- n_prod(centered, inv_sigma_start[[d]], d)
+  #   }
+  #
+  #   centered
+  # })
+  #
+  # precision_resids <- simplify2array(precision_resids)
 
-  mu <- res_normal$mu
-  sigmas <- res_normal$sigmas
-
-  inv_sigma_start <- lapply(sigmas, invert_safe)
-
-  precision_resids <- lapply(data, function(x) {
-    centered <- x - mu
-
-    for (d in seq_along(inv_sigma_start)) {
-      centered <- n_prod(centered, inv_sigma_start[[d]], d)
-    }
-
-    centered
-  })
-
-  precision_resids <- simplify2array(precision_resids)
-
-  # The normal fit gives a centered location and covariance start. We then
-  # use the median shift of precision-weighted residuals to seed skewness.
-  skew <- -apply(precision_resids, 1:o, median)
+  # E[X] = M + nu/(nu-2) * skew
+  skew <- (nu-2)/nu * (mean_draws - median_draws)
 
   logliks <- rep(NA_real_, max_iter)
   pen_logliks <- rep(NA_real_, max_iter)
 
-  #sigmas <- lapply(dims, diag)
+  sigmas <- lapply(dims, diag)
+  mu <- median_draws
 
-  # for(k in 1:o) {
-  #   tot_sum <- 0
-  #
-  #   for(i in 1:n) {
-  #       curr_unfold <- matricization(data[[i]] - mu, k)
-  #
-  #       tot_sum <- tot_sum + (curr_unfold %*% t(curr_unfold))
-  #   }
-  #
-  #   tot_sum <- tot_sum * dims[k]/(n * n_star)
-  #
-  #   tot_sum <- tot_sum/(sum(diag(tot_sum))) * dims[k]
-  #
-  #   sigmas[[k]] <- tot_sum
-  # }
+  for(k in 1:o) {
+    tot_sum <- 0
+
+    for(i in 1:n) {
+        curr_unfold <- matricization(data[[i]] - mean_draws, k)
+
+        tot_sum <- tot_sum + (curr_unfold %*% t(curr_unfold))
+    }
+
+    tot_sum <- tot_sum * dims[k]/(n * n_star)
+
+    tot_sum <- tot_sum/(sum(diag(tot_sum))) * dims[k]
+
+    sigmas[[k]] <- tot_sum
+  }
 
   for (t in 1:max_iter) {
     # Step 2: Update a, b, c depending on expected values

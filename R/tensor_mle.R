@@ -18,7 +18,7 @@
 tensor_mle <- function(draws, max_iter = 1000, tol = 1e-4, quiet = TRUE,
                        model, restrict = NULL) {
   if (!model %in% c("normal", "skewt", "vargamma", "invgauss", "genhyper")) {
-    stop("Not a valid model. Must be normal, skewt, vargammax, invgauss, or genhyper")
+    stop("Not a valid model. Must be normal, skewt, vargamma, invgauss, or genhyper")
   } # check there is a real model
 
   if (!is.list(draws) || length(draws) == 0) {

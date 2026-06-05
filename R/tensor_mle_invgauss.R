@@ -19,40 +19,21 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
   kappa <- 2
   flat_draws <- simplify2array(data)
 
-  res_normal <- tensor_mle_normal(
-    data,
-    max_iter = max_iter,
-    tol = tol,
-    quiet = TRUE,
-    restrict = NULL
-  )
+  mean_draws <- apply(flat_draws, 1:o, mean)
+  median_draws <- apply(flat_draws, 1:o, median)
+  mu <- median_draws
 
-  mu <- res_normal$mu
-  sigmas <- res_normal$sigmas
-
-  inv_sigma_start <- lapply(sigmas, invert_safe)
-
-  precision_resids <- lapply(data, function(x) {
-    centered <- x - mu
-
-    for (d in seq_along(inv_sigma_start)) {
-      centered <- n_prod(centered, inv_sigma_start[[d]], d)
-    }
-
-    centered
-  })
-
-  precision_resids <- simplify2array(precision_resids)
-
-  # Use the median shift of precision-weighted residuals to seed skewness.
-  skew <- -apply(precision_resids, 1:o, median)
+  # E[X] = M + 1/kappa * skew
+  skew <- kappa * (mean_draws - median_draws)
 
   logliks <- rep(0, max_iter)
+
+  sigmas <- lapply(dims, diag)
 
   for(k in 1:o) {
     tot_sum <- 0
     for(i in 1:n) {
-      curr_unfold <- matricization(data[[i]] - mu, k)
+      curr_unfold <- matricization(data[[i]] - mean_draws, k)
 
       tot_sum <- tot_sum + tcrossprod(curr_unfold)
     }
@@ -258,7 +239,7 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
   k <- n_star + sum((dims * (dims+1))/2) - (o - 1) + 1
 
   list(mu = mu, skew = skew, sigmas = sigmas, kappa = kappa,
-       Ew = a, Einvw = b, Elogw = c,
+       #Ew = a, Einvw = b, Elogw = c,
        loglik = logliks[t],
        k = k,
        AIC = 2 * k - 2 * logliks[t],
