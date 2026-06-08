@@ -17,8 +17,8 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
   # Step 1: Initialize vals
 
   # different params based on model
-  lambda <- 2
-  omega <- 2
+  lambda <- 10
+  omega <- 10
 
   flat_draws <- simplify2array(data)
 
@@ -28,8 +28,7 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
 
   # E[X] = M + K_{lambda+1}(omega)/K_{lambda}(omega) * skew
 
-  R_lambda <- besselK(x = omega, nu = lambda + 1, expon.scaled = TRUE) /
-    besselK(x = omega, nu = lambda, expon.scaled = TRUE)
+  R_lambda <- .besselK_asym_ratio(omega, lambda + 1, lambda)
 
   skew <- 1/R_lambda * (mean_draws - median_draws)
 
@@ -108,39 +107,19 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
     delta_vals <- delta_vals + omega
     param_vals <- lambda - n_star / 2
 
-    k_lambda_1 <- besselK(
-      x = sqrt(rho * delta_vals),
-      nu = param_vals + 1,
-      expon.scaled = TRUE
-    )
+    bessel_arg <- sqrt(rho * delta_vals)
+    k_ratio <- .besselK_asym_ratio(bessel_arg, param_vals + 1, param_vals)
 
-    k_lambda <- besselK(
-      x = sqrt(rho * delta_vals),
-      nu = param_vals,
-      expon.scaled = TRUE
-    )
-
-    a <- sqrt(delta_vals / rho) * (k_lambda_1 / k_lambda)
+    a <- sqrt(delta_vals / rho) * k_ratio
 
     b <- sqrt(rho / delta_vals) *
-      (k_lambda_1 / k_lambda) -
+      k_ratio -
       (2 * param_vals) / delta_vals
 
     eps <- 1e-5
 
-    K_plus <- besselK(
-      x = sqrt(rho * delta_vals),
-      nu = param_vals + eps,
-      expon.scaled = TRUE
-    )
-
-    K_minus <- besselK(
-      x = sqrt(rho * delta_vals),
-      nu = param_vals - eps,
-      expon.scaled = TRUE
-    )
-
-    c <- 1/2 * log(delta_vals / rho) + (log(K_plus) - log(K_minus)) / (2*eps)
+    c <- 1/2 * log(delta_vals / rho) +
+      .dlog_besselK_asym_dnu(bessel_arg, param_vals, eps)
 
     # Step 3: Update mu, skew, params
     weight_mean <- mean(a) * b - 1
@@ -172,20 +151,12 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
       log(gamma) + 1 - digamma(gamma) + mean(c) - mean(a)
     }
 
-    K_plus <- besselK(x = omega, nu = lambda + eps, expon.scaled = TRUE)
-
-    K_minus <- besselK(x = omega, nu = lambda - eps, expon.scaled = TRUE)
-
     new_lambda <- mean(c) * lambda *
-                  1 / ((log(K_plus) - log(K_minus)) / (2 * eps))
+                  1 / .dlog_besselK_asym_dnu(omega, lambda, eps)
 
-    R_lambda <-
-      besselK(x = omega, nu = new_lambda + 1, expon.scaled = TRUE) /
-      besselK(x = omega, nu = new_lambda, expon.scaled = TRUE)
+    R_lambda <- .besselK_asym_ratio(omega, new_lambda + 1, new_lambda)
 
-    R_neg_lambda <-
-      besselK(x = omega, nu = -new_lambda + 1, expon.scaled = TRUE) /
-      besselK(x = omega, nu = -new_lambda, expon.scaled = TRUE)
+    R_neg_lambda <- .besselK_asym_ratio(omega, -new_lambda + 1, -new_lambda)
 
     first_deriv <- 1 / 2 * (R_lambda + R_neg_lambda - (mean(a) + mean(b)))
 
@@ -283,7 +254,7 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
 
   list(mu = mu, skew = skew, sigmas = sigmas,
        lambda = lambda, omega = omega,
-       Ew = a, Einvw = b, Elogw = c,
+       #Ew = a, Einvw = b, Elogw = c,
        loglik = logliks[t],
        k = k,
        AIC = 2 * k - 2 * logliks[t],

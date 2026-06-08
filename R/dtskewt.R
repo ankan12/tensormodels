@@ -54,11 +54,12 @@ dtskewt <- function(x, mu, skew, sigmas, nu, log = FALSE) {
   delta <- sum(xm_tmp * ve_xm)
   xm_skew <- sum(xm_tmp * ve_skew)
   y <- sqrt(rho * (delta + nu))
+  log_bessel <- .log_besselK_asym(y, (nu + n_star) / 2)
 
   loglik <-
     log(2) + nu/2 * log(nu/2) - lgamma(nu/2) - n_star/2 * log(2 * pi) -
     all_det + xm_skew - (nu + n_star)/4 * log((delta + nu)/rho) +
-    log(besselK(y, nu = -(nu + n_star)/2, expon.scaled = TRUE)) - y
+    log_bessel - y
 
   if(log == FALSE) loglik <- exp(loglik)
 

@@ -52,13 +52,14 @@ dtvargamma <- function(x, mu, skew, sigmas, scale, log = FALSE) {
   rho <- sum(skew_tmp * ve_skew)
   delta <- sum(xm_tmp * ve_xm)
   xm_skew <- sum(xm_tmp * ve_skew)
+  y <- sqrt((rho + 2 * scale) * delta)
+  log_bessel <- .log_besselK_asym(y, scale - n_star/2)
 
   loglik <-
     log(2) + scale * log(scale) - (n_star)/2 * log(2 * pi) - all_det -
     log(gamma(scale)) + xm_skew +
     (scale - (n_star/2))/2 * log(delta/(rho + 2 * scale)) +
-    log(besselK(sqrt((rho + 2 * scale) * (delta)), nu = scale - n_star/2,
-                expon.scaled = TRUE)) - sqrt((rho + 2 * scale) * (delta))
+    log_bessel - y
 
   if(log == FALSE) loglik <- exp(loglik)
 

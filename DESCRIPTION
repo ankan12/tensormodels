@@ -11,6 +11,7 @@ RoxygenNote: 7.3.3
 LinkingTo: 
     Rcpp, RcppEigen
 Imports: 
+    Bessel,
     Rcpp
 Suggests: 
     testthat (>= 3.0.0)

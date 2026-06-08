@@ -93,39 +93,19 @@ tensor_mle_skewt <- function(data, max_iter = 1e3, tol = 1e-6,
     delta_vals <- delta_vals + nu
     param_vals <- -(nu + n_star) / 2
 
-    k_lambda_1 <- besselK(
-      x = sqrt(rho * delta_vals),
-      nu = param_vals + 1,
-      expon.scaled = TRUE
-    )
+    bessel_arg <- sqrt(rho * delta_vals)
+    k_ratio <- .besselK_asym_ratio(bessel_arg, param_vals + 1, param_vals)
 
-    k_lambda <- besselK(
-      x = sqrt(rho * delta_vals),
-      nu = param_vals,
-      expon.scaled = TRUE
-    )
-
-    a <- sqrt(delta_vals / rho) * (k_lambda_1 / k_lambda)
+    a <- sqrt(delta_vals / rho) * k_ratio
 
     b <- sqrt(rho / delta_vals) *
-      (k_lambda_1 / k_lambda) -
+      k_ratio -
       (2 * param_vals) / delta_vals
 
     eps <- 1e-5
 
-    K_plus <- besselK(
-      x = sqrt(rho * delta_vals),
-      nu = param_vals + eps,
-      expon.scaled = TRUE
-    )
-
-    K_minus <- besselK(
-      x = sqrt(rho * delta_vals),
-      nu = param_vals - eps,
-      expon.scaled = TRUE
-    )
-
-    c <- 1/2 * log(delta_vals / rho) + (log(K_plus) - log(K_minus)) / (2*eps)
+    c <- 1/2 * log(delta_vals / rho) +
+      .dlog_besselK_asym_dnu(bessel_arg, param_vals, eps)
 
     #replace NaN or Inf values
     # b[!is.finite(b)] <- 0

@@ -10,9 +10,8 @@
 #' @examples
 #' s1 <- matrix(rnorm(4), nrow = 2) |> crossprod()
 #' s2 <- matrix(rnorm(16), nrow = 4) |> crossprod()
-#' matnorm_draws <- rtnorm(n, mu = matrix(1:8, nrow = 2), sigmas = list(s1, s2))
+#' matnorm_draws <- rtnorm(n = 10, mu = matrix(1:8, nrow = 2), sigmas = list(s1, s2))
 #' (mahalanobis_dist(matnorm_draws))
-#'
 #' @seealso [plot_dist()] to create a plot of the Malahanobis distances.
 #'
 #' @export
@@ -52,8 +51,7 @@ mahalanobis_dist <- function(data) {
   }
 
   # compute vector Mahalanobis
-  vec_data <-
-    matrix(data = data_array, nrow = n, ncol = n_star)
+  vec_data <- matrix(data = data_array, nrow = n, ncol = n_star)
 
   mu_vec <- apply(vec_data, MARGIN = 2, FUN = mean)
 

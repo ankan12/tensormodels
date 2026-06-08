@@ -33,7 +33,7 @@ We can also write this model as
 To simulate draws from the multilinear normal, instead of multiplying by the
 full covariance matrix, we can use the Cholesky decomposition to obtain the
 covariance in an easier equation. \cr \cr
-For each \eqn{A_{k}}, we compute the Cholesky to obtain \eqn{\bold{\Sigma}_{k} = R_{k}^{T} RL_{k}.}
+For each \eqn{A_{k}}, we compute the Cholesky to obtain \eqn{\bold{\Sigma}_{k} = R_{k}^{T} R_{k}.}
 We can then use those Cholesky versions of the covariance matrices to sample
 from a multilinear normal distribution. We can rewrite
 \eqn{\mathcal{Y} = \mathcal{U} + \textbf{Z} \times \bold{\Sigma}} as

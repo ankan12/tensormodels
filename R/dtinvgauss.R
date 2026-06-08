@@ -56,11 +56,12 @@ dtinvgauss <- function(x, mu, skew, sigmas, kappa, log = FALSE) {
   xm_skew <- sum(xm_tmp * ve_skew)
 
   y <- sqrt((rho + kappa^2) * (delta + 1))
+  log_bessel <- .log_besselK_asym(y, (1 + n_star) / 2)
 
   loglik <-
         log(2) - (n_star + 1)/2 * log(2 * pi) - all_det + xm_skew +
         kappa - (1 + n_star)/4 * log((delta + 1)/(rho + kappa^2)) +
-        log(besselK(y, nu = -(1 + n_star)/2, expon.scaled = TRUE)) - y
+        log_bessel - y
 
   if(log == FALSE) loglik <- exp(loglik)
 

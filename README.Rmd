@@ -56,6 +56,7 @@ Tensor operations, decompositions, and distributions in R.
 library("tensormodels")
 library("tidyverse")
 library("tictoc")
+library("keras")
 old_digits <- getOption("digits")
 options(digits = 3)
 ```
@@ -742,17 +743,17 @@ make_skew <- function(dims, strength = 1) {
 
 
 ```{r}
-model_compare <- function(iter) {
-  s1 <- crossprod(matrix(rnorm(4), nrow = 2))
-  s2 <- crossprod(matrix(rnorm(9), nrow = 3))
-  s3 <- crossprod(matrix(rnorm(16), nrow = 4))
+s1 <- crossprod(matrix(rnorm(4), nrow = 2))
+s2 <- crossprod(matrix(rnorm(9), nrow = 3))
+s3 <- crossprod(matrix(rnorm(16), nrow = 4))
 
-  skew_true <- make_skew(dims = c(2, 3, 4), strength = 1.5)
-  
-  draws <- rtskewt(n = 1e3, mu = array(1:24, dim = c(2, 3, 4)), 
-                   sigmas = list(s1, s2, s3), skew = skew_true,
-                   nu = 40)
-  
+skew_true <- make_skew(dims = c(2, 3, 4), strength = 1.5)
+
+draws <- rtskewt(n = 1e3, mu = array(1:24, dim = c(2, 3, 4)), 
+                 sigmas = list(s1, s2, s3), skew = skew_true,
+                 nu = 40)
+
+model_compare <- function(draws) {
   res_normal <- tensor_mle(draws, model = "normal", quiet = FALSE)
   res_skewt <- tensor_mle(draws, model = "skewt", quiet = FALSE)
   res_vargam <- tensor_mle(draws, model = "vargamma", quiet = FALSE)
@@ -772,13 +773,82 @@ model_compare <- function(iter) {
   )
   
   all_mod
-  # return best model by BIC
-  # tibble(iter = iter, 
-  #        res = all_mod |> arrange(BIC) |> slice_head(n=1) |> pull(model))
 }
 ```
 
 
+
+## Example
+
+```{r}
+library(torchvision)
+
+#cifar100 <- cifar100_dataset(download = TRUE)
+
+cifar100 <- cifar100_dataset()
+
+cifar_tree_indices <- which(cifar100$y == 48)
+
+n <- length(cifar_tree_indices)
+
+imgs <- vector("list", n)
+
+for (i in seq_len(n)) {
+  imgs[[i]] <- cifar100[[cifar_tree_indices[i]]]$x
+}
+
+imgs <- imgs[1:200]
+
+res <- model_compare(imgs)
+
+res_normal <- tensor_mle(imgs, model = "normal", quiet = FALSE)
+res_skewt <- tensor_mle(imgs, model = "skewt", quiet = FALSE)
+res_vargam <- tensor_mle(imgs, model = "vargamma", quiet = FALSE)
+res_invgauss <- tensor_mle(imgs, model = "invgauss", quiet = FALSE)
+res_genhyper <- tensor_mle(imgs, model = "genhyper", quiet = FALSE)
+
+res_normal$BIC
+res_skewt$BIC
+res_vargam$BIC
+res_invgauss$BIC
+res_genhyper$BIC
+
+model_compare(imgs)
+
+img <- res$mu
+```
+
+
+```{r}
+img <- imgs[[5]]
+
+img <- img/255
+
+rgb_img <- array(
+  rgb(img[,,1], img[,,2], img[,,3]),
+  dim = c(32, 32)
+)
+
+plot(0, 0, type = "n", xlab = "", ylab = "", axes = FALSE,
+     xlim = c(0, 32), ylim = c(0, 32))
+
+rasterImage(rgb_img, 0, 0, 32, 32)
+
+```
+
+
+```{r}
+tic()
+res <- tensor_mle(imgs, model = "normal", quiet = FALSE)
+toc()
+```
+
+
+```{r}
+plot_matrix(res$mu[, , 1]) +
+  plot_matrix(res$mu[, , 2]) +
+  plot_matrix(res$mu[, , 3]) 
+```
 
 
 

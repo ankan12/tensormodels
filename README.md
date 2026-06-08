@@ -49,24 +49,6 @@ old_digits <- getOption("digits")
 options(digits = 3)
 ```
 
-## Tensor draw format
-
-In this package, a sample of tensor-valued data is represented as a list
-of $n$ draws, where each element of the list is one tensor observation,
-rather than as a single stacked tensor with an additional mode of size
-$n$. This makes it clear that the sample size indexes observations and
-is not itself part of the tensor structure. It also works naturally
-with simulation, estimation, and iteration in R, where many functions
-already return or operate on lists.
-
-The main advantage of this choice is that each draw can be handled
-directly as one observation without having to separate the sampling
-dimension from the tensor modes. It also avoids ambiguity between the
-order of a tensor and the number of observed draws. A drawback is that
-some array operations are less convenient than when data are stored in
-one $(O+1)$-th order tensor, so functions such as `simplify2array()`
-may still be useful when a stacked representation is needed.
-
 # Operations
 
 ## n-mode prod
@@ -166,12 +148,10 @@ tensor_prod(A, x)
 The density function of the multilinear normal distribution
 is<sup>1</sup>
 
-$$
-f(x) =
+$$f(x) =
 (2\pi)^{-p^{*}/2}
 \biggl(\prod_{i=1}^{k} |\Sigma_i|^{-p^{*}/(2p_i)}\biggr)
-\exp\biggl\{ -\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu) \biggr\}
-$$
+\exp\biggl\{ -\frac{1}{2} (x-\mu)^{T} \Sigma_{1:k}^{-1} (x-\mu) \biggr\}$$
 
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
 $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
@@ -229,11 +209,20 @@ By default, the covariance matrices will be the identity.
 
 ``` r
 matrix_draws <- rtnorm(n = 1e3, mu = matrix(1:6, nrow = 2, ncol = 3))
+```
 
+When simulating draws, the output is represented a list of $n$ draws.
+Each element of the list represents one tensor observation. This makes
+it clear that the sample size indexes observations and works well with
+other functions in the package. Functions such as `simplify2array()` can
+be used to create a higher-order tensor with one mode being the sample
+index.
+
+``` r
 matrix_draws[[1]]
-#>       [,1] [,2] [,3]
-#> [1,] 0.459 3.50 4.19
-#> [2,] 1.687 2.74 4.96
+#>           [,1]     [,2]     [,3]
+#> [1,] 1.7391149 1.483627 3.674582
+#> [2,] 0.8653698 3.381173 6.263703
 ```
 
 Below is a simulation from a tensor variate normal of size
@@ -253,17 +242,17 @@ tvn_draws <- rtnorm(n = 1e3, mu = mu_true,
 tvn_draws[[1]]
 #> , , 1
 #> 
-#>       [,1] [,2] [,3]  [,4]
-#> [1,] 0.686 4.38 9.39  8.19
-#> [2,] 1.202 1.88 8.96 11.30
-#> [3,] 2.942 5.02 7.71 13.10
+#>           [,1]      [,2]     [,3]      [,4]
+#> [1,] 0.1772103  2.686398  3.74531  8.142328
+#> [2,] 1.6455212 10.565258 10.34400 16.043991
+#> [3,] 2.1656371  5.491703 11.64316 13.430647
 #> 
 #> , , 2
 #> 
-#>       [,1]  [,2] [,3] [,4]
-#> [1,]  5.00 -2.48 13.3 21.0
-#> [2,]  9.47 10.08 32.6 14.9
-#> [3,] 19.29 28.14 27.5 23.3
+#>          [,1]     [,2]     [,3]     [,4]
+#> [1,] 13.96192 16.68971 19.00767 22.71868
+#> [2,] 14.12012 15.10580 20.49584 21.57830
+#> [3,] 14.41665 20.40647 18.01518 24.32685
 ```
 
 # Estimation
@@ -279,11 +268,11 @@ similar to the true results.
 ``` r
 (univarnorm_est <- tensor_mle(draws = univar_draws, model = "normal"))
 #> $mu
-#> [1] -2.02
+#> [1] -2.023296
 #> 
 #> $sigmas
 #> $sigmas[[1]]
-#> [1] 4.28
+#> [1] 4.284203
 ```
 
 The multivariate normal draws had a mean vector of
@@ -310,25 +299,25 @@ covariance matrices were the identity.
 matrix_est <- tensor_mle(matrix_draws, model = "normal")
 
 matrix_est$mu
-#>           [,1]     [,2]     [,3]
-#> [1,] 0.9814778 3.011375 4.988384
-#> [2,] 2.0250889 3.977172 5.985084
+#>          [,1]     [,2]     [,3]
+#> [1,] 1.016722 2.988299 4.995788
+#> [2,] 1.979936 3.979311 5.978654
 matrix_est$sigmas |> lapply(round, 3)
 #> [[1]]
-#>        [,1]   [,2]
-#> [1,]  1.001 -0.005
-#> [2,] -0.005  0.999
+#>       [,1]  [,2]
+#> [1,] 0.996 0.007
+#> [2,] 0.007 1.004
 #> 
 #> [[2]]
 #>        [,1]   [,2]   [,3]
-#> [1,]  1.073 -0.034 -0.002
-#> [2,] -0.034  1.026 -0.037
-#> [3,] -0.002 -0.037  1.016
+#> [1,]  1.028 -0.042  0.007
+#> [2,] -0.042  1.018 -0.010
+#> [3,]  0.007 -0.010  0.997
 ```
 
-The `tensor_mle()` function also works for tensor-valued data. Below,
-we compare the estimated and true values using the mean squared error
-(MSE).
+The `tensor_mle()` function also works for tensor-valued data. Below, we
+compare the estimated and true covariance matrices using the mean
+squared error (MSE).
 
 Also, note that there is nonidentifiability in the scaling of the
 covariance matrices. Given the tensor variate normal draws, we know the
@@ -340,9 +329,6 @@ the relative covariance structure within each mode.
 ``` r
 tensor_est <- tensor_mle(draws = tvn_draws, model = "normal")
 
-mean((tensor_est$mu - mu_true)^2)
-#> [1] 0.009266418
-
 true_sigmas <- list(S1, S2, S3)
 
 for(i in 1:3) {
@@ -351,9 +337,9 @@ for(i in 1:3) {
   
   print(mean((est_scaled - true_scaled)^2))
 }
-#> [1] 9.295722e-06
-#> [1] 4.470407e-05
-#> [1] 1.500983e-06
+#> [1] 5.504582e-05
+#> [1] 1.754755e-05
+#> [1] 2.100553e-05
 ```
 
 # Other models
@@ -386,8 +372,7 @@ $W \sim \operatorname{IG}(1, \kappa)$.
 
 The density function of the normal inverse Gaussian distribution is
 
-$$
-\begin{aligned}
+$$\begin{aligned}
 f_{\text{TVNIG}}(\mathcal{X}|\mathbf{V})
 &= \frac{2 \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
 \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A}) + \kappa \biggr\}}
@@ -398,8 +383,7 @@ f_{\text{TVNIG}}(\mathcal{X}|\mathbf{V})
 &\quad \times
 K_{-\frac{1 + n^{*}}{2}} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \kappa^{2}\Bigr]
 \Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 1\Bigr]} \biggr).
-\end{aligned}
-$$
+\end{aligned}$$
 
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
 $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
@@ -419,9 +403,7 @@ invgauss_draws <- rtinvgauss(n = 1e3, mu = mu_true, skew = skew_true,
 ```
 
 ``` r
-invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss", 
-                           quiet = FALSE, tol = 1e-3)
-#> Converged at iteration 38
+invgauss_est <- tensor_mle(invgauss_draws, model = "invgauss")
 ```
 
 For the inverse gaussian distribution, the true mean
@@ -431,16 +413,16 @@ estimation for the mean with the true values using MSE.
 ``` r
 mean((with(invgauss_est, mu + skew/kappa) -
         (mu_true + skew_true/kappa_true))^2)
-#> [1] 0.0002815123
+#> [1] 0.002919574
 ```
 
 ``` r
 mean((invgauss_est$mu - mu_true)^2)
-#> [1] 0.1006889
+#> [1] 0.01684996
 mean((invgauss_est$skew - skew_true)^2)
-#> [1] 0.6173558
+#> [1] 2.726522
 invgauss_est$kappa
-#> [1] 0.7421025
+#> [1] 0.6375593
 
 for(i in 1:2) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -448,8 +430,8 @@ for(i in 1:2) {
   
   print(mean((est_scaled - true_scaled)^2))
 }
-#> [1] 8.742185e-06
-#> [1] 3.968699e-05
+#> [1] 1.194769e-05
+#> [1] 1.17049e-05
 ```
 
 ## Tensor variate generalized hyperbolic
@@ -459,8 +441,7 @@ $W \sim I(\omega, 1, \lambda)$.
 
 The density function of the generalized hyperbolic distribution is
 
-$$
-\begin{aligned}
+$$\begin{aligned}
 f_{\text{TVGH}}(\mathcal{X}|\mathbf{V})
 &= \frac{\exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
 \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}
@@ -471,8 +452,7 @@ f_{\text{TVGH}}(\mathcal{X}|\mathbf{V})
 &\quad \times
 K_{\lambda - n^{*}/2} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega\Bigr]
 \Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \omega\Bigr]}\biggr).
-\end{aligned}
-$$
+\end{aligned}$$
 where $\Sigma$ is positive definite, $x \in \mathbb{R}^p$,
 $\mu \in \mathbb{R}^p$ and $\Sigma_{1:k} \in \mathbb{R}^p.$
 
@@ -486,11 +466,12 @@ well. Here, we simulate random draws from a univariate normal with mean
 $-2$ and variance $4$.
 
 ``` r
-lambda_true <- 2
-omega_true <- 2
-
+lambda_true <- 10
+omega_true <- 12
+ 
 genhyper_draws <- rtgenhyper(n = 1e3, mu = mu_true, skew = skew_true,
-                             sigmas = list(S1, S2, S3))
+                             sigmas = list(S1, S2, S3),
+                             lambda = lambda_true, omega = omega_true)
 ```
 
 For the generalized hyperbolic distribution, the true mean
@@ -499,8 +480,9 @@ We can compare the model’s estimation for the mean with the true values
 using MSE.
 
 ``` r
-genhyper_est <- tensor_mle(genhyper_draws, model = "genhyper", quiet = FALSE)
-#> Converged at iteration 10
+genhyper_est <- tensor_mle(genhyper_draws, model = "genhyper", quiet = FALSE, tol = 1e-5)
+#> Iteration 50: criterion = 1.962e-05
+#> Converged at iteration 74
 
 mean((
   with(genhyper_est, mu + besselK(x = omega, nu = lambda + 1)/
@@ -508,12 +490,12 @@ mean((
     (mu_true + besselK(x = omega_true, nu = lambda_true + 1)/
        besselK(x = omega_true, nu = lambda_true) * skew_true)
   )^2)
-#> [1] 0.0006161589
+#> [1] 0.004171649
 
 mean((genhyper_est$mu - mu_true)^2)
-#> [1] 0.9404605
+#> [1] 0.8171771
 mean((genhyper_est$skew - skew_true)^2)
-#> [1] 0.8004998
+#> [1] 3.339013
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -521,25 +503,24 @@ for(i in 1:3) {
   
   print(mean((est_scaled - true_scaled)^2))
 }
-#> [1] 1.268605e-05
-#> [1] 3.610402e-05
-#> [1] 0.0001174092
+#> [1] 2.80842e-05
+#> [1] 1.591615e-05
+#> [1] 7.089782e-06
 
 genhyper_est$lambda
-#> [1] 2.420612
+#> [1] 8.624151
 genhyper_est$omega
-#> [1] 0.472649
+#> [1] 2.14075
 ```
 
 ## Tensor variate variance gamma
 
 For the tensor variate variance gamma distribution, we let
-$W \sim \operatorname{Gamma}(\gamma, \gamma)$.
+$W \sim \text{Gamma}(\gamma, \gamma)$.
 
 The density function of the variance gamma distribution is
 
-$$
-\begin{aligned}
+$$\begin{aligned}
 f_{\text{TVVG}}(\mathcal{X}|\mathbf{V})
 &= \frac{2\gamma^{\gamma} \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
 \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}
@@ -550,8 +531,7 @@ f_{\text{TVVG}}(\mathcal{X}|\mathbf{V})
 &\quad \times
 K_{\gamma - n^{*}/2} \biggl(\sqrt{\Bigl[\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + 2\gamma\Bigr]
 \delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})} \biggr).
-\end{aligned}
-$$
+\end{aligned}$$
 
 ``` r
 vargamma_draws <- rtvargamma(n = 1e3, mu = mu_true, skew = skew_true,
@@ -560,15 +540,15 @@ vargamma_draws <- rtvargamma(n = 1e3, mu = mu_true, skew = skew_true,
 
 ``` r
 vargamma_est <- tensor_mle(vargamma_draws, model = "vargamma", quiet = FALSE)
-#> Converged at iteration 9
+#> Converged at iteration 6
 
 mean((with(vargamma_est, mu + skew) - (mu_true + skew_true))^2)
-#> [1] 0.05944153
+#> [1] 0.1187094
 
 mean((vargamma_est$mu - mu_true)^2)
-#> [1] 0.01708016
+#> [1] 0.003826563
 mean((vargamma_est$skew - skew_true)^2)
-#> [1] 0.8261067
+#> [1] 0.1008045
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -576,12 +556,12 @@ for(i in 1:3) {
   
   print(mean((est_scaled - true_scaled)^2))
 }
-#> [1] 2.068968e-06
-#> [1] 6.179259e-05
-#> [1] 0.000250726
+#> [1] 1.333307e-05
+#> [1] 8.393338e-06
+#> [1] 3.607587e-06
 
 vargamma_est$gamma
-#> [1] 0.2919051
+#> [1] 1.830932
 ```
 
 ## Tensor variate skewed t
@@ -591,8 +571,7 @@ $W \sim \operatorname{Inv\text{-}Gamma}(\nu/2, \nu/2)$.
 
 The density function of the skewed t distribution is
 
-$$
-\begin{aligned}
+$$\begin{aligned}
 f_{\text{TVST}}(\mathcal{X}|\mathbf{V})
 &= \frac{2\bigl(\frac{\nu}{2}\bigr)^{\nu/2} \exp\biggl\{\text{vec}(\mathcal{X} - \mathcal{M})^{T}
 \bigotimes_{d=1}^{D} \Sigma_{d}^{-1} \text{vec}(\mathcal{A})\biggr\}}
@@ -603,8 +582,7 @@ f_{\text{TVST}}(\mathcal{X}|\mathbf{V})
 &\quad \times
 K_{-\frac{\nu + n^{*}}{2}} \biggl(\sqrt{\rho(\mathcal{A}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1})
 \Bigl[\delta(\mathcal{X}; \mathcal{M}, \bigotimes_{d=1}^{D} \Sigma_{d}^{-1}) + \nu\Bigr]} \biggr).
-\end{aligned}
-$$
+\end{aligned}$$
 
 ``` r
 nu_true <- 20
@@ -624,12 +602,12 @@ skewt_draws <- rtskewt(n = 1e3, mu = mu_true, skew = skew_true,
 
 ``` r
 skewt_est <- tensor_mle(skewt_draws, model = "skewt",
-                        quiet = FALSE, tol = 1e-3)
-#> Converged at iteration 14
+                        quiet = FALSE)
+#> Converged at iteration 28
 
 mean((with(skewt_est, mu + (nu)/(nu-2) * skew) -
         (mu_true + nu_true / (nu_true - 2) * skew_true))^2)
-#> [1] 0.0005612264
+#> [1] 0.002083219
 
 for(i in 1:3) {
   true_scaled <- true_sigmas[[i]] / sum(diag(true_sigmas[[i]]))
@@ -637,43 +615,35 @@ for(i in 1:3) {
   
   print(mean((est_scaled - true_scaled)^2))
 }
-#> [1] 4.447815e-06
-#> [1] 6.457394e-05
-#> [1] 2.242578e-07
+#> [1] 6.403674e-06
+#> [1] 1.334612e-06
+#> [1] 1.931086e-06
 ```
 
 ## Assessing tensor variate normality
 
-We assess tensor variate normality by comparing two Mahalanobis squared
-distances for each draw. For a vectorized draw $\text{vec}(\mathcal{X}_{i})$,
-the multivariate Mahalanobis distance is
-
-$$D(\mathcal{X}_{i}, \boldsymbol{\mu}, \boldsymbol{\Sigma}) = \bigl\{\text{vec}(\mathcal{X}_{i}) - \boldsymbol{\mu}\bigr\}^{T} \boldsymbol{\Sigma}^{-1} \bigl\{\text{vec}(\mathcal{X}_{i}) - \boldsymbol{\mu}\bigr\}.$$
-
-where $\boldsymbol{\mu} = \text{vec}(\mathcal{M})$. If $\mathcal{X}$
-follows an order-$D$ tensor variate normal distribution, then
-$\text{vec}(\mathcal{X})$ follows a multivariate normal distribution
-with mean $\text{vec}(\mathcal{M})$ and covariance matrix
-$\boldsymbol{\Sigma}_{D} \otimes \cdots \otimes \boldsymbol{\Sigma}_{1}$.
+We assess tensor variate normality using the Mahalanobis distance. If
+$\mathcal{X}$ follows an order-$O$ tensor variate normal distribution,
+then $\text{vec}(\mathcal{X})$ follows a multivariate normal
+distribution with mean $\text{vec}(\mathcal{M})$ and covariance matrix
+$\boldsymbol{\Sigma}_{O} \otimes \cdots \otimes \boldsymbol{\Sigma}_{1}$.
 This is why we can vectorize the tensor draws and compare the
 multivariate Mahalanobis distances to the tensor variate Mahalanobis
-distances. For a third-order tensor, the tensor variate Mahalanobis
-distance is
+distances. If we have properly reconstructed the structure using the
+MLEs $\hat{\mathcal{M}}$ and
+$\hat{\Sigma}_{O}, \cdots \hat{\Sigma}_{1}$, then the standardized draws
+should be from a standard normal.
 
-$$D_{T}(\mathcal{X}_{i}, \mathcal{M}, \boldsymbol{\Sigma}_{1}, \boldsymbol{\Sigma}_{2}, \boldsymbol{\Sigma}_{3}) = \text{vec}(\mathcal{X}_{i} - \mathcal{M})^{T}(\boldsymbol{\Sigma}_{1}^{-1} \otimes \boldsymbol{\Sigma}_{2}^{-1} \otimes \boldsymbol{\Sigma}_{3}^{-1})\text{vec}(\mathcal{X}_{i} - \mathcal{M}).$$
-
-More generally, for an order-$D$ tensor we replace the covariance matrix
-with the Kronecker product of the mode-specific covariance matrices. If
-a tensor normal covariance structure is present, then the multivariate
-and tensor variate distances should be close to one another. Following
-the matrix variate normality paper, this can be visualized with a
-distance-distance plot: when the tensor normal structure is appropriate,
-the distances lie close to the reference line; when the Kronecker
-product structure is absent, the distances diverge.
+If a tensor normal covariance structure is present, then the
+multivariate and tensor variate distances should be close to one
+another. Following the matrix variate normality paper, this can be
+visualized with a distance-distance plot: when the tensor normal
+structure is appropriate, the distances lie close to the reference line;
+when the Kronecker product structure is absent, the distances diverge.
 
 The function `mahalanobis_dist()` computes both distances using fitted
-MLEs, and `mahalanobis_test()` performs a two-sample
-Kolmogorov-Smirnov test to compare their empirical distributions.
+MLEs, and `mahalanobis_test()` performs a two-sample Kolmogorov-Smirnov
+test to compare their empirical distributions.
 
 ``` r
 A <- matrix(rnorm(6^2), 6, 6)
@@ -707,7 +677,7 @@ plot_malanobis(matrix_nocovar_draws, title = "Mat no covar norm")
 plot_malanobis(tvn_draws, title = "Tensor norm")
 ```
 
-<img src="man/figures/README-unnamed-chunk-26-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-27-1.png" width="100%" />
 
 We are also interested in performing a likelihood ratio test. We are
 curious if one of the covariance matrices might be the identity matrix.
@@ -752,15 +722,15 @@ test_restrict <- function(draws, restrict) {
 (res <- map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
         draws = tvn_draws, test_restrict))
 #> # A tibble: 7 × 5
-#>       mse loglik     k   BIC restrict
-#>        <dbl>  <dbl> <dbl> <dbl> <chr>   
-#> 1     0.0415  -13.3    41  310. None    
-#> 2     0.725   -52.0    36  353. 1       
-#> 3     0.673   -56.6    32  334. 2       
-#> 4     0.977  -249.     39  767. 3       
-#> 5     0.860   -95.1    27  377. 1, 2    
-#> 6     0.989  -283.     34  800. 1, 3    
-#> 7     0.987  -287.     30  781. 2, 3
+#>       mse  loglik     k     BIC restrict
+#>     <dbl>   <dbl> <dbl>   <dbl> <chr>   
+#> 1 0.00724 -42243.    41  84769. None    
+#> 2 1.80    -51553.    36 103354. 1       
+#> 3 2.47    -56939.    32 114099. 2       
+#> 4 3.91    -60844.    39 121958. 3       
+#> 5 3.39    -65847.    27 131881. 1, 2    
+#> 6 4.34    -69754.    34 139742. 1, 3    
+#> 7 4.49    -75248.    30 150703. 2, 3
 ```
 
 ``` r
@@ -778,15 +748,15 @@ lrt_test <- function(draws, restrict) {
 map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
         draws = tvn_draws, lrt_test)
 #> # A tibble: 7 × 2
-#>   restrict      pval
-#>   <chr>        <dbl>
-#> 1 ""       1   e+  0
-#> 2 "1"      2.75e- 15
-#> 3 "2"      7.56e- 15
-#> 4 "3"      6.10e-103
-#> 5 "1, 2"   1.34e- 27
-#> 6 "1, 3"   3.71e-112
-#> 7 "2, 3"   2.87e-110
+#>   restrict  pval
+#>   <chr>    <dbl>
+#> 1 ""           1
+#> 2 "1"          0
+#> 3 "2"          0
+#> 4 "3"          0
+#> 5 "1, 2"       0
+#> 6 "1, 3"       0
+#> 7 "2, 3"       0
 ```
 
 ``` r
@@ -798,28 +768,28 @@ second_identity <- rtnorm(n = 1e3, mu = mu_true,
 map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)), 
         draws = second_identity, test_restrict)
 #> # A tibble: 7 × 5
-#>       mse loglik     k   BIC restrict
-#>        <dbl>  <dbl> <dbl> <dbl> <chr>   
-#> 1     0.0406  -16.3    41  316. None    
-#> 2     0.725   -54.8    36  358. 1       
-#> 3     0.0282  -16.3    32  254. 2       
-#> 4     0.878   -38.3    39  346. 3       
-#> 5     0.724   -54.8    27  296. 1, 2    
-#> 6     0.944   -76.6    34  388. 1, 3    
-#> 7     0.878   -38.3    30  284. 2, 3
+#>         mse  loglik     k    BIC restrict
+#>       <dbl>   <dbl> <dbl>  <dbl> <chr>   
+#> 1 0.000206  -25784.    41 51852. None    
+#> 2 0.0673    -34465.    36 69180. 1       
+#> 3 0.0000499 -25794.    32 51809. 2       
+#> 4 0.0742    -30418.    39 61105. 3       
+#> 5 0.0672    -34480.    27 69146. 1, 2    
+#> 6 0.115     -39055.    34 78345. 1, 3    
+#> 7 0.0741    -30435.    30 61077. 2, 3
 
 map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
         draws = second_identity, lrt_test)
 #> # A tibble: 7 × 2
-#>   restrict     pval
-#>   <chr>       <dbl>
-#> 1 ""       1   e+ 0
-#> 2 "1"      3.61e-15
-#> 3 "2"      1.00e+ 0
-#> 4 "3"      2.88e-10
-#> 5 "1, 2"   1.01e-10
-#> 6 "1, 3"   5.59e-23
-#> 7 "2, 3"   7.20e- 6
+#>   restrict   pval
+#>   <chr>     <dbl>
+#> 1 ""       1     
+#> 2 "1"      0     
+#> 3 "2"      0.0228
+#> 4 "3"      0     
+#> 5 "1, 2"   0     
+#> 6 "1, 3"   0     
+#> 7 "2, 3"   0
 ```
 
 ## Tensor Variate Skewed T
@@ -847,7 +817,7 @@ tibble(skew25 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3),
 #> `stat_bin()` using `bins = 30`. Pick better value `binwidth`.
 ```
 
-<img src="man/figures/README-unnamed-chunk-30-1.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-31-1.png" width="100%" />
 
 ``` r
 
@@ -872,7 +842,138 @@ tibble(nu05 = unlist(rtskewt(n = 1e3, mu = matrix(0, nrow = 2, ncol = 3),
 #> `stat_bin()` using `bins = 30`. Pick better value `binwidth`.
 ```
 
-<img src="man/figures/README-unnamed-chunk-30-2.png" width="100%" />
+<img src="man/figures/README-unnamed-chunk-31-2.png" width="100%" />
+
+Suppose $X_{n \times p} \sim N_{np}(0, \Sigma_1, \Sigma_2)$. A natural
+question is whether the usual sample covariance of the rows can estimate
+$\Sigma_2$, and whether the sample covariance of the columns can
+estimate $\Sigma_1$.
+
+If we compute the usual row covariance
+
+$$S_{\text{row}} = \frac{1}{n-1} X^T \biggl(I_n - \frac{1}{n}\mathbf{1}_n \mathbf{1}_n^T\biggr) X,$$
+
+then under the matrix normal model,
+
+$$\mathbb{E}(S_{\text{row}})
+= \frac{\operatorname{tr}\left[\left(I_n - \frac{1}{n}\mathbf{1}_n \mathbf{1}_n^T\right)\Sigma_1\right]}{n-1}\Sigma_2.$$
+
+So the usual sample covariance does recover the of $\Sigma_2$, but only
+up to a multiplicative constant determined by $\Sigma_1$. The same
+argument with $X^T$ shows that the usual column covariance recovers the
+shape of $\Sigma_1$, but only up to a multiplicative constant determined
+by $\Sigma_2$.
+
+The simulation below shows exactly that. The trace-normalized naive
+covariance matrices are close to the truth in all three cases, but the
+raw traces are distorted by the covariance matrix on the other mode.
+
+``` r
+mse <- function(mat1, mat2) {
+  mat1_scale <- mat1/diag(mat1)
+  mat2_scale <- mat2/diag(mat2)
+  
+  mean((mat1_scale - mat2_scale)^2)
+}
+
+compare_naive_covs <- function(sigmas, n_rep = 200,
+                               n_row = 30, n_col = 4) {
+  
+  draws <- rtnorm(n = n_rep, mu = matrix(0, nrow = n_row, ncol = n_col),
+                  sigmas = sigmas)
+
+  draws_mat <- matrix(aperm(simplify2array(draws), c(1, 3, 2)), ncol = 4)
+  transpose_draws_mat <- matrix(aperm(simplify2array(draws), c(2, 1, 3)), ncol = 30)
+  
+  s2_naive <- var(draws_mat)
+  s1_naive <- var(transpose_draws_mat)
+  
+  mle_est <- tensor_mle(draws, model = "normal")
+  
+  s2_hat <- mle_est$sigmas[[2]]
+  s1_hat <- mle_est$sigmas[[1]]
+
+  tibble(name = c("s2_naive", "s1_naive", "s2_hat", "s1_hat"),
+         error = c(mse(s2_naive, sigmas[[2]]),
+                   mse(s1_naive, sigmas[[1]]),
+                   mse(s2_hat, sigmas[[2]]),
+                   mse(s1_hat, sigmas[[1]])),
+         trace_ratio = c(sum(diag(s2_naive)) / sum(diag(sigmas[[2]])),
+                         sum(diag(s1_naive)) / sum(diag(sigmas[[1]])),
+                         sum(diag(s2_hat)) / sum(diag(sigmas[[2]])),
+                         sum(diag(s1_hat)) / sum(diag(sigmas[[1]]))))
+}
+
+set.seed(123)
+
+s1 <- crossprod(matrix(rnorm(30^2), nrow = 30))
+s2 <- crossprod(matrix(rnorm(4^2), nrow = 4))
+
+rbind(
+  compare_naive_covs(list(diag(30), s2)) |> mutate(setting = "Sigma1 = I"),
+  compare_naive_covs(list(s1, diag(4))) |> mutate(setting = "Sigma2 = I"),
+  compare_naive_covs(list(s1, s2)) |> mutate(setting = "both non-identity")
+) |> View()
+```
+
+In this table, `s2_error` measures how close `var(X)` is to the shape of
+$\Sigma_2$ after trace normalization, and `s1_error` does the same for
+`var(t(X))` and $\Sigma_1$. The trace ratios show the scale distortion.
+For example, when $\Sigma_2 = I$, the usual covariance of the rows still
+recovers the shape of $\Sigma_2$ well, but its trace is inflated by a
+factor of about $29$, coming from $\Sigma_1$.
+
+- `var(X)` can estimate the shape of $\Sigma_2$, but not its absolute
+  scale, unless the scale contribution from $\Sigma_1$ is fixed.
+- `var(t(X))` can estimate the shape of $\Sigma_1$, but not its absolute
+  scale, unless the scale contribution from $\Sigma_2$ is fixed.
+- This is exactly why the tensor and matrix normal models need an
+  identifying constraint such as fixing the trace of one mode
+  covariance.
+
+``` r
+make_skew <- function(dims, strength = 1) {
+  A <- array(rnorm(prod(dims)), dim = dims)
+  A / sqrt(sum(A^2)) * strength
+}
+```
+
+``` r
+model_compare <- function(iter) {
+  s1 <- crossprod(matrix(rnorm(4), nrow = 2))
+  s2 <- crossprod(matrix(rnorm(9), nrow = 3))
+  s3 <- crossprod(matrix(rnorm(16), nrow = 4))
+
+  skew_true <- make_skew(dims = c(2, 3, 4), strength = 1.5)
+  
+  draws <- rtskewt(n = 1e3, mu = array(1:24, dim = c(2, 3, 4)), 
+                   sigmas = list(s1, s2, s3), skew = skew_true,
+                   nu = 40)
+  
+  res_normal <- tensor_mle(draws, model = "normal", quiet = FALSE)
+  res_skewt <- tensor_mle(draws, model = "skewt", quiet = FALSE)
+  res_vargam <- tensor_mle(draws, model = "vargamma", quiet = FALSE)
+  res_invgauss <- tensor_mle(draws, model = "invgauss", quiet = FALSE)
+  res_genhyper <- tensor_mle(draws, model = "genhyper", quiet = FALSE)
+
+  all_mod <- 
+    tibble(model = c("Normal", "Skewt", "Vargamma", "Invgauss", "Genhyper"),
+    loglik = c(res_normal$loglik, res_skewt$loglik,
+               res_vargam$loglik, res_invgauss$loglik, res_genhyper$loglik),
+    k = c(res_normal$k, res_skewt$k,
+          res_vargam$k, res_invgauss$k, res_genhyper$k),
+    AIC = c(res_normal$AIC, res_skewt$AIC,
+            res_vargam$AIC, res_invgauss$AIC, res_genhyper$AIC),
+    BIC = c(res_normal$BIC, res_skewt$BIC,
+            res_vargam$BIC, res_invgauss$BIC, res_genhyper$BIC)
+  )
+  
+  all_mod
+  # return best model by BIC
+  # tibble(iter = iter, 
+  #        res = all_mod |> arrange(BIC) |> slice_head(n=1) |> pull(model))
+}
+```
 
 ## Installation
 

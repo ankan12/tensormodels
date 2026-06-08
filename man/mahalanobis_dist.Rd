@@ -4,7 +4,7 @@
 \alias{mahalanobis_dist}
 \title{mahalanobis_dist}
 \usage{
-mahalanobis_dist(draws)
+mahalanobis_dist(data)
 }
 \arguments{
 \item{data}{A list of arrays containing the independent, identically distributed draws.}
@@ -14,14 +14,13 @@ A data frame with one column containing the vector distances and
 one column containing the tensor distances.
 }
 \description{
-Computes the vector and tensor Mahalanobis distance for draws using the MLE.
+Computes the vector and tensor Mahalanobis distance for data using the MLE.
 }
 \examples{
 s1 <- matrix(rnorm(4), nrow = 2) |> crossprod()
 s2 <- matrix(rnorm(16), nrow = 4) |> crossprod()
-matnorm_draws <- rtnorm(n, mu = matrix(1:8, nrow = 2), sigmas = list(s1, s2))
+matnorm_draws <- rtnorm(n = 10, mu = matrix(1:8, nrow = 2), sigmas = list(s1, s2))
 (mahalanobis_dist(matnorm_draws))
-
 }
 \seealso{
 \code{\link[=plot_dist]{plot_dist()}} to create a plot of the Malahanobis distances.

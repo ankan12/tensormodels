@@ -15,10 +15,10 @@ dtinvgauss(x, mu, skew, sigmas, kappa, log = FALSE)
 
 \item{sigmas}{A list of the sigma covariance matrices.}
 
-\item{log}{Defaults to FALSE. If TRUE, return the log of the density.}
-
-\item{nu}{A parameter that describes the shape of the
+\item{kappa}{A parameter that describes the shape of the
 inverse Gaussian}
+
+\item{log}{Defaults to FALSE. If TRUE, return the log of the density.}
 }
 \value{
 The log likelihood.

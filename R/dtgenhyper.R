@@ -56,12 +56,13 @@ dtgenhyper <- function(x, mu, skew, sigmas, lambda, omega, log = FALSE) {
   delta <- sum(xm_tmp * ve_xm)
   xm_skew <- sum(xm_tmp * ve_skew)
 
-  Kw <- log(besselK(omega, nu = lambda, expon.scaled = TRUE)) - omega
+  Kw <- .log_besselK_asym(omega, lambda) - omega
+  y <- sqrt((rho + omega) * (delta + omega))
+  log_bessel <- .log_besselK_asym(y, lambda - n_star/2)
 
   loglik <- -(n_star)/2 * log(2 * pi) - all_det - Kw + xm_skew +
     (lambda - n_star/2)/2 * log((delta + omega)/(rho + omega)) +
-    log(besselK(sqrt((rho + omega) * (delta + omega)), nu = lambda - n_star/2,
-                expon.scaled = TRUE)) - sqrt((rho + omega) * (delta + omega))
+    log_bessel - y
 
   if(log == FALSE) loglik <- exp(loglik)
 
