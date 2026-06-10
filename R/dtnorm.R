@@ -45,7 +45,7 @@ dtnorm <- function(x, mu = NULL, sigmas = NULL, log = FALSE) {
 
     log_det <- log(det_sigd)
 
-    all_det <- all_det + (n_star / (2 * nrow(sigd))) * (2 * log_det)
+    all_det <- all_det + (n_star / (2 * nrow(sigd))) * log_det
   }
 
   xm_tmp <- as.numeric(xm_tmp)

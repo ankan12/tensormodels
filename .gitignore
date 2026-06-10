@@ -42,3 +42,5 @@ rtskewt_sim.RDS
 docs
 .positai
 data
+cifar_image_10x.png
+smooth_tensor_image.png

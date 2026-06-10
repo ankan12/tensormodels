@@ -250,7 +250,7 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
 
   if(t == max_iter) message("Reached max iter ", max_iter)
 
-  k <- n_star + sum((dims * (dims+1))/2) - (o - 1) + 2
+  k <- 2 * n_star + sum((dims * (dims+1))/2) - (o - 1) + 2
 
   list(mu = mu, skew = skew, sigmas = sigmas,
        lambda = lambda, omega = omega,

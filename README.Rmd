@@ -59,6 +59,18 @@ library("tictoc")
 library("keras")
 old_digits <- getOption("digits")
 options(digits = 3)
+
+plot_matrix <- function(input) { # function to plot matrices
+  input |> 
+    as_tibble(.name_repair = ~ paste0("V", seq_along(.))) |> 
+    mutate(row = row_number()) |> 
+    pivot_longer(-row, names_to = "col", values_to = "value") |> 
+    mutate(col = as.integer(str_remove(col, "^V"))) |> 
+    ggplot(aes(x = col, y = row, fill = value)) +
+    geom_tile(color = "black", lwd = 0.1) +
+    scale_y_reverse() +
+    scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) 
+}
 ```
 
 
@@ -769,7 +781,8 @@ model_compare <- function(draws) {
     AIC = c(res_normal$AIC, res_skewt$AIC,
             res_vargam$AIC, res_invgauss$AIC, res_genhyper$AIC),
     BIC = c(res_normal$BIC, res_skewt$BIC,
-            res_vargam$BIC, res_invgauss$BIC, res_genhyper$BIC)
+            res_vargam$BIC, res_invgauss$BIC, res_genhyper$BIC), 
+    mod_obj = list(res_normal, res_skewt, res_vargam, res_invgauss, res_genhyper)
   )
   
   all_mod
@@ -778,78 +791,166 @@ model_compare <- function(draws) {
 
 
 
-## Example
+## Example: CIFAR Data
 
+
+Now that we have set up our tensor distributions, we can use them on a real-world example. The CIFAR 100 dataset contains images of a set of 100 common objects. In this case, we will only be using the maple trees, which have an ID value of 48.
 ```{r}
 library(torchvision)
+library(patchwork)
 
-#cifar100 <- cifar100_dataset(download = TRUE)
+plot_image <- function(img) {
+  rgb_image <-
+    expand_grid(x = seq_len(dim(img)[1]),
+                y = seq_len(dim(img)[2])) |>
+    mutate(r = as.vector(img[, , 1]), 
+           g = as.vector(img[, , 2]),
+           b = as.vector(img[, , 3]),
+           fill = rgb(r, g, b))
+  
+  ggplot(rgb_image, aes(x = x, y = y, fill = fill)) +
+    geom_raster(interpolate = TRUE) +
+    scale_fill_identity() +
+    coord_fixed(expand = FALSE) +
+    scale_y_reverse() +
+    theme_void()
+}
+```
 
-cifar100 <- cifar100_dataset()
 
-cifar_tree_indices <- which(cifar100$y == 48)
+Once we have the CIFAR dataset loaded in from torchvision, we can plot 20 example images. The images are stored as an array of size 32 x 32 x 3. This is an image that is 32 x 32 pixels stored as red, green, and blue values. 
+```{r}
+cifar100 <- cifar100_dataset(download = TRUE)
 
-n <- length(cifar_tree_indices)
+maple_idx <- which(cifar100$y == 48)
 
-imgs <- vector("list", n)
+maple_trees <- vector("list", length(maple_idx))
 
-for (i in seq_len(n)) {
-  imgs[[i]] <- cifar100[[cifar_tree_indices[i]]]$x
+# store as a list of images
+for (i in seq_along(maple_idx)) {
+  maple_trees[[i]] <- cifar100[[maple_idx[i]]]$x/255
 }
 
-imgs <- imgs[1:200]
+wrap_plots(lapply(maple_trees[1:20], plot_image), ncol = 5)
+```
 
-res <- model_compare(imgs)
 
-res_normal <- tensor_mle(imgs, model = "normal", quiet = FALSE)
-res_skewt <- tensor_mle(imgs, model = "skewt", quiet = FALSE)
-res_vargam <- tensor_mle(imgs, model = "vargamma", quiet = FALSE)
-res_invgauss <- tensor_mle(imgs, model = "invgauss", quiet = FALSE)
-res_genhyper <- tensor_mle(imgs, model = "genhyper", quiet = FALSE)
+We can fit the best model to this set of images. The function `model_compare()`{.R} takes in a dataset and fits all of the possible tensor models. It returns the result as a data frame with columns containing the name of the model, log likelihood, number of parameters denoted as k, AIC, BIC, and the model object itself. We can then select the model with the lowest BIC to proceed. 
+```{r}
+res <- model_compare(maple_trees)
 
-res_normal$BIC
-res_skewt$BIC
-res_vargam$BIC
-res_invgauss$BIC
-res_genhyper$BIC
+print(res)
 
-model_compare(imgs)
+best_mod <- res$mod_obj[[which.min(res$BIC)]]
+```
 
-img <- res$mu
+
+In this case, the best model was the normal inverse Gaussian. The expected value of its draws is $\mathcal{M} + \mathcal{A}/\kappa$, where $\mathcal{M}$ is the location parameter and $\mathcal{A}$ is the skew parameter. The plot below contains three images: the first is the empirical average of all of the maple trees without a model assumption. The second is the location parameter $\mathcal{M}$ from the model. Lastly, we have $E[X]$, which is the expected average from the model. 
+
+$\mathcal{M}$ is closer to a traditional green maple tree. This seems to be a good starting point to model the variety of colors of the maples, from green to red. Once we add the skew parameter, the $E[X]$ appears similar to the empirical average.. 
+```{r}
+plot_image(apply(simplify2array(maple_trees), 1:3, mean)) + 
+  labs(title = "Avg")+
+plot_image(best_mod$mu) +
+  labs(title = "M") +
+plot_image(with(best_mod, mu + skew/kappa)) +
+  labs(title = "E[X]")
+```
+
+
+We can also create summary plots of the skew $\mathcal{A}$ and the covariance matrices $\Sigma$ from the model. We converted the covariance matrices to correlation matrices to make it easier to interpret each matrix, since this places them on the same scale. 
+```{r}
+plot_matrix(best_mod$skew[, , 1]) +
+  plot_matrix(best_mod$skew[, , 2]) +
+  plot_matrix(best_mod$skew[, , 3]) + 
+  plot_layout(guides = 'collect') &
+  scale_fill_gradient2(#low = "blue", mid = "white", high = "red",
+    midpoint = 0,
+    limits = c(min(best_mod$skew), max(best_mod$skew)))
+
+sig_corr <- lapply(best_mod$sigmas, cov2cor)
+
+plot_matrix(sig_corr[[1]]) +
+  plot_matrix(sig_corr[[2]]) +
+  plot_matrix(sig_corr[[3]]) +
+  plot_layout(guides = "collect") &
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red",
+                       midpoint = 0, limits = c(-1, 1))
+```
+
+
+
+Now that we have the best model for the maple trees, we can obtain the likelihood of each image. 
+```{r}
+all_lik <- vector(mode = "numeric", length = 500)
+
+for(i in 1:500) {
+  all_lik[i] <- dtinvgauss(x = maple_trees[[i]], mu = best_mod$mu,
+                           skew = best_mod$skew, sigmas = best_mod$sigmas, 
+                           kappa = best_mod$kappa, log = TRUE)
+}
+
+all_lik |> 
+  as_tibble() |> 
+  ggplot() +
+  geom_histogram(aes(x = value), color = "black", fill = "lightpink",
+                 bins = 40) +
+  theme_minimal() +
+  labs(x = "Likelihood", y = "Count")
+```
+
+
+There are clearly some outliers, both at much smaller and much larger likelihoods. Out of curiosity, I plotted the lowest likelihoods. All of these maples are predominantly orange and red, which differ from the average tensor that the model had. It seems that the data contains many more green maples, so the model struggles to account for the possible variation in tree color. 
+```{r}
+wrap_plots(lapply(maple_trees[which(all_lik <= 4500)], plot_image), 
+           ncol = 5)
+```
+
+
+As expected, all of the maples that had a large likelihood follow the pattern of being a forest green and mainly in the center of the image. 
+```{r}
+wrap_plots(lapply(maple_trees[which(all_lik >= 9000)], plot_image), 
+           ncol = 5)
 ```
 
 
 ```{r}
-img <- imgs[[5]]
-
-img <- img/255
-
-rgb_img <- array(
-  rgb(img[,,1], img[,,2], img[,,3]),
-  dim = c(32, 32)
-)
-
-plot(0, 0, type = "n", xlab = "", ylab = "", axes = FALSE,
-     xlim = c(0, 32), ylim = c(0, 32))
-
-rasterImage(rgb_img, 0, 0, 32, 32)
-
+# classes <- sort(unique(y))
+# 
+# best_models <- vector(mode = "list", length = 10L)
+# 
+# for(class in classes) {
+#   class_x <- x[y == class]
+#   
+#   curr_model <- model_compare(class_x[1:300])
+#   
+#   best_mod <- curr_model$mod_obj[[which.min(curr_model$BIC)]]
+#   
+#   best_models[[class]] <- best_mod
+# }
+# 
+# View(best_models)
 ```
 
 
 ```{r}
-tic()
-res <- tensor_mle(imgs, model = "normal", quiet = FALSE)
-toc()
+# cifar_indices <- which(cifar100$y %in% 40:48)
+# 
+# n <- length(cifar_indices)
+# 
+# imgs <- vector("list", n)
+# 
+# for (i in seq_len(n)) {
+#   imgs[[i]] <- cifar100[[cifar_indices[i]]]$x/255
+# }
+# 
+# class <- cifar100$y[cifar_indices]
+
+
+
+#imgs <- imgs[1:100]
+
 ```
-
-
-```{r}
-plot_matrix(res$mu[, , 1]) +
-  plot_matrix(res$mu[, , 2]) +
-  plot_matrix(res$mu[, , 3]) 
-```
-
 
 
 ## Installation

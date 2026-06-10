@@ -975,6 +975,94 @@ model_compare <- function(iter) {
 }
 ```
 
+## Naive classification
+
+A natural supervised setup is to keep the tensor-valued observations and
+their class labels as parallel objects:
+
+``` r
+train <- list(
+  x = imgs,      # list of tensor-valued draws
+  y = labels     # vector of class labels, same length as x
+)
+```
+
+The labels do not need to be attached to each tensor. Keeping `x` and `y`
+separate makes it easy to pass class-specific subsets directly to
+`tensor_mle()`.
+
+For a simple generative classifier, fit one class-conditional tensor
+distribution per class. The distribution family can differ by class, as
+long as all classes use the same tensor dimensions and preprocessing.
+The prediction rule is the class with the largest posterior score,
+`log(prior) + log(density)`.
+
+``` r
+candidate_models <- c("normal", "skewt", "vargamma", "invgauss", "genhyper")
+
+fit_class_model <- function(x, model) {
+  fit <- tensor_mle(x, model = model, quiet = TRUE)
+  fit$model <- model
+  fit
+}
+
+fit_naive_tensor_classifier <- function(x, y,
+                                        models = candidate_models) {
+  classes <- sort(unique(y))
+
+  fits <- lapply(classes, function(cls) {
+    class_x <- x[y == cls]
+
+    model_fits <- lapply(models, function(model) {
+      tryCatch(fit_class_model(class_x, model), error = function(e) NULL)
+    })
+    names(model_fits) <- models
+    model_fits <- Filter(Negate(is.null), model_fits)
+
+    best_model <- names(which.min(sapply(model_fits, `[[`, "BIC")))
+
+    list(
+      fit = model_fits[[best_model]],
+      prior = length(class_x) / length(x)
+    )
+  })
+
+  names(fits) <- classes
+  fits
+}
+
+tensor_log_density <- function(x, fit) {
+  switch(
+    fit$model,
+    normal = dtnorm(x, mu = fit$mu, sigmas = fit$sigmas, log = TRUE),
+    skewt = dtskewt(x, mu = fit$mu, skew = fit$skew,
+                    sigmas = fit$sigmas, nu = fit$nu, log = TRUE),
+    vargamma = dtvargamma(x, mu = fit$mu, skew = fit$skew,
+                          sigmas = fit$sigmas, scale = fit$gamma,
+                          log = TRUE),
+    invgauss = dtinvgauss(x, mu = fit$mu, skew = fit$skew,
+                          sigmas = fit$sigmas, kappa = fit$kappa,
+                          log = TRUE),
+    genhyper = dtgenhyper(x, mu = fit$mu, skew = fit$skew,
+                          sigmas = fit$sigmas, lambda = fit$lambda,
+                          omega = fit$omega, log = TRUE)
+  )
+}
+
+predict_naive_tensor_classifier <- function(x_new, classifier) {
+  scores <- sapply(classifier, function(class_fit) {
+    log(class_fit$prior) + tensor_log_density(x_new, class_fit$fit)
+  })
+
+  names(which.max(scores))
+}
+```
+
+For example, if the normal model has the lowest BIC for cats and the
+generalized hyperbolic model has the lowest BIC for maple trees, those
+two class densities can still be compared on a new image because both
+return log densities on the same input space.
+
 ## Installation
 
 You can install the development version of tensormodels from

@@ -216,7 +216,7 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
 
     if(t == max_iter) message("Reached max iter ", max_iter)
 
-  k <- n_star + sum((dims * (dims+1))/2) - (o - 1) + 1
+  k <- 2 * n_star + sum((dims * (dims+1))/2) - (o - 1) + 1
 
   list(mu = mu, skew = skew, sigmas = sigmas, kappa = kappa,
        #Ew = a, Einvw = b, Elogw = c,

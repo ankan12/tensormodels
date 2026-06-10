@@ -228,7 +228,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
 
   if(t == max_iter) message("Reached max iter ", max_iter)
 
-  k <- n_star + sum((dims * (dims+1))/2) - (o - 1) + 1
+  k <- 2 * n_star + sum((dims * (dims+1))/2) - (o - 1) + 1
 
   list(mu = mu, skew = skew, sigmas = sigmas, gamma = gamma,
        Ew = a, Einvw = b, Elogw = c,
