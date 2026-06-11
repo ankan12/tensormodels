@@ -1,0 +1,158 @@
+---
+title: "normal_mean_variance_mixture"
+format: html
+editor: visual
+---
+
+```{r}
+library(tensormodels)
+library(tidyverse)
+```
+
+
+## Poisson Sim for EM
+
+The mean of $x_{1}$ is $\lambda_{1}$ and the mean of $y_{1}$ is $\beta * \lambda_{1}$.
+```{r}
+n <- 20
+
+lambdas <- 30 * runif(n = 20)
+beta <- 0.2
+
+x <- rpois(n = n, lambda = lambdas)
+y <- rpois(n = n, lambda = beta * lambdas)
+
+beta_hat <- sum(y)/sum(x)
+
+lambdas_hat <- (x + y)/(beta_hat + 1)
+
+sum(lambdas_hat - lambdas)
+```
+
+
+## Normal Mean-Variance Mixture with $U \sim Unif(0, 1)$
+
+```{r}
+mean_mix <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, nu = 4) {
+  dims <- dim(mu)
+  
+  if(is.null(dims)) dims <- length(mu)
+
+  # draw tensor variate normals
+  tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
+
+  # generate inv gamma
+  unif_draws <- runif(n = n)
+  #inv_gammas <- rinvgamma(n = n, shape = nu/2, rate = nu/2)
+
+  mix_unif_draws <- vector("list", n)
+
+  for(i in 1:n) { # scale normals and skew by inv gamma
+    mix_unif_draws[[i]] <- mu + tensor_norms[[i]] * sqrt(unif_draws[i]) +
+                        skew * unif_draws[i]
+  }
+
+  mix_unif_draws
+}
+```
+
+
+```{r}
+s1 <- matrix(c(1, 0.25, 0.25, 0.5), nrow = 2)
+
+n <- 1e3
+
+mix_unif_noskew <- mean_mix(n = n, mu = c(1, 2), 
+                            sigmas = list(s1), skew = c(0, 0))
+
+pull_draw <- function(i, data) {
+  curr_draw <- data[[i]]
+  tibble(val = c(curr_draw[1], curr_draw[2]), 
+         pos = c(1, 2), draw = c(i, i))
+}
+
+noskew_draws_pos <- map_dfr(.x = 1:n, .f = pull_draw, 
+                            data = mix_unif_noskew)
+
+noskew_draws_pos |> 
+  ggplot() +
+  geom_histogram(aes(x = val), color = "black", fill = "lightpink") +
+  facet_wrap(~pos, nrow = 2) +
+  theme_minimal()
+```
+
+
+```{r}
+mix_unif_skew <- mean_mix(n = n, mu = c(1, 2), 
+                          sigmas = list(s1), skew = c(2, 1))
+
+skew_draws_pos <- map_dfr(.x = 1:n, .f = pull_draw, 
+                          data = mix_unif_skew)
+
+skew_draws_pos |> 
+  ggplot() +
+  geom_histogram(aes(x = val), color = "black", fill = "lightpink") +
+  facet_wrap(~pos, nrow = 2) +
+  labs(x = "Value", y = "Count") +
+  theme_minimal()
+```
+
+
+```{r}
+mix_skewt <- rtskewt(n = 1e3, mu = c(1, 2), 
+                     sigmas = list(s1), skew = c(2, 1),
+                     nu = 20)
+
+skewt_draws_pos <- map_dfr(.x = 1:n, .f = pull_draw, 
+                          data = mix_skewt)
+
+skewt_draws_pos |> 
+  ggplot() +
+  geom_histogram(aes(x = val), color = "black", fill = "lightpink") +
+  facet_wrap(~pos, nrow = 2) +
+  labs(x = "Value", y = "Count") +
+  theme_minimal()
+```
+
+
+```{r}
+library(tidyverse)
+
+mu <- matrix(c(0, 0), nrow = 2, ncol = 1)
+
+sigmas <- list(
+  matrix(c(1, 0.5,
+           0.5, 1), nrow = 2))
+
+grid <- expand_grid(
+  x11 = seq(-4, 4, length.out = 150),
+  x21 = seq(-4, 4, length.out = 150)
+) |>
+  mutate(
+    dens = purrr::map2_dbl(x11, x21, function(a, b) {
+      x <- matrix(c(a, b), nrow = 2, ncol = 1)
+      dtnorm(x, mu = mu, sigmas = sigmas, log = FALSE)
+    })
+  )
+
+ggplot(grid, aes(x = x11, y = x21, z = dens)) +
+  geom_contour_filled(bins = 20) +
+  coord_fixed() +
+  labs(
+    x = "X[1, 1]",
+    y = "X[2, 1]",
+    fill = "density"
+  ) +
+  theme_minimal()
+
+ggplot(grid, aes(x = x11, y = x21, fill = dens)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  coord_fixed() +
+  labs(x = "X[1, 1]",
+       y = "X[2, 1]", 
+       fill = "density"
+  ) +
+  theme_minimal()
+```
+
