@@ -26,7 +26,12 @@ beta_hat <- sum(y)/sum(x)
 
 lambdas_hat <- (x + y)/(beta_hat + 1)
 
-sum(lambdas_hat - lambdas)
+sqrt(mean((lambdas_hat - lambdas)^2))
+```
+
+
+```{r}
+
 ```
 
 
@@ -99,10 +104,31 @@ skew_draws_pos |>
 
 
 ```{r}
-mix_skewt <- rtskewt(n = 1e3, mu = c(1, 2), 
-                     sigmas = list(s1), skew = c(2, 1),
-                     nu = 20)
+# mix_skewt <- rtskewt(n = 1e3, mu = c(1, 2), 
+#                      sigmas = list(s1), skew = c(2, 1),
+#                      nu = 20)
 
+eval_points <- 
+  expand_grid(x11 = seq(-2, 6, length.out = 150),
+              x21 = seq(-2, 6, length.out = 150))
+
+skewt_density <-
+  eval_points |> 
+  rowwise() |> 
+  mutate(density = dtskewt(c(x11, x21), 
+                           mu = c(1, 2), sigmas = sigmas, skew = c(2, 1), 
+                           nu = 20))
+
+ggplot(skewt_density, aes(x = x11, y = x21, fill = density)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  coord_fixed() +
+  labs(x = "X[1, 1]", y = "X[2, 1]", fill = "density") +
+  theme_minimal()
+```
+
+
+```{r}
 skewt_draws_pos <- map_dfr(.x = 1:n, .f = pull_draw, 
                           data = mix_skewt)
 
@@ -116,43 +142,194 @@ skewt_draws_pos |>
 
 
 ```{r}
-library(tidyverse)
-
 mu <- matrix(c(0, 0), nrow = 2, ncol = 1)
 
-sigmas <- list(
-  matrix(c(1, 0.5,
-           0.5, 1), nrow = 2))
+sigmas <- list(matrix(c(1, 0.5,
+                        0.5, 1), nrow = 2))
 
-grid <- expand_grid(
-  x11 = seq(-4, 4, length.out = 150),
-  x21 = seq(-4, 4, length.out = 150)
-) |>
-  mutate(
-    dens = purrr::map2_dbl(x11, x21, function(a, b) {
-      x <- matrix(c(a, b), nrow = 2, ncol = 1)
-      dtnorm(x, mu = mu, sigmas = sigmas, log = FALSE)
-    })
-  )
+eval_points <- expand_grid(x11 = seq(-4, 4, length.out = 150),
+                           x21 = seq(-4, 4, length.out = 150))
 
-ggplot(grid, aes(x = x11, y = x21, z = dens)) +
-  geom_contour_filled(bins = 20) +
-  coord_fixed() +
-  labs(
-    x = "X[1, 1]",
-    y = "X[2, 1]",
-    fill = "density"
-  ) +
-  theme_minimal()
+norm_density <-
+  eval_points |> 
+  rowwise() |> 
+  mutate(density = dtnorm(c(x11, x21), mu = mu, sigmas = sigmas)) |> 
+  ungroup()
 
-ggplot(grid, aes(x = x11, y = x21, fill = dens)) +
+ggplot(norm_density, aes(x = x11, y = x21, fill = density)) +
   geom_raster() +
   scale_fill_viridis_c() +
   coord_fixed() +
-  labs(x = "X[1, 1]",
-       y = "X[2, 1]", 
-       fill = "density"
+  labs(x = "X1", y = "X2", fill = "Density") +
+  theme_minimal()
+```
+
+
+```{r}
+mu <- matrix(c(1, 2,
+               3, 4), nrow = 2)
+
+skew <- matrix(c(2, 1,
+                 1, 0.5), nrow = 2)
+
+s1 <- matrix(c(1, 0.5, 0.5, 2), nrow = 2)
+s2 <- matrix(c(2, 1, 1, 2), nrow = 2)
+  
+eval_points <- 
+  expand_grid(
+    x11 = seq(-2, 6, length.out = 40),
+    x21 = seq(-2, 6, length.out = 40),
+    x12 = 0:10, #seq(-2, 6, length.out = 20),
+    x22 = 0:10) #seq(-2, 6, length.out = 20))
+
+matrix_skewt_density <-
+  eval_points |> 
+  rowwise() |> 
+  mutate(log_density = dtskewt(matrix(c(x11, x21, x12, x22), nrow = 2),
+                               mu = mu, sigmas = list(s1, s2), skew = skew,
+                               nu = 20, log = TRUE)) |>
+  ungroup()
+
+matrix_skewt_density |> 
+  mutate(x12_lab = factor(round(x12, 2), 
+                          levels = sort(unique(round(x12, 2)))),
+         x22_lab = factor(round(x22, 2), 
+                          levels = sort(unique(round(x22, 2))))) |> 
+  ggplot(aes(x = x11, y = x21, fill = log_density)) +
+  geom_raster() +
+  facet_grid(rows = vars(`X[2,2]` = x22_lab),
+             cols = vars(`X[1,2]` = x12_lab), 
+             labeller = label_both) +
+  scale_fill_viridis_c(option = "H") +
+  coord_fixed() +
+  labs(x = "X[1,1]", y = "X[2,1]",
+      fill = "log density",
+      title = "Skewed T") +
+  theme_minimal(base_size = 9)
+```
+
+
+```{r}
+# mu <- matrix(c(1, 2,
+#                3, 4), nrow = 2)
+# 
+# skew <- matrix(c(2, 1,
+#                  1, 0.5), nrow = 2)
+# 
+# s1 <- crossprod(matrix(rnorm(4), nrow = 2))
+# s2 <- crossprod(matrix(rnorm(4), nrow = 2))
+# 
+# eval_points <- 
+#   expand_grid(
+#     x11 = seq(-2, 6, length.out = 40),
+#     x21 = seq(-2, 6, length.out = 40),
+#     x12 = 0:10, #seq(-2, 6, length.out = 20),
+#     x22 = 0:10) #seq(-2, 6, length.out = 20))
+
+matrix_normal_density <-
+  eval_points |> 
+  rowwise() |> 
+  mutate(log_density = dtnorm(matrix(c(x11, x21, x12, x22), nrow = 2),
+                              mu = mu, sigmas = list(s1, s2), log = TRUE)) |>
+  ungroup()
+
+matrix_normal_density |> 
+  mutate(x12_lab = factor(round(x12, 2), 
+                          levels = sort(unique(round(x12, 2)))),
+         x22_lab = factor(round(x22, 2), 
+                          levels = sort(unique(round(x22, 2))))) |> 
+  ggplot(aes(x = x11, y = x21, fill = log_density)) +
+  geom_raster() +
+  facet_grid(rows = vars(`X[2,2]` = x22_lab),
+             cols = vars(`X[1,2]` = x12_lab), 
+             labeller = label_both) +
+  scale_fill_viridis_c(option = "H") +
+  coord_fixed() +
+  labs(x = "X[1,1]", y = "X[2,1]",
+      fill = "log density",
+      title = "Normal") +
+  theme_minimal(base_size = 9)
+```
+
+
+```{r}
+mu <- matrix(c(0.5, 0.25, 0.25, 0.5), nrow = 2)
+
+skew_settings <- tibble(
+  skew_name = c("No skew", "Mild skew", "Strong skew"),
+  skew = list(
+    matrix(c(1e-6, 1e-6, 1e-6, 1e-6), nrow = 2),
+    matrix(c(1, 0.5, 0.5, 0.25), nrow = 2),
+    matrix(c(2, 1, 1, 0.5), nrow = 2)
+  )
+)
+
+eval_points_2d <-
+  expand_grid(
+    x11 = seq(-10, 10, length.out = 200),
+    x21 = seq(-10, 10, length.out = 200)
+  )
+
+density_compare <-
+  skew_settings |>
+  mutate(skew_name = factor(skew_name, 
+                            levels = c("No skew", "Mild skew", "Strong skew"))) |> 
+  crossing(eval_points_2d) |>
+  rowwise() |>
+  mutate(
+    log_density = dtskewt(
+      matrix(c(x11, x21,
+               mu[1, 2], mu[2, 2]), nrow = 2),
+      mu = mu,
+      sigmas = list(s1, s2),
+      skew = skew,
+      nu = 20,
+      log = TRUE
+    )
+  ) |>
+  ungroup()
+
+ggplot(density_compare, aes(x = x11, y = x21)) +
+  geom_raster(aes(fill = log_density)) +
+  geom_contour(aes(z = log_density), color = "black") +
+  facet_wrap(~skew_name, nrow = 1) +
+  scale_fill_viridis_c(option = "H") +
+  coord_fixed() +
+  labs(
+    x = "X[1,1]",
+    y = "X[2,1]",
+    fill = "log density",
+    title = "Effect of skew on a matrix-variate skew-t density",
+    subtitle = "X[1,2] and X[2,2] fixed at their mean values"
   ) +
   theme_minimal()
 ```
 
+
+```{r}
+ggplot(density_compare, aes(x = x11, y = x21)) +
+  geom_raster(aes(fill = log_density)) +
+  geom_contour(aes(z = log_density), color = "black") +
+  facet_wrap(~ skew_name, nrow = 1) +
+  scale_fill_viridis_b(option = "H", n.breaks = 10) +
+  coord_fixed() +
+  theme_minimal()
+```
+
+
+```{r}
+ggplot(density_compare, aes(x = x11, y = x21)) +
+  geom_contour_filled(aes(z = log_density), bins = 12) +
+  geom_contour(aes(z = log_density), color = "black", bins = 12) +
+  facet_wrap(~skew_name, nrow = 1) +
+  scale_fill_viridis_d(option = "H") +
+  coord_fixed() +
+    labs(
+    x = "X[1,1]",
+    y = "X[2,1]",
+    fill = "Relative log density",
+    title = "Effect of skew on a matrix-variate skew-t density",
+    subtitle = "X[1,2] and X[2,2] fixed at their mean values"
+  ) + 
+  theme_minimal()
+```
