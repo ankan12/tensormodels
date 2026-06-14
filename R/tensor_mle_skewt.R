@@ -213,14 +213,8 @@ tensor_mle_skewt <- function(data, max_iter = 1e3, tol = 1e-6,
 
     # Step 5: Check convergence
 
-    total_loglik <- 0
-
-    for(i in 1:n) {
-      total_loglik <- total_loglik +
-        dtskewt(data[[i]], mu, skew, sigmas, nu, log = TRUE)
-    }
-
-    logliks[t] <- total_loglik
+    eval_dtskewt <- .make_dtskewt_evaluator(mu, skew, sigmas, nu)
+    logliks[t] <- sum(eval_dtskewt(data, log = TRUE))
 
     if(t >= 3) {
       ll_rel <- abs(logliks[t] - logliks[t - 1]) /

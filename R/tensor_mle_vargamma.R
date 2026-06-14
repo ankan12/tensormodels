@@ -202,14 +202,8 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
 
     # Step 5: Check convergence
 
-    total_loglik <- 0
-
-    for(i in 1:n) {
-      total_loglik <- total_loglik +
-        dtvargamma(data[[i]], mu, skew, sigmas, gamma, log = TRUE)
-    }
-
-    logliks[t] <- total_loglik
+    eval_dtvargamma <- .make_dtvargamma_evaluator(mu, skew, sigmas, gamma)
+    logliks[t] <- sum(eval_dtvargamma(data, log = TRUE))
 
     if(t >= 3) {
       ll_rel <- abs(logliks[t] - logliks[t - 1]) /

@@ -9,10 +9,10 @@ library(tensormodels)
 library(tidyverse)
 ```
 
-
 ## Poisson Sim for EM
 
 The mean of $x_{1}$ is $\lambda_{1}$ and the mean of $y_{1}$ is $\beta * \lambda_{1}$.
+
 ```{r}
 n <- 20
 
@@ -29,11 +29,9 @@ lambdas_hat <- (x + y)/(beta_hat + 1)
 sqrt(mean((lambdas_hat - lambdas)^2))
 ```
 
-
 ```{r}
 
 ```
-
 
 ## Normal Mean-Variance Mixture with $U \sim Unif(0, 1)$
 
@@ -61,7 +59,6 @@ mean_mix <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, nu = 4) {
 }
 ```
 
-
 ```{r}
 s1 <- matrix(c(1, 0.25, 0.25, 0.5), nrow = 2)
 
@@ -86,7 +83,6 @@ noskew_draws_pos |>
   theme_minimal()
 ```
 
-
 ```{r}
 mix_unif_skew <- mean_mix(n = n, mu = c(1, 2), 
                           sigmas = list(s1), skew = c(2, 1))
@@ -102,7 +98,6 @@ skew_draws_pos |>
   theme_minimal()
 ```
 
-
 ```{r}
 # mix_skewt <- rtskewt(n = 1e3, mu = c(1, 2), 
 #                      sigmas = list(s1), skew = c(2, 1),
@@ -116,7 +111,7 @@ skewt_density <-
   eval_points |> 
   rowwise() |> 
   mutate(density = dtskewt(c(x11, x21), 
-                           mu = c(1, 2), sigmas = sigmas, skew = c(2, 1), 
+                           mu = c(1, 2), sigmas = list(s1), skew = c(2, 1), 
                            nu = 20))
 
 ggplot(skewt_density, aes(x = x11, y = x21, fill = density)) +
@@ -127,19 +122,17 @@ ggplot(skewt_density, aes(x = x11, y = x21, fill = density)) +
   theme_minimal()
 ```
 
-
 ```{r}
-skewt_draws_pos <- map_dfr(.x = 1:n, .f = pull_draw, 
-                          data = mix_skewt)
-
-skewt_draws_pos |> 
-  ggplot() +
-  geom_histogram(aes(x = val), color = "black", fill = "lightpink") +
-  facet_wrap(~pos, nrow = 2) +
-  labs(x = "Value", y = "Count") +
-  theme_minimal()
+# skewt_draws_pos <- map_dfr(.x = 1:n, .f = pull_draw, 
+#                           data = mix_skewt)
+# 
+# skewt_draws_pos |> 
+#   ggplot() +
+#   geom_histogram(aes(x = val), color = "black", fill = "lightpink") +
+#   facet_wrap(~pos, nrow = 2) +
+#   labs(x = "Value", y = "Count") +
+#   theme_minimal()
 ```
-
 
 ```{r}
 mu <- matrix(c(0, 0), nrow = 2, ncol = 1)
@@ -147,23 +140,31 @@ mu <- matrix(c(0, 0), nrow = 2, ncol = 1)
 sigmas <- list(matrix(c(1, 0.5,
                         0.5, 1), nrow = 2))
 
-eval_points <- expand_grid(x11 = seq(-4, 4, length.out = 150),
-                           x21 = seq(-4, 4, length.out = 150))
+eval_points <- expand_grid(x11 = seq(-8, 8, length.out = 150),
+                           x21 = seq(-8, 8, length.out = 150)) 
+
+eval_mat <- as.matrix(eval_points)
+
+eval_dtnorm <- .make_dtnorm_evaluator(mu, sigmas, log = TRUE)
+
+dtnorm_density <- vector("numeric", nrow(eval_points))
+
+for(i in 1:nrow(eval_points)) {
+  dtnorm_density[[i]] <- eval_dtnorm(matrix(eval_mat[i,], nrow = 2))
+}
 
 norm_density <-
   eval_points |> 
-  rowwise() |> 
-  mutate(density = dtnorm(c(x11, x21), mu = mu, sigmas = sigmas)) |> 
-  ungroup()
+  mutate(log_density = dtnorm_density) 
 
-ggplot(norm_density, aes(x = x11, y = x21, fill = density)) +
-  geom_raster() +
+ggplot(norm_density, aes(x = x11, y = x21)) +
+  geom_raster(aes(fill = log_density)) +
+  geom_contour(aes(z = log_density), color = "black") +
   scale_fill_viridis_c() +
   coord_fixed() +
-  labs(x = "X1", y = "X2", fill = "Density") +
+  labs(x = "X1", y = "X2", fill = "Log Density") +
   theme_minimal()
 ```
-
 
 ```{r}
 mu <- matrix(c(1, 2,
@@ -176,21 +177,26 @@ s1 <- matrix(c(1, 0.5, 0.5, 2), nrow = 2)
 s2 <- matrix(c(2, 1, 1, 2), nrow = 2)
   
 eval_points <- 
-  expand_grid(
-    x11 = seq(-2, 6, length.out = 40),
-    x21 = seq(-2, 6, length.out = 40),
-    x12 = 0:10, #seq(-2, 6, length.out = 20),
-    x22 = 0:10) #seq(-2, 6, length.out = 20))
+  expand_grid(x11 = seq(-2, 6, length.out = 40),
+              x21 = seq(-2, 6, length.out = 40),
+              x12 = 0:10, x22 = 0:10) 
 
-matrix_skewt_density <-
+eval_matrix <- as.matrix(eval_points)
+
+dtskewt_density <- vector("numeric", nrow(eval_points))
+
+eval_dtskewt <- .make_dtskewt_evaluator(mu, skew, sigmas = list(s1, s2), 
+                                        nu = 20, log = TRUE)
+
+for(i in 1:nrow(eval_points)) {
+  dtskewt_density[[i]] <- eval_dtskewt(matrix(eval_matrix[i,], nrow = 2))
+}
+
+mat_skewt_density <-
   eval_points |> 
-  rowwise() |> 
-  mutate(log_density = dtskewt(matrix(c(x11, x21, x12, x22), nrow = 2),
-                               mu = mu, sigmas = list(s1, s2), skew = skew,
-                               nu = 20, log = TRUE)) |>
-  ungroup()
+  mutate(log_density = dtskewt_density) 
 
-matrix_skewt_density |> 
+mat_skewt_density |> 
   mutate(x12_lab = factor(round(x12, 2), 
                           levels = sort(unique(round(x12, 2)))),
          x22_lab = factor(round(x22, 2), 
@@ -203,11 +209,10 @@ matrix_skewt_density |>
   scale_fill_viridis_c(option = "H") +
   coord_fixed() +
   labs(x = "X[1,1]", y = "X[2,1]",
-      fill = "log density",
+      fill = "Log Density",
       title = "Skewed T") +
   theme_minimal(base_size = 9)
 ```
-
 
 ```{r}
 # mu <- matrix(c(1, 2,
@@ -226,14 +231,19 @@ matrix_skewt_density |>
 #     x12 = 0:10, #seq(-2, 6, length.out = 20),
 #     x22 = 0:10) #seq(-2, 6, length.out = 20))
 
-matrix_normal_density <-
-  eval_points |> 
-  rowwise() |> 
-  mutate(log_density = dtnorm(matrix(c(x11, x21, x12, x22), nrow = 2),
-                              mu = mu, sigmas = list(s1, s2), log = TRUE)) |>
-  ungroup()
+dtnorm_density <- vector("numeric", nrow(eval_points))
 
-matrix_normal_density |> 
+eval_matnorm <- .make_dtnorm_evaluator(mu, sigmas = list(s1, s2), log = TRUE)
+
+for(i in 1:nrow(eval_points)) {
+  dtnorm_density[[i]] <- eval_matnorm(matrix(eval_matrix[i,], nrow = 2))
+}
+
+mat_normal_density <-
+  eval_points |> 
+  mutate(log_density = dtnorm_density) 
+
+mat_normal_density |> 
   mutate(x12_lab = factor(round(x12, 2), 
                           levels = sort(unique(round(x12, 2)))),
          x22_lab = factor(round(x22, 2), 
@@ -250,7 +260,6 @@ matrix_normal_density |>
       title = "Normal") +
   theme_minimal(base_size = 9)
 ```
-
 
 ```{r}
 mu <- matrix(c(0.5, 0.25, 0.25, 0.5), nrow = 2)
@@ -305,7 +314,6 @@ ggplot(density_compare, aes(x = x11, y = x21)) +
   theme_minimal()
 ```
 
-
 ```{r}
 ggplot(density_compare, aes(x = x11, y = x21)) +
   geom_raster(aes(fill = log_density)) +
@@ -315,7 +323,6 @@ ggplot(density_compare, aes(x = x11, y = x21)) +
   coord_fixed() +
   theme_minimal()
 ```
-
 
 ```{r}
 ggplot(density_compare, aes(x = x11, y = x21)) +
