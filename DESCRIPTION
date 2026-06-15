@@ -12,6 +12,7 @@ LinkingTo:
     Rcpp, RcppEigen
 Imports: 
     Bessel,
+    ggplot2,
     Rcpp
 Suggests: 
     testthat (>= 3.0.0)

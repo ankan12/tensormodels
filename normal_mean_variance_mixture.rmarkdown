@@ -77,140 +77,99 @@ pull_draw <- function(i, data) {
 noskew_draws_pos <- map_dfr(.x = 1:n, .f = pull_draw, 
                             data = mix_unif_noskew)
 
+density_breaks <- seq(0, 1, length.out = 10)
+
+noskew_plot <- 
+  noskew_draws_pos |> 
+  pivot_wider(names_from = pos, values_from = val) |> 
+  ggplot(aes(x = x1, y = x2)) +
+  geom_density_2d_filled(breaks = density_breaks) +
+  coord_fixed() +
+  labs(x = expression(X[1]),
+       y = expression(X[2]),
+       title = "No Skew",
+       fill = "density") +
+  theme_minimal()
+```
+
+
+```{r}
 mix_unif_skew <- mean_mix(n = n, mu = c(1, 2), 
                           sigmas = list(s1), skew = c(2, 1))
 
 skew_draws_pos <- map_dfr(.x = 1:n, .f = pull_draw, 
                           data = mix_unif_skew)
 
-mean_points <-
-  tibble(setting = c("No Skew", "Skew = c(2, 1)"),
-         x1 = c(1, 2), x2 = c(2, 2.5),
-         point = c("E[X] no skew", "E[X] skew"))
-
-bind_rows(noskew_draws_pos |> mutate(setting = "No Skew"),
-          skew_draws_pos |> mutate(setting = "Skew = c(2, 1)")) |>
+skew_plot <-
+  skew_draws_pos |> 
   pivot_wider(names_from = pos, values_from = val) |> 
-  ggplot(aes(x = x1, y = x2)) + 
-  geom_hdr() +
-  # geom_density_2d_filled(breaks = seq(0.1, 1, by = 0.1),
-  #                        color = "black", linewidth = 0.2) +
-  geom_point(data = mean_points,
-             aes(x = x1, y = x2, color = point), size = 1.2) +
-  facet_wrap(~setting) +
-  scale_fill_viridis_d() +
+  ggplot(aes(x = x1, y = x2)) +
+  geom_density_2d_filled(breaks = density_breaks) +
   coord_fixed() +
   labs(x = expression(X[1]),
        y = expression(X[2]),
-       fill = "Density",
-       color = "Mean") +
+       title = "Skew = c(2, 1)",
+       fill = "density") +
   theme_minimal()
+
+noskew_plot + skew_plot +
+  plot_layout(guides = "collect")  &
+  scale_fill_viridis_d()
 ```
 
 
 ```{r}
-eval_points <- 
-  expand_grid(x11 = seq(-4, 8, length.out = 150),
-              x21 = seq(-4, 8, length.out = 150))
+bind_rows(noskew_draws_pos |> mutate(setting = "No Skew"),
+          skew_draws_pos |> mutate(setting = "Skew = c(2, 1)")) |>
+  pivot_wider(names_from = pos, values_from = val)
 
-skewt_density <-
-  eval_points |> 
-  rowwise() |> 
-  mutate(log_density = dtskewt(c(x11, x21), 
-                           mu = c(1, 2), sigmas = list(s1), skew = c(2, 1), 
-                           nu = 20, log = TRUE))
-
-ggplot(skewt_density, aes(x = x11, y = x21)) +
-  geom_raster(aes(fill = log_density)) +
-  geom_contour(aes(z = log_density), color = "black", linewidth = 0.4) +
-  scale_fill_viridis_c(option = "turbo") +
-  coord_fixed() +
-  labs(x = "X[1, 1]", y = "X[2, 1]", fill = "Log density") +
-  theme_minimal()
-```
-
-
-```{r}
-nu_vals <- seq(4, 24, by = 4)
-
-mean_diff_nus <-
-  tibble(nu = nu_vals,
-         x1 = 1 + (nu)/(nu-2) * 2,
-         x2 = 2 + (nu)/(nu-2) * 1,
-         point = as.character(nu))
-
-
-eval_points <- 
-  expand_grid(
-    x11 = seq(-4, 10, length.out = 200),
-    x21 = seq(-4, 10, length.out = 200)
-  )
-
-x_list <- purrr::pmap(
-  list(eval_points$x11, eval_points$x21),
-  \(x11, x21) c(x11, x21)
-)
-
-skewt_density <-
-  tibble(nu = nu_vals) |>
-  mutate(
-    eval_dtskewt = purrr::map(
-      nu,
-      \(curr_nu) .make_dtskewt_evaluator(
-        mu = c(1, 2),
-        sigmas = list(s1),
-        skew = c(2, 1),
-        nu = curr_nu,
-        log = TRUE
-      )
-    ),
-    density_grid = purrr::map2(
-      nu,
-      eval_dtskewt,
-      \(curr_nu, f) {
-        eval_points |>
-          mutate(
-            nu = curr_nu,
-            log_density = f(x_list)
-          )
-      }
-    )
-  ) |>
-  select(density_grid) |>
-  tidyr::unnest(density_grid) |>
-  mutate(nu = factor(nu, levels = nu_vals))
-```
-
-
-```{r}
-ggplot(skewt_density, aes(x = x11, y = x21)) +
-  geom_raster(aes(fill = log_density), interpolate = TRUE) +
-  geom_contour(aes(z = log_density), color = "black", linewidth = 0.25) +
-  geom_point(data = mean_diff_nus,
-             aes(x = x1, y = x2), size = 1.2, color = "blue") +
-  facet_wrap(~ nu, ncol = 2) +
-  scale_fill_viridis_c(option = "turbo") +
+ggplot(both_draws, aes(x = x1, y = x2)) +
+  geom_density_2d_filled(breaks = density_breaks) +
+  facet_wrap(~ setting) +
+  scale_fill_viridis_d(drop = FALSE) +
   coord_fixed() +
   labs(
     x = expression(X[1]),
     y = expression(X[2]),
-    fill = "log density",
-    title = "Skew-t density across degrees of freedom",
-    subtitle = expression(mu == c(1, 2) * "," ~ A == c(2, 1))
+    fill = "density"
   ) +
   theme_minimal()
 ```
 
 ```{r}
-skewt_draws_pos <- map_dfr(.x = 1:n, .f = pull_draw,
-                          data = mix_skewt)
+# mix_skewt <- rtskewt(n = 1e3, mu = c(1, 2), 
+#                      sigmas = list(s1), skew = c(2, 1),
+#                      nu = 20)
 
-skewt_draws_pos |>
-  ggplot() +
-  geom_histogram(aes(x = val), color = "black", fill = "lightpink") +
-  facet_wrap(~pos, nrow = 2) +
-  labs(x = "Value", y = "Count") +
+eval_points <- 
+  expand_grid(x11 = seq(-2, 6, length.out = 150),
+              x21 = seq(-2, 6, length.out = 150))
+
+skewt_density <-
+  eval_points |> 
+  rowwise() |> 
+  mutate(density = dtskewt(c(x11, x21), 
+                           mu = c(1, 2), sigmas = list(s1), skew = c(2, 1), 
+                           nu = 20))
+
+ggplot(skewt_density, aes(x = x11, y = x21, fill = density)) +
+  geom_raster() +
+  scale_fill_viridis_c() +
+  coord_fixed() +
+  labs(x = "X[1, 1]", y = "X[2, 1]", fill = "density") +
   theme_minimal()
+```
+
+```{r}
+# skewt_draws_pos <- map_dfr(.x = 1:n, .f = pull_draw, 
+#                           data = mix_skewt)
+# 
+# skewt_draws_pos |> 
+#   ggplot() +
+#   geom_histogram(aes(x = val), color = "black", fill = "lightpink") +
+#   facet_wrap(~pos, nrow = 2) +
+#   labs(x = "Value", y = "Count") +
+#   theme_minimal()
 ```
 
 ```{r}
@@ -238,10 +197,10 @@ norm_density <-
 
 ggplot(norm_density, aes(x = x11, y = x21)) +
   geom_raster(aes(fill = log_density)) +
-  geom_contour(aes(z = log_density), color = "black", linewidth = 0.4) +
-  scale_fill_viridis_c(option = "turbo") +
+  geom_contour(aes(z = log_density), color = "black") +
+  scale_fill_viridis_c() +
   coord_fixed() +
-  labs(x = "X1", y = "X2", fill = "Log Density", title = "Normal") +
+  labs(x = "X1", y = "X2", fill = "Log Density") +
   theme_minimal()
 ```
 
@@ -468,3 +427,4 @@ ggplot(density_compare, aes(x = x11, y = x21)) +
   ) + 
   theme_minimal()
 ```
+
