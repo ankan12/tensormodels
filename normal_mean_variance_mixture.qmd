@@ -60,6 +60,8 @@ mean_mix <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, nu = 4) {
 ```
 
 
+### dunifmix no skew vs skew
+
 ```{r}
 s1 <- matrix(c(1, 0.25, 0.25, 0.5), nrow = 2)
 
@@ -92,46 +94,120 @@ bind_rows(noskew_draws_pos |> mutate(setting = "No Skew"),
           skew_draws_pos |> mutate(setting = "Skew = c(2, 1)")) |>
   pivot_wider(names_from = pos, values_from = val) |> 
   ggplot(aes(x = x1, y = x2)) + 
-  geom_hdr() +
-  # geom_density_2d_filled(breaks = seq(0.1, 1, by = 0.1),
-  #                        color = "black", linewidth = 0.2) +
+  geom_density_2d_filled(breaks = seq(0.1, 1, by = 0.1),
+                          color = "black", linewidth = 0.2) +
   geom_point(data = mean_points,
              aes(x = x1, y = x2, color = point), size = 1.2) +
   facet_wrap(~setting) +
-  scale_fill_viridis_d() +
+  scale_fill_viridis_d(option = "D") +
   coord_fixed() +
-  labs(x = expression(X[1]),
-       y = expression(X[2]),
+  labs(x = TeX("$\\X_{1}$"),
+       y = TeX("$\\X_{2}$"),
        fill = "Density",
-       color = "Mean") +
-  theme_minimal()
+       color = "Mean",
+       title = TeX("W $\\sim$ Unif(0, 1)")) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
 ```
 
 
+### dtskewt no skew vs skew
+
 ```{r}
+# 
+# ggplot() +
+#   geom_hdr_fun(fun = noskew_fun, xlim = c(-3, 5), ylim = c(-3, 6),
+#                probs = c(0.50, 0.75, 0.95, 0.99),
+#                aes(fill = factor(after_stat(probs))),
+#                color = "black", linewidth = 0.4, alpha = 0.6) +
+#   scale_fill_viridis_d(name = "HDR probability", direction = -1) +
+#   coord_fixed() +
+#   labs(x = expression(X[1]), y = expression(X[2])) +
+#   theme_minimal() +
+# ggplot() +
+#   geom_hdr_fun(fun = skew_fun, xlim = c(-3, 5), ylim = c(-3, 6),
+#                probs = c(0.50, 0.75, 0.95, 0.99),
+#                aes(fill = factor(after_stat(probs))),
+#                color = "black", linewidth = 0.4, alpha = 0.6) +
+#   scale_fill_viridis_d(name = "HDR probability", direction = -1) +
+#   coord_fixed() +
+#   labs(x = expression(X[1]), y = expression(X[2])) +
+#   theme_minimal()
+
 eval_points <- 
-  expand_grid(x11 = seq(-4, 8, length.out = 150),
-              x21 = seq(-4, 8, length.out = 150))
+  expand_grid(x11 = seq(-6, 8, length.out = 300),
+              x21 = seq(-6, 8, length.out = 300))
+
+noskew_skewt_density <-
+  eval_points |> 
+  rowwise() |> 
+  mutate(log_density = dtskewt(c(x11, x21), 
+                               mu = c(1, 2), sigmas = list(s1), 
+                               skew = c(1e-6, 1e-6), 
+                               nu = 20, log = TRUE))
 
 skewt_density <-
   eval_points |> 
   rowwise() |> 
   mutate(log_density = dtskewt(c(x11, x21), 
-                           mu = c(1, 2), sigmas = list(s1), skew = c(2, 1), 
-                           nu = 20, log = TRUE))
+                               mu = c(1, 2), sigmas = list(s1), skew = c(2, 1), 
+                               nu = 20, log = TRUE))
 
-ggplot(skewt_density, aes(x = x11, y = x21)) +
+bind_rows(noskew_skewt_density |> mutate(skew = "No skew"),
+          skewt_density |> mutate(skew = "Skew = c(2, 1)")) |> 
+  ggplot(aes(x = x11, y = x21)) +
   geom_raster(aes(fill = log_density)) +
   geom_contour(aes(z = log_density), color = "black", linewidth = 0.4) +
-  scale_fill_viridis_c(option = "turbo") +
+  facet_grid(~skew) +
+  scale_fill_viridis_c(option = "D") +
   coord_fixed() +
-  labs(x = "X[1, 1]", y = "X[2, 1]", fill = "Log density") +
+  labs(x = TeX("$\\X_{1}$"),
+       y = TeX("$\\X_{2}$"),
+       fill = "Log Density",
+       title = TeX("W $\\sim$ Inv-Gamma(10, 10)")) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+
+### dtskewt hdr no skew vs skew
+
+```{r}
+noskew_dtskewt <- .make_dtskewt_evaluator(mu = c(1, 2), skew = c(1e-6, 1e-6), sigmas = list(s1), nu = 20)
+
+noskew_fun <- function(x, y) {
+  x_list <- Map(c, x, y)
+  noskew_dtskewt(x_list)
+}
+
+skew_dtskewt <- .make_dtskewt_evaluator(mu = c(1, 2), skew = c(2, 1), sigmas = list(s1), nu = 20)
+
+skew_fun <- function(x, y) {
+  x_list <- Map(c, x, y)
+  skew_dtskewt(x_list)
+}
+
+ggplot() + 
+  geom_hdr_fun(fun = noskew_fun, xlim = c(-6, 8), ylim = c(-6, 8)) +
+  labs(x = TeX("$\\X_{1}$"),
+       y = TeX("$\\X_{2}$"),
+       subtitle = "No skew") + 
+  coord_fixed(xlim = c(-6, 8), ylim = c(-6, 8)) +
+  theme_minimal() +
+ggplot(skewt_density, aes(x = x11, y = x21)) + 
+  geom_hdr_fun(fun = skew_fun, xlim = c(-6, 8), ylim = c(-6, 8)) +
+  labs(x = TeX("$\\X_{1}$"),
+       y = TeX("$\\X_{2}$"),
+       subtitle = "Skew = c(2, 1)") +
+  coord_fixed(xlim = c(-6, 8), ylim = c(-6, 8)) +
   theme_minimal()
 ```
 
 
+### dtskewt different nu
+
 ```{r}
-nu_vals <- seq(4, 24, by = 4)
+nu_vals <- seq(4, 26, by = 2) 
 
 mean_diff_nus <-
   tibble(nu = nu_vals,
@@ -141,64 +217,44 @@ mean_diff_nus <-
 
 
 eval_points <- 
-  expand_grid(
-    x11 = seq(-4, 10, length.out = 200),
-    x21 = seq(-4, 10, length.out = 200)
-  )
+  expand_grid(x11 = seq(-4, 10, length.out = 200),
+              x21 = seq(-4, 10, length.out = 200))
 
-x_list <- purrr::pmap(
-  list(eval_points$x11, eval_points$x21),
-  \(x11, x21) c(x11, x21)
-)
+x_list <- vector(mode = "list", length = 200*200)
+
+for(i in 1:(200*200)) {
+  x_list[[i]] <- unlist(eval_points[i,])
+}
 
 skewt_density <-
-  tibble(nu = nu_vals) |>
-  mutate(
-    eval_dtskewt = purrr::map(
-      nu,
-      \(curr_nu) .make_dtskewt_evaluator(
-        mu = c(1, 2),
-        sigmas = list(s1),
-        skew = c(2, 1),
-        nu = curr_nu,
-        log = TRUE
-      )
-    ),
-    density_grid = purrr::map2(
-      nu,
-      eval_dtskewt,
-      \(curr_nu, f) {
-        eval_points |>
-          mutate(
-            nu = curr_nu,
-            log_density = f(x_list)
-          )
-      }
-    )
-  ) |>
-  select(density_grid) |>
-  tidyr::unnest(density_grid) |>
+  tibble(nu = nu_vals) |> 
+  rowwise() |> 
+  mutate(eval_dtskewt = 
+         list(.make_dtskewt_evaluator(mu = c(1, 2), sigmas = list(s1),
+                                      skew = c(2, 1), nu = nu, log = TRUE))) |> 
+  mutate(density_grid = list(mutate(eval_points, nu = nu, 
+                                    log_density = eval_dtskewt(x_list)))) |>
+  ungroup() |> 
+  select(density_grid) |> 
+  unnest(density_grid) |> 
   mutate(nu = factor(nu, levels = nu_vals))
-```
 
-
-```{r}
 ggplot(skewt_density, aes(x = x11, y = x21)) +
   geom_raster(aes(fill = log_density), interpolate = TRUE) +
   geom_contour(aes(z = log_density), color = "black", linewidth = 0.25) +
   geom_point(data = mean_diff_nus,
              aes(x = x1, y = x2), size = 1.2, color = "blue") +
-  facet_wrap(~ nu, ncol = 2) +
-  scale_fill_viridis_c(option = "turbo") +
+  facet_wrap(~ nu, ncol = 4) +
+  scale_fill_viridis_c(option = "D") +
   coord_fixed() +
-  labs(
-    x = expression(X[1]),
-    y = expression(X[2]),
-    fill = "log density",
-    title = "Skew-t density across degrees of freedom",
-    subtitle = expression(mu == c(1, 2) * "," ~ A == c(2, 1))
-  ) +
-  theme_minimal()
+  labs(x = TeX("$\\X_{1}$"),
+       y = TeX("$\\X_{2}$"),
+       fill = "Log density",
+       title = "Skew-t density across degrees of freedom",
+       subtitle = TeX("$\\mu = c(1, 2), A = c(2, 1)$")) +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(hjust = 0.5))
 ```
 
 ```{r}
@@ -212,6 +268,9 @@ skewt_draws_pos |>
   labs(x = "Value", y = "Count") +
   theme_minimal()
 ```
+
+
+## dtnorm
 
 ```{r}
 mu <- matrix(c(0, 0), nrow = 2, ncol = 1)
@@ -239,11 +298,14 @@ norm_density <-
 ggplot(norm_density, aes(x = x11, y = x21)) +
   geom_raster(aes(fill = log_density)) +
   geom_contour(aes(z = log_density), color = "black", linewidth = 0.4) +
-  scale_fill_viridis_c(option = "turbo") +
+  scale_fill_viridis_c(option = "D") +
   coord_fixed() +
   labs(x = "X1", y = "X2", fill = "Log Density", title = "Normal") +
-  theme_minimal()
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
 ```
+
+
 
 ```{r}
 mu <- matrix(c(1, 2,
@@ -290,7 +352,8 @@ mat_skewt_density |>
   labs(x = "X[1,1]", y = "X[2,1]",
       fill = "Log Density",
       title = "Skewed T") +
-  theme_minimal(base_size = 9)
+  theme_minimal(base_size = 9) +
+  theme(plot.title = element_text(hjust = 0.5))
 ```
 
 
