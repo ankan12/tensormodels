@@ -9,13 +9,18 @@ library(tensormodels)
 library(tidyverse)
 library(latex2exp)
 library(patchwork)
+library(ggdensity)
 
 theme_update(plot.title = element_text(hjust = 0.5))
 ```
 
 ## Poisson Sim for EM
 
-The mean of $x_{1}$ is $\lambda_{1}$ and the mean of $y_{1}$ is $\beta * \lambda_{1}$.
+The mean of $x_{1}$ is $\lambda_{1}$ and the mean of $y_{1}$ is $\beta * \lambda_{1}$. If we have all of the data, then we can compute the MLEs as
+
+$$\hat{\beta} = \frac{\sum_{i=1}^{n} y_{i}}{\sum_{i=1}^{n} x_{i}}$$ 
+
+and $$\hat{\lambda}_{i} = \frac{x_{i} + y_{i}}{\hat{\beta} + 1}.$$
 
 ```{r}
 n <- 20
@@ -34,7 +39,132 @@ sqrt(mean((lambdas_hat - lambdas)^2))
 ```
 
 
-## Normal Mean-Variance Mixture with $U \sim Unif(0, 1)$
+Now, suppose we are missing $x_{1}$ and still want to estimate $\lambda_{1}$. The incomplete likelihood is now 
+
+$$L(\beta, \lambda_{1}, \lambda_{2}, \dots, \lambda_{n}|y_{1}, (x_{2}, y_{2}), \dots, (x_{n}, y_{n}) = \\ \left[\prod_{i=1}^{n} \frac{e^{-\beta \lambda_{i}} (\beta \lambda_{i}^{y_{i}})}{y_{i}!} \right] \left[\prod_{i=2}^{n} \frac{e^{-\lambda_{i}} (\lambda_{i}^{x_{i}})}{_{i}!}\right]$$
+
+```{r}
+x_missing <- x[2:n]
+y
+```
+
+
+```{r}
+fit_beta_lambda <- function(x, y) {
+  n <- length(x)
+  
+  neg_loglik <- function(par) {
+    beta <- exp(par[1])
+    lambda <- exp(par[-1])
+    
+    ll_y <- sum(dpois(y, lambda = beta * lambda, log = TRUE))
+    
+    ll_x <- sum(dpois(x[2:n], lambda = lambda[2:n], log = TRUE))
+    
+    -(ll_y + ll_x)
+  }
+  
+  start_beta <- 1
+  start_lambda <- pmax(y/x, 0.1)
+  start_lambda[1] <- 1
+  
+  fit <- optim(par = log(c(start_beta, start_lambda)),
+               fn = neg_loglik, method = "BFGS", hessian = TRUE)
+  
+  beta_hat <- exp(fit$par[1])
+  lambda_hat <- exp(fit$par[-1])
+  
+  list(beta = beta_hat, lambda = lambda_hat)
+}
+
+fit_beta_lambda(x, y)
+```
+
+### EM
+
+```{r}
+fit_beta_lambda_em <- function(x, y, max_iter = 1000, tol = 1e-8) {
+  n <- length(x)
+  
+  beta <- 1
+  lambda <- pmax(y/x, 0.1)
+  lambda[1] <- 1
+
+  loglik <- function(beta, lambda) { # incomplete loglik
+    sum(dpois(y, lambda = beta * lambda, log = TRUE)) +
+      sum(dpois(x[2:n], lambda = lambda[2:n], log = TRUE))
+  }
+
+  loglik_vals <- numeric(max_iter)
+
+  for (iter in seq_len(max_iter)) {
+    beta_old <- beta
+    lambda_old <- lambda
+
+    # E-step
+    x1_hat <- lambda[1] # sufficient stat is lambda1
+
+    # M-step
+    beta <- sum(y) / (x1_hat + sum(x[2:n]))
+
+    lambda[1] <- (x1_hat + y[1]) / (1 + beta)
+    lambda[2:n] <- (x[2:n] + y[2:n]) / (1 + beta)
+
+    loglik_vals[iter] <- loglik(beta, lambda)
+
+    diff <- max(abs(c(beta, lambda) - c(beta_old, lambda_old)))
+
+    if (diff < tol) { #s top when converge
+      loglik_vals <- loglik_vals[seq_len(iter)]
+      break
+    }
+  }
+
+  list(beta = beta, lambda = lambda)
+}
+
+fit_beta_lambda_em(x, y)
+```
+
+
+## Plots of distributions
+
+### dtnorm
+
+```{r}
+mu <- matrix(c(0, 0), nrow = 2, ncol = 1)
+
+sigmas <- list(matrix(c(1, 0.5,
+                        0.5, 1), nrow = 2))
+
+eval_points <- expand_grid(x11 = seq(-8, 8, length.out = 150),
+                           x21 = seq(-8, 8, length.out = 150)) 
+
+eval_mat <- as.matrix(eval_points)
+
+eval_dtnorm <- .make_dtnorm_evaluator(mu, sigmas, log = TRUE)
+
+dtnorm_density <- vector("numeric", nrow(eval_points))
+
+for(i in 1:nrow(eval_points)) {
+  dtnorm_density[[i]] <- eval_dtnorm(matrix(eval_mat[i,], nrow = 2))
+}
+
+norm_density <-
+  eval_points |> 
+  mutate(log_density = dtnorm_density) 
+
+ggplot(norm_density, aes(x = x11, y = x21)) +
+  geom_raster(aes(fill = log_density)) +
+  geom_contour(aes(z = log_density), color = "black", linewidth = 0.4) +
+  scale_fill_viridis_c(option = "D") +
+  coord_fixed() +
+  labs(x = "X1", y = "X2", fill = "Log Density", title = "Normal") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5))
+```
+
+### Normal Mean-Variance Mixture with $U \sim Unif(0, 1)$
 
 ```{r}
 mean_mix <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, nu = 4) {
@@ -138,27 +268,29 @@ eval_points <-
   expand_grid(x11 = seq(-6, 8, length.out = 300),
               x21 = seq(-6, 8, length.out = 300))
 
-noskew_skewt_density <-
-  eval_points |> 
-  rowwise() |> 
-  mutate(log_density = dtskewt(c(x11, x21), 
-                               mu = c(1, 2), sigmas = list(s1), 
-                               skew = c(1e-6, 1e-6), 
-                               nu = 20, log = TRUE))
+multivar_noskewt <- .make_dtskewt_evaluator(mu = c(1, 2), skew = c(1e-6, 1e-6),
+                                          sigmas = list(s1), nu = 20, log = TRUE)
 
-skewt_density <-
-  eval_points |> 
-  rowwise() |> 
-  mutate(log_density = dtskewt(c(x11, x21), 
-                               mu = c(1, 2), sigmas = list(s1), skew = c(2, 1), 
-                               nu = 20, log = TRUE))
 
-bind_rows(noskew_skewt_density |> mutate(skew = "No skew"),
-          skewt_density |> mutate(skew = "Skew = c(2, 1)")) |> 
+multivar_skewt <- .make_dtskewt_evaluator(mu = c(1, 2), skew = c(2, 1),
+                                          sigmas = list(s1), nu = 20, log = TRUE)
+
+multivar_dtnoskewt <- vector("numeric", nrow(eval_points))
+multivar_dtskewt <- vector("numeric", nrow(eval_points))
+
+for(i in 1:nrow(eval_points)) {
+  multivar_dtnoskewt[[i]] <- multivar_noskewt(unlist(eval_points[i,]))
+  multivar_dtskewt[[i]] <- multivar_skewt(unlist(eval_points[i,]))
+}
+
+tibble(eval_points, multivar_dtnoskewt, multivar_dtskewt) |> 
+  pivot_longer(cols = c(multivar_dtnoskewt, multivar_dtskewt)) |> 
+  mutate(name = ifelse(name == "multivar_dtnoskewt", 
+                       "No skew", "Skew = c(2, 1)")) |> 
   ggplot(aes(x = x11, y = x21)) +
-  geom_raster(aes(fill = log_density)) +
-  geom_contour(aes(z = log_density), color = "black", linewidth = 0.4) +
-  facet_grid(~skew) +
+  geom_raster(aes(fill = value)) +
+  geom_contour(aes(z = value), color = "black", linewidth = 0.4) +
+  facet_grid(~name) +
   scale_fill_viridis_c(option = "D") +
   coord_fixed() +
   labs(x = TeX("$\\X_{1}$"),
@@ -188,18 +320,18 @@ skew_fun <- function(x, y) {
 }
 
 ggplot() + 
-  geom_hdr_fun(fun = noskew_fun, xlim = c(-6, 8), ylim = c(-6, 8)) +
+  geom_hdr_fun(fun = noskew_fun, xlim = c(-4, 6), ylim = c(-2, 6)) +
   labs(x = TeX("$\\X_{1}$"),
        y = TeX("$\\X_{2}$"),
        subtitle = "No skew") + 
-  coord_fixed(xlim = c(-6, 8), ylim = c(-6, 8)) +
+  coord_fixed(xlim = c(-4, 8), ylim = c(-2, 6)) +
   theme_minimal() +
 ggplot(skewt_density, aes(x = x11, y = x21)) + 
-  geom_hdr_fun(fun = skew_fun, xlim = c(-6, 8), ylim = c(-6, 8)) +
+  geom_hdr_fun(fun = skew_fun, xlim = c(-4, 6), ylim = c(-2, 6)) +
   labs(x = TeX("$\\X_{1}$"),
        y = TeX("$\\X_{2}$"),
        subtitle = "Skew = c(2, 1)") +
-  coord_fixed(xlim = c(-6, 8), ylim = c(-6, 8)) +
+  coord_fixed(xlim = c(-4, 8), ylim = c(-2, 6)) +
   theme_minimal()
 ```
 
@@ -244,7 +376,7 @@ ggplot(skewt_density, aes(x = x11, y = x21)) +
   geom_contour(aes(z = log_density), color = "black", linewidth = 0.25) +
   geom_point(data = mean_diff_nus,
              aes(x = x1, y = x2), size = 1.2, color = "blue") +
-  facet_wrap(~ nu, ncol = 4) +
+  facet_wrap(~nu, ncol = 4) +
   scale_fill_viridis_c(option = "D") +
   coord_fixed() +
   labs(x = TeX("$\\X_{1}$"),
@@ -257,55 +389,8 @@ ggplot(skewt_density, aes(x = x11, y = x21)) +
         plot.subtitle = element_text(hjust = 0.5))
 ```
 
-```{r}
-skewt_draws_pos <- map_dfr(.x = 1:n, .f = pull_draw,
-                          data = mix_skewt)
 
-skewt_draws_pos |>
-  ggplot() +
-  geom_histogram(aes(x = val), color = "black", fill = "lightpink") +
-  facet_wrap(~pos, nrow = 2) +
-  labs(x = "Value", y = "Count") +
-  theme_minimal()
-```
-
-
-## dtnorm
-
-```{r}
-mu <- matrix(c(0, 0), nrow = 2, ncol = 1)
-
-sigmas <- list(matrix(c(1, 0.5,
-                        0.5, 1), nrow = 2))
-
-eval_points <- expand_grid(x11 = seq(-8, 8, length.out = 150),
-                           x21 = seq(-8, 8, length.out = 150)) 
-
-eval_mat <- as.matrix(eval_points)
-
-eval_dtnorm <- .make_dtnorm_evaluator(mu, sigmas, log = TRUE)
-
-dtnorm_density <- vector("numeric", nrow(eval_points))
-
-for(i in 1:nrow(eval_points)) {
-  dtnorm_density[[i]] <- eval_dtnorm(matrix(eval_mat[i,], nrow = 2))
-}
-
-norm_density <-
-  eval_points |> 
-  mutate(log_density = dtnorm_density) 
-
-ggplot(norm_density, aes(x = x11, y = x21)) +
-  geom_raster(aes(fill = log_density)) +
-  geom_contour(aes(z = log_density), color = "black", linewidth = 0.4) +
-  scale_fill_viridis_c(option = "D") +
-  coord_fixed() +
-  labs(x = "X1", y = "X2", fill = "Log Density", title = "Normal") +
-  theme_minimal() +
-  theme(plot.title = element_text(hjust = 0.5))
-```
-
-
+### dtskewt matrix variate
 
 ```{r}
 mu <- matrix(c(1, 2,
@@ -342,8 +427,9 @@ mat_skewt_density |>
                           levels = sort(unique(round(x12, 2)))),
          x22_lab = factor(round(x22, 2), 
                           levels = sort(unique(round(x22, 2))))) |> 
-  ggplot(aes(x = x11, y = x21, fill = log_density)) +
-  geom_raster() +
+  ggplot(aes(x = x11, y = x21)) +
+  geom_raster(aes(fill = log_density)) +
+  geom_contour(aes(z = log_density), color = "black") +
   facet_grid(rows = vars(`X[2,2]` = x22_lab),
              cols = vars(`X[1,2]` = x12_lab), 
              labeller = label_both) +
@@ -422,6 +508,8 @@ plot_density(
 ```
 
 
+### dtnorm matrix variate
+
 ```{r}
 dtnorm_density <- vector("numeric", nrow(eval_points))
 
@@ -440,8 +528,9 @@ mat_normal_density |>
                           levels = sort(unique(round(x12, 2)))),
          x22_lab = factor(round(x22, 2), 
                           levels = sort(unique(round(x22, 2))))) |> 
-  ggplot(aes(x = x11, y = x21, fill = log_density)) +
-  geom_raster() +
+  ggplot(aes(x = x11, y = x21)) +
+  geom_raster(aes(fill = log_density)) +
+  geom_contour(aes(z = log_density), color = "black") +
   facet_grid(rows = vars(`X[2,2]` = x22_lab),
              cols = vars(`X[1,2]` = x12_lab), 
              labeller = label_both) +
@@ -453,6 +542,8 @@ mat_normal_density |>
   theme_minimal(base_size = 9)
 ```
 
+
+### dtskewt multivar for different skew
 
 ```{r}
 mu <- matrix(c(0.5, 0.25, 0.25, 0.5), nrow = 2)
@@ -500,34 +591,5 @@ ggplot(density_compare, aes(x = x11, y = x21)) +
     title = "Effect of skew on a matrix-variate skew-t density",
     subtitle = "X[1,2] and X[2,2] fixed at their mean values"
   ) +
-  theme_minimal()
-```
-
-
-```{r}
-ggplot(density_compare, aes(x = x11, y = x21)) +
-  geom_raster(aes(fill = log_density)) +
-  geom_contour(aes(z = log_density), color = "black") +
-  facet_wrap(~ skew_name, nrow = 1) +
-  scale_fill_viridis_b(option = "H", n.breaks = 10) +
-  coord_fixed() +
-  theme_minimal()
-```
-
-
-```{r}
-ggplot(density_compare, aes(x = x11, y = x21)) +
-  geom_contour_filled(aes(z = log_density), bins = 12) +
-  geom_contour(aes(z = log_density), color = "black", bins = 12) +
-  facet_wrap(~skew_name, nrow = 1) +
-  scale_fill_viridis_d(option = "H") +
-  coord_fixed() +
-    labs(
-    x = "X[1,1]",
-    y = "X[2,1]",
-    fill = "Relative log density",
-    title = "Effect of skew on a matrix-variate skew-t density",
-    subtitle = "X[1,2] and X[2,2] fixed at their mean values"
-  ) + 
   theme_minimal()
 ```
