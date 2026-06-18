@@ -2,21 +2,42 @@
 title: "normal_mean_variance_mixture"
 format: html
 editor: visual
+execute:
+  cache: true
 ---
 
-```{r}
+```{r, message = FALSE, warning = FALSE, cache = FALSE}
 library(tensormodels)
 library(tidyverse)
 library(latex2exp)
 library(patchwork)
 library(ggdensity)
+devtools::load_all(".", quiet = TRUE)
 
 theme_update(plot.title = element_text(hjust = 0.5))
 ```
 
 ## Poisson Sim for EM
 
-The mean of $x_{1}$ is $\lambda_{1}$ and the mean of $y_{1}$ is $\beta * \lambda_{1}$. If we have all of the data, then we can compute the MLEs as
+Let $X_{i} \sim \text{Poisson}(\lambda_{i})$ and $Y_{i} \sim \text{Poisson}(\beta \lambda_{i})$ be independent draws. Denote the vector of observations as $\textbf{x}$ and $\textbf{y}$, along with the vector of true $\lambda_{i}$ values as $\mathbf{\lambda}$. 
+
+If we have all of the data, then we can compute the MLEs. 
+
+$$f(\textbf{X}, \textbf{Y}|\beta, \mathbf{\lambda}) = \left[\prod_{i=1}^{n} \frac{e^{-\beta \lambda_{i}} (\beta \lambda_{i})^{y_{i}}}{y_{i}!} \right] \left[\frac{e^{-\lambda_{i}} (\lambda_{i})^{x_{i}}}{x_{i}!}\right]$$
+
+To compute the MLEs, it is easier to take the log likelihood. 
+
+$$\ell(\beta, \mathbf{\lambda}| \textbf{x}, \textbf{y}) = \sum_{i=1}^{n} \bigg[(-\beta \lambda_{i}) + y_{i} \log(\beta \lambda_{i}) - \log(y_{i}!) - \lambda_{i} + x_{i} \log(\lambda_{i}) - \log(x_{i}!)\bigg]\\
+ = \sum_{i=1}^{n} \bigg[-\lambda_{i}(\beta + 1) + y_{i} \log(\beta) + (x_{i} + y_{i}) \log(\lambda_{i}) - \log(y_{i}!) - \log(x_{i}!) \bigg]$$
+ 
+Now that we have the log likelihood, we can take the derivative relative to each parameter to obtain the MLEs. 
+
+$$\frac{\partial}{\partial \beta} \ell(\beta, \mathbf{\lambda}|\textbf{x}, \textbf{y}) = \sum_{i=1}^{n} \bigg[-\lambda_{i} + \frac{y_{i}}{\beta} \bigg] = 0 \\ \sum_{i=1}^{n} \bigg[-\beta \lambda_{i}\bigg] = \sum_{i=1}^{n} \bigg[-y_{i} \bigg] \\
+\sum_{i=1}^{n} \bigg[\beta \bigg] = \sum_{i=1}^{n} \bigg[\frac{y_{i}}{\lambda_{i}} \bigg] \\ 
+\frac{\partial}{\partial \mathbf{\lambda}} \ell(\beta, \mathbf{\lambda}|\textbf{x}, \textbf{y}) =\sum_{i=1}^{n} \bigg[-(\beta + 1) + \frac{(x_{i} + y_{i})}{\lambda_{i}} \bigg] = 0 \\
+\sum_{i=1}^{n} \bigg[-\lambda_{i} (\beta + 1) + (x_{i} + y_{i})\bigg] = 0 \\
+\sum_{i=1}^{n} \bigg[-\lambda_{i} (\beta + 1)\bigg] = -\sum_{i=1}^{n} \bigg[x_{i} + y_{i}\bigg]
+$$
 
 $$\hat{\beta} = \frac{\sum_{i=1}^{n} y_{i}}{\sum_{i=1}^{n} x_{i}}$$ 
 
@@ -44,10 +65,10 @@ Now, suppose we are missing $x_{1}$ and still want to estimate $\lambda_{1}$. Th
 $$L(\beta, \lambda_{1}, \lambda_{2}, \dots, \lambda_{n}|y_{1}, (x_{2}, y_{2}), \dots, (x_{n}, y_{n}) = \\ \left[\prod_{i=1}^{n} \frac{e^{-\beta \lambda_{i}} (\beta \lambda_{i}^{y_{i}})}{y_{i}!} \right] \left[\prod_{i=2}^{n} \frac{e^{-\lambda_{i}} (\lambda_{i}^{x_{i}})}{_{i}!}\right]$$
 
 ```{r}
-x_missing <- x[2:n]
-y
+x_missing <- c(NA, x[2:n])
 ```
 
+### Optim
 
 ```{r}
 fit_beta_lambda <- function(x, y) {
@@ -66,7 +87,8 @@ fit_beta_lambda <- function(x, y) {
   
   start_beta <- 1
   start_lambda <- pmax(y/x, 0.1)
-  start_lambda[1] <- 1
+  start_lambda[is.na(start_lambda)] <- 1
+  start_lambda[is.infinite(start_lambda)] <- 1
   
   fit <- optim(par = log(c(start_beta, start_lambda)),
                fn = neg_loglik, method = "BFGS", hessian = TRUE)
@@ -77,7 +99,7 @@ fit_beta_lambda <- function(x, y) {
   list(beta = beta_hat, lambda = lambda_hat)
 }
 
-fit_beta_lambda(x, y)
+fit_beta_lambda(x_missing, y)
 ```
 
 ### EM
@@ -88,7 +110,8 @@ fit_beta_lambda_em <- function(x, y, max_iter = 1000, tol = 1e-8) {
   
   beta <- 1
   lambda <- pmax(y/x, 0.1)
-  lambda[1] <- 1
+  lambda[is.na(lambda)] <- 1
+  lambda[is.infinite(lambda)] <- 1
 
   loglik <- function(beta, lambda) { # incomplete loglik
     sum(dpois(y, lambda = beta * lambda, log = TRUE)) +
@@ -123,7 +146,7 @@ fit_beta_lambda_em <- function(x, y, max_iter = 1000, tol = 1e-8) {
   list(beta = beta, lambda = lambda)
 }
 
-fit_beta_lambda_em(x, y)
+fit_beta_lambda_em(x_missing, y)
 ```
 
 
@@ -195,7 +218,7 @@ mean_mix <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, nu = 4) {
 ```{r}
 s1 <- matrix(c(1, 0.25, 0.25, 0.5), nrow = 2)
 
-n <- 1e3
+n <- 1e5
 
 mix_unif_noskew <- mean_mix(n = n, mu = c(1, 2), 
                             sigmas = list(s1), skew = c(0, 0))
@@ -326,7 +349,7 @@ ggplot() +
        subtitle = "No skew") + 
   coord_fixed(xlim = c(-4, 8), ylim = c(-2, 6)) +
   theme_minimal() +
-ggplot(skewt_density, aes(x = x11, y = x21)) + 
+ggplot() + 
   geom_hdr_fun(fun = skew_fun, xlim = c(-4, 6), ylim = c(-2, 6)) +
   labs(x = TeX("$\\X_{1}$"),
        y = TeX("$\\X_{2}$"),
@@ -444,71 +467,26 @@ mat_skewt_density |>
 
 
 ```{r}
-# Values shown inside each small panel
-eval_points_2d <- expand_grid(
-  x11 = seq(-6, 6, length.out = 50),
-  x21 = seq(-6, 6, length.out = 50)
-)
-
-# Values used to define the facet grid
-fixed_points <- expand_grid(x12 = -4:6, x22 = -4:6)
-
-density_grid <-
-  fixed_points |>
-  crossing(eval_points_2d) |>
-  mutate(x_tensor = pmap(
-        list(x11, x21, x12, x22),
-        \(x11, x21, x12, x22) { 
-          matrix(c(x11, x21, x12, x22), nrow = 2)
-      }),
-    log_density = eval_dtskewt(x_tensor),
-    x12_lab = paste0("X[12]==", round(x12, 1)),
-    x22_lab = paste0("X[22]==", round(x22, 1)),
-    x12 = factor(x12, levels = -4:6),
-    x22 = factor(x22, levels = -4:6)
-  )
-
-ggplot(density_grid, aes(x = x11, y = x21)) +
-  geom_raster(aes(fill = log_density), interpolate = TRUE) +
-  geom_contour(aes(z = log_density), color = "black") + 
-  facet_grid(rows = vars(x22), cols = vars(x12)) +
-  scale_fill_viridis_c(option = "turbo") +
-  coord_fixed(expand = FALSE) +
-  labs(
-    x = TeX("$X_{11}$"),
-    y = TeX("$X_{21}$"),
-    fill = "log density",
-    title = "Skewed t matrix-variate density slices",
-    subtitle = TeX("Columns fix $X_{12}$; rows fix $X_{22}$. Each panel varies $X_{11}$ and $X_{21}$.")
-  ) +
-  theme_minimal(base_size = 12) +
-  theme(
-    panel.grid = element_blank(),
-    axis.text = element_blank(),
-    axis.ticks = element_blank(),
-    strip.text.x = element_text(size = 7),
-    strip.text.y = element_text(size = 7, angle = 0),
-    panel.spacing = unit(0.05, "lines"),
-    plot.title = element_text(size = 18, face = "bold"),
-    plot.subtitle = element_text(size = 12),
-    legend.position = "right"
-  )
-
-plot_density(
-  x12 = seq(-4, 6, by = 1),
-  x22 = seq(-4, 6, by = 1),
-  x11 = seq(-6, 6, length.out = 50),
-  x21 = seq(-6, 6, length.out = 50),
-  mu = mu,
-  sigmas = list(s1, s2),
-  model = "skewt",
-  skew = skew,
-  nu = 20
-)
+plot_density(x12 = seq(-4, 6, by = 1),
+             x22 = seq(-4, 6, by = 1),
+             x11 = seq(-6, 6, length.out = 50),
+             x21 = seq(-6, 6, length.out = 50),
+             mu = mu, sigmas = list(s1, s2),
+             model = "skewt", skew = skew, nu = 20)
 ```
 
 
 ### dtnorm matrix variate
+
+```{r}
+plot_density(x12 = seq(0, 10, by = 1),
+             x22 = seq(0, 10, by = 1),
+             x11 = seq(-2, 6, length.out = 50),
+             x21 = seq(-2, 6, length.out = 50),
+             mu = mu, sigmas = list(s1, s2),
+             model = "normal")
+```
+
 
 ```{r}
 dtnorm_density <- vector("numeric", nrow(eval_points))

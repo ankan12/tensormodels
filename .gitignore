@@ -36,6 +36,7 @@ rsconnect/
 .Rproj.user
 .DS_Store
 .Rbuildignore
+.Rlib/
 LICENSE
 LICENSE.md
 rtskewt_sim.RDS
