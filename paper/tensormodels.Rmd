@@ -1,6 +1,6 @@
 ---
 title: "tensormodels: Statistical Models for Tensor-Valued Data"
-date: "2026-06-18"
+date: "2026-06-21"
 header-includes:
   - |
       \newcommand{\coleq}{\mathrel{\mathop:}=}
@@ -69,14 +69,14 @@ contributions. End this section with a short roadmap of the paper.
 
 The tensor space is still being established, with works using conflicting notation. In this section, we will set a standard for certain operations, and explain the basic underlying theory for several of the functions. Tensors are a generalization of vectors and matrices, allowing us to represent higher-order data into a structure. We need new terminology to describe these objects.
 
-\subsection{Order} \label{sec_1.2.1}
+## Order
 
 The order of a tensor is the number of indices needed to specify a value. A vector has order 1 and a matrix has order 2, while the order of a tensor is 3 or more. Another way to define the order is the number of values needed in R's subsetting operator to pull out a specific element.
 
 
 For example, take the vector $\ve{a} = (1, 2, 3)$. To extract a specific element, you only require one value, so it has an order 1.
 
-```{r}
+```{r vector}
 a <- c(1, 2, 3)
 
 a[2]
@@ -91,7 +91,7 @@ $$\mat{A} = \begin{bmatrix}
 In R, we would need to specify two indices to pull out an element - the first represents the row, and the second represents the column.
 
 
-```{r}
+```{r matrix}
 A <- matrix(data = 1:6, nrow = 2, ncol = 3)
 
 A[2, 1]
@@ -107,7 +107,7 @@ Consider a third-order tensor. In R, we would need to specify three indices to p
 \end{figure}
 
 
-```{r}
+```{r tensor}
 A <- array(data = 1:24, dim = c(4, 3, 2))
 
 A[3, 1, 1]
@@ -115,14 +115,14 @@ A[3, 1, 1]
 
 
 
-\subsection{Mode} \label{sec_1.2.2}
+## Mode
 
 The mode of an object is its specific axis. For a matrix, it is common terminology to refer to the first mode as the rows and the second mode as the columns. However, since a tensor can have three or more dimensions, we now need a term for the specific dimension being referred to.
 
 Consider a tensor $\tensor{A} \in \mathbb{k}^{4 \times 2 \times 3}$. We would say the first mode is 4, the second mode is 2, and the third mode is 3. Note that the modes of a tensor are dependent on the structure of the object. For example, we could keep the same data in $\tensor{A}$ but permute the modes, leading to a new tensor $\tensor{B} \in \mathbb{k}^{4 \times 3 \times 2}$. When communicating a tensor, it is important to keep the modes consistent and keep track of what each mode represents.
 
 
-\subsection{$n$-mode product} \label{sec_1.3.3}
+## $n$-mode product
 
 The $n$-mode matrix product of a tensor $\tensor{A} \in \field{k}^{I_1 \times I_2 \times ... \times I_n}$ with a matrix $\mat{U} \in \field{k}^{J \times I_n}$
 is
@@ -158,7 +158,7 @@ $$ \ve{a} \times_{1} \mat{U} =
 \end{bmatrix}$$
 
 
-\subsection{$nm$-mode product} \label{sec_1.3.4}
+## $nm$-mode product
 
 The $\mn{n}{m}$-product of a tensor $\tensor{A} \in \field{k}^{I_1 \times I_2 \times ... \times I_N}$ with a tensor $\tensor{B} \in \field{k}^{J_1 \times J_2 \times ... \times J_M}$ such that $I_n = J_m$, is defined as
 $\tensor{C} = \tensor{A} \mn{n}{m} \tensor{B}.$
@@ -191,8 +191,8 @@ Note that this operation is different from the tensor product. It is like the $n
 
 $$\mat{A} \mn{1}{1} \ve{b} =
  \begin{bmatrix}
- \color{red}{1}\color{black}{(}\color{blue}{5}\color{black}{)} + \color{red}{2}\color{black}{(}\color{blue}{6}\color{black}{)} \\
- \color{orange}{3}\color{black}{(}\color{blue}{5}\color{black}{)} + \color{orange}{4}\color{black}{(}\color{blue}{6}\color{black}{)}
+ 1(5) + 2(6) \\
+ 3(5) + 4(6)
  \end{bmatrix} =
  \begin{bmatrix}
  5 + 12 \\
@@ -204,7 +204,7 @@ $$\mat{A} \mn{1}{1} \ve{b} =
  \end{bmatrix}
  $$
  
- \subsection{Matricization} \label{sec_1.3.5}
+## Matricization
 
 Let $\tensor{A} \in \field{k}^{I_1 \times ... \times I_N}$ be an $N$-th order tensor. The $k$-th matricization of $\tensor{A}$ is a matrix $\mat{A}_k \in \field{k}^{I_1I_2,...,I_k \times I_{k+1} \times I_{k+2} \times... \times I_N}$, whose elements are taken column-wise from A. The elements are
 $\mat{A}_{(k)}(i_1 ..., i_k, i_{k+1}, ...., i_N) = \tensor{A}(i_1,..., i_k, i_{k+1}, ..., i_N).$
@@ -231,7 +231,85 @@ $$A_{(1)} = \begin{bmatrix} 1 & 5 & 9 & 13 & 17 & 21 \\
                             2 & 6 & 10 & 14 & 18 & 22 \\
                             3 & 7 & 11 & 15 & 19 & 23 \\
                             4 & 8 & 12 & 16 & 20 & 24
-              \end{bmatrix}$$
+            \end{bmatrix}$$
+
+## Frobenius norm
+
+Let $\tensor{A} \in \field{k}^{I_1 \times I_2 \times \dots \times I_N}$ be a tensor. The Frobenius norm of this tensor is defined as [@tensorDecomp]
+$$\|\tensor{A}\| = \sqrt{\sum_{i_1 = 1}^{I_1} \sum_{i_2 = 1}^{I_2} \dots \sum_{i_N = 1}^{I_N} a(i_1, i_2, \dots i_N)^2}.$$
+
+This notation means that we take every value in the tensor, square them, add them up, and then take the square root of that sum. Another way to think about this is vectorizing the tensor, squaring the elements, adding them up, and then taking the square root.
+
+## Existing tensor packages
+
+There are currently several major R packages that implement tensor operations. The package \pkg{rTensor} creates an S4 class called Tensor. This is a wrapper of the \textsf{array} class, adding several methods and attributes. The major methods on a Tensor class include functions for computing the Frobenius norm, inner product, matricization, and tensor times matrix products. The package also facilitates several major tensor decompositions, including canonical polyadic decomposition, general Tucker decomposition, multilinear principal component analysis, higher-order singular value decomposition, tensor singular value decomposition, and population value decomposition.
+
+The package \pkg{tensorr}'s goal is to manipulate and store sparse tensors. It provides standard operations like multiplication and unfolding. It has two S4 class objects: \textsf{dtensor} and \textsf{stensor}. The \textsf{stensor} object stores the indices and values of non-zero elements, which provides a more efficient representation for sparse tensors.
+
+The package \pkg{ttTensor} provides methods for the Tensor-Train decomposition. The three functions it provides are \textsf{TTCross}, \textsf{TTSVD}, and \textsf{TTWOPT}. The function \textsf{TTCross} decomposes the tensor using the skeleton decomposition algorithm while \textsf{TTSVD} uses the SVD and \textsf{TTWOPT} uses gradient descent.
+
+The \pkg{tensormodels} package complements this existing software by focusing on statistical distributions for tensor-valued observations. It also uses base R arrays and lists of arrays so that users do not need to convert their data to a separate S4 tensor representation.
+
+## Tensor variate distributions
+
+There are several tensor variate distributions that are generalizations of matrix variate distributions. This section introduces the distributions that are used by \pkg{tensormodels}.
+
+### Tensor variate normal
+
+The tensor variate normal distribution can be considered a generalization of the multivariate and matrix variate normal distributions. If $\tensor{X}$ has dimensions $n_1 \times \cdots \times n_D$, then
+\[
+\operatorname{vec}(\tensor{X}) \sim
+N_{n^*}\left(\operatorname{vec}(\tensor{M}),
+\bigotimes_{d=1}^{D}\Sigma_d\right),
+\qquad n^* = \prod_{d=1}^{D} n_d.
+\]
+The density function of the multilinear normal distribution is [@tensornormprop]
+\[
+f(\tensor{X}) =
+(2\pi)^{-n^*/2}
+\left(\prod_{d=1}^{D} |\Sigma_d|^{-n^*/(2n_d)}\right)
+\exp\left\{-\frac{1}{2}
+\operatorname{vec}(\tensor{X}-\tensor{M})^T
+\left(\bigotimes_{d=1}^{D}\Sigma_d^{-1}\right)
+\operatorname{vec}(\tensor{X}-\tensor{M})\right\}.
+\]
+Each $\Sigma_d$ is positive definite and describes the covariance structure corresponding to mode $d$.
+
+### Skewed distributions as transformations of the tensor variate normal
+
+To generate tensor variate skewed distributions, we use the normal variance mean mixture model [@variancemeanmix]. An $r$-dimensional random vector $x$ is a normal variance-mean mixture with mixing distribution $F$ if, for a given $u \ge 0$ that follows a probability distribution $F$ on $[0, \infty)$, $x|u \sim N_r(\mu + u \beta, u \Sigma)$. $\Sigma \in \mathbb{R}^{r \times r}$ is a constant, positive-definite matrix and $\mu \in \mathbb{R}^{r}$ and $\beta \in \mathbb{R}^{r}$ are constant vectors.
+
+We state that $x$ is a normal variance-mean mixture with position $\mu$, drift $\beta$, structure matrix $\Sigma$, and mixing distribution $F$. Different mixing distributions lead to different distributions. For example, if $F$, the mixing distribution, is the generalized inverse Gaussian distribution, then the resulting distribution of $x$ is a generalized hyperbolic distribution.
+
+In the tensor variate case, the normal variance mean mixture model is an efficient way to introduce skewness. A random tensor $\tensor{X}$ can be written as
+
+\begin{equation}
+  \tensor{X} = \tensor{M} + W \tensor{A} + \sqrt{W} \tensor{V},
+  \label{eq-skewmix}
+\end{equation}
+
+where $\tensor{M}$ is a location tensor, $\tensor{A}$ is a skewness tensor, $\tensor{V} \sim \mathcal{N}_{n^*}(\mathbb{O}, \bigotimes_{d=1}^{D} \Sigma_{d})$ and $W > 0$ is a positive random variable. The distribution of $\tensor{X}$ will depend on the distribution of $W$.
+
+The mixing distributions and their parameters for each of the skewed tensor variate distributions are summarized below. In each case, the support of $W$ is $(0, \infty)$.
+
+| Distribution | Distribution of $W$ | Parameters | Parameter support |
+|:-------------|:--------------------|:-----------|:------------------|
+| Tensor variate skewed-t | $\operatorname{Inv\text{-}Gamma}(\nu/2,\nu/2)$ | $\nu$ | $\nu > 0$ |
+| Tensor variate generalized hyperbolic | $I(\omega,1,\lambda)$ | $\lambda,\omega$ | $\lambda \in \mathbb{R},\ \omega > 0$ |
+| Tensor variate variance gamma | $\operatorname{Gamma}(\gamma,\gamma)$ | $\gamma$ | $\gamma > 0$ |
+| Tensor variate normal inverse Gaussian | $\operatorname{IG}(1,\kappa)$ | $\kappa$ | $\kappa > 0$ |
+
+Table: Mixing distributions used to construct the skewed tensor variate distributions. \label{tab:mixing-distributions}
+
+The tensor variate skewed-t distribution can be generated by setting $W \sim \text{Inv-Gamma}(\nu/2, \nu/2)$ in Equation \ref{eq-skewmix}. We then say that $\tensor{X} \sim \text{TVST}_n(\tensor{M}, \tensor{A}, \bigotimes_{d=1}^{D} \Sigma_d, \nu)$.
+
+The tensor variate generalized hyperbolic distribution can be generated by setting $W \sim I(\omega, 1, \lambda)$ in Equation \ref{eq-skewmix}. We then say that $\tensor{X} \sim \text{TVGH}_n(\tensor{M}, \tensor{A}, \bigotimes_{d=1}^{D} \Sigma_d, \lambda, \omega)$.
+
+The tensor variate variance gamma distribution can be generated by setting $W \sim \text{Gamma}(\gamma, \gamma)$ in Equation \ref{eq-skewmix}. We then say that $\tensor{X} \sim \text{TVVG}_n(\tensor{M}, \tensor{A}, \bigotimes_{d=1}^{D} \Sigma_d, \gamma)$.
+
+The tensor variate normal inverse Gaussian distribution can be generated by setting $W \sim \text{IG}(1, \kappa)$ in Equation \ref{eq-skewmix}. We then say that $\tensor{X} \sim \text{TVNIG}_n(\tensor{M}, \tensor{A}, \bigotimes_{d=1}^{D} \Sigma_d, \kappa)$.
+
+These choices of $W$ give the four skewed families implemented in \pkg{tensormodels}. Their common representation also makes it possible to use a shared estimation framework while changing the distribution of the latent mixing variable.
 
 
 
@@ -248,7 +326,7 @@ One intentional decision was to store independent, identically distributed draws
 
 Another option would be to output a tensor of size $100 \times 2 \times 3 \times 4$; that is, create a tensor of one higher dimension where the first mode represents the index of the draw. The choice to have the first mode rpresent the draw is arbitrary and could potentially confuse users, especially if they permute the dimensions. 
 
-```{r}
+```{r tensor_random}
 three_dim_iid <- rtnorm(n = 100, mu = array(1:12, dim = c(2, 3, 4)))
 
 length(three_dim_iid)
@@ -265,7 +343,7 @@ approach. Emphasize design decisions that matter to an R user.
 This package contains random number generations for several tensor variate distributions. Below is a simulation from a tensor variate normal of size $2 \times 3 \times 4$. The dimension of the draws is the same as the mu object provided. The covariance structure is specified with a list of matrices, where each matrix must be a square of the corresponding mode. 
 
 
-```{r}
+```{r rtnorm}
 mu_true <- array(1:24, dim = c(2, 3, 4))
 
 S1 <- crossprod(matrix(rnorm(4), nrow = 2))
@@ -283,7 +361,7 @@ tvn_draws[[1]]
 
 Given a list of draws, the package can estimate the MLEs using the function `tensor_mle()`{.R}. The model argument is required to know which distribution to fit to the data. 
 
-```{r}
+```{r tensor_mle_normal}
 tvn_mles <- tensor_mle(tvn_draws, model = "normal")
 
 mean((tvn_mles$mu - mu_true)^2)
@@ -299,9 +377,53 @@ for(i in 1:3) {
 
 There are also density functions for each distribution. For the tensor variate normal, the required arguments are mu and sigmas. There is an optional log argument to compute the log density rather than the density itself. 
 
-```{r}
+```{r dtnorm}
 dtnorm(tvn_draws[[1]], mu = mu_true, sigmas = sigmas_true)
 ```
+
+## Tensor decompositions
+
+The idea of decompositions can also apply to tensors. The package provides the Tucker, PARAFAC, higher-order singular value, and Tensor-Train decompositions.
+
+### Tucker decomposition
+
+The idea behind the Tucker decomposition is similar to rank factorization for matrices. The Tucker decomposition factorizes an $N$-th order tensor into a core tensor and a list of matrices [@tucker]:
+\[
+\tensor{A} = \tensor{B} \times_1 \mat{U}_1 \times_2 \mat{U}_2 \dots \times_N \mat{U}_N.
+\]
+The core tensor $\tensor{B}$ has the same order as the original tensor $\tensor{A}$, and the number of $\mat{U}$ matrices is also the number of modes. The modes of $\tensor{B}$ are called the Tucker ranks, which determine how reduced the form is.
+
+Each matrix $\mat{U}_n$ contains principal factors for mode $n$. The $\mat{U}_n$ is a basis for the $n$th mode, and thus spans a subspace of $\mathbb{R}^{I_n}$. The core tensor $\tensor{B}$ represents the strength of interactions between factors. The idea behind this decomposition is to reduce the dimensionality of the input. We are able to summarize the higher-order object $\tensor{A}$ with a smaller core tensor $\tensor{B}$ and several factor matrices $\mat{U}_1, \mat{U}_2, \dots, \mat{U}_N$. However, one key issue with the Tucker decomposition is that it is not unique.
+
+### PARAFAC decomposition
+
+The PARAFAC decomposition has several other names---CANDECOMP, CP, and Tensor Rank decomposition. PARAFAC stands for parallel factor analysis while CANDECOMP stands for canonical polyadic decomposition. This decomposition is a special case of the Tucker decomposition, where the core tensor is superdiagonal.
+
+Let us say we want to approximate the tensor $\tensor{A} \in \field{k}^{I_1 \times I_2 \times \dots \times I_N}$ with a linear combination of $R$ rank 1 tensors. The approximation can be written as
+\[
+\tensor{A} \approx \sum_{r=1}^R \oneVect{\lambda}(r)
+\ve{u}_1(:, r) \otimes \dots \otimes \ve{u}_N(:, r).
+\]
+However, determining the rank of a tensor is an NP hard problem, so it is difficult to determine the value of $R$ necessary to approximate the original tensor. The package computes this decomposition using the alternating least squares algorithm described by @CP and @CPtwo.
+
+### Higher-order singular value decomposition
+
+The higher-order singular value decomposition (HOSVD) is a specific case of the Tucker decomposition with restrictions. The matrices $\mat{U}$ are unitary and the core tensor $\tensor{B}$ has subtensors, defined as setting the $n$th index to a value $\alpha$, that are orthogonal [@hosvd]. Additionally, the subtensors have a descending order of Frobenius norms:
+\[
+\|\tensor{B}_{i_n = 1}\| \ge \|\tensor{B}_{i_n = 2}\|
+\ge \dots \ge \|\tensor{B}_{i_n = I_n}\| \ge 0.
+\]
+These Frobenius norms are the $n$-mode singular values of $\tensor{A}$, and the vector $U_i(n)$ is the $i$th $n$-mode singular vector.
+
+### Tensor-Train decomposition
+
+The Tensor-Train decomposition factorizes an $N$-th order tensor $\tensor{A}$ in a product of third-order tensors [@ttDecomp]. These are denoted as $\mat{U}_1, \tensor{U}_2, \dots, \mat{U}_N$ and are called TT-cores:
+\[
+\tensor{A}(i_1, \dots, i_N) =
+\mat{U}_1(i_1,:) \tensor{U}_2(:,i_2,:) \tensor{U}_3(:,i_3,:)
+\dots \mat{U}_N(:,i_N).
+\]
+The package computes this decomposition using the TT-SVD algorithm. The user can provide the ranks directly or allow them to be selected using an approximation accuracy.
 
 
 
@@ -313,9 +435,36 @@ fast enough that the full article can be rebuilt in under ten minutes.
 
 One major functionality that tensormodels provides is MLE estimation. This is done via two different algorithms: for the tensor variate normal distribution, a flip-flop algorithm is used. For tensor variate skewed distributions, an EM algorithm is used. 
 
+Before discussing the tensor variate normal, we discuss the simpler matrix variate normal distribution. The matrix variate normal distribution can be considered a special case of the multivariate normal distribution, where we force the restriction that the covariance matrix is separable. That is, the covariance of the vectorized matrix draws can be described as the Kronecker product of two matrices.
+
+Let $\mat{X} \sim N(\mat{M}, \mat{U}, \mat{V}) \in \mathbb{R}^{n \times p}$ and set $\boldsymbol{y} = \operatorname{vec}(\mat{X})$. The matrix variate normal distribution imposes the separable covariance restriction
+\[
+\boldsymbol{\Sigma} = \mat{V} \otimes \mat{U},
+\]
+where $\mat{U}$ is the row covariance matrix and $\mat{V}$ is the column covariance matrix. Therefore
+\[
+\operatorname{vec}(\mat{X}) \sim
+N_{np}\left(\operatorname{vec}(\mat{M}), \mat{V} \otimes \mat{U}\right).
+\]
+This is a nonlinear restriction on the natural parameter space of the full multivariate normal family. For the matrix variate normal, the covariance matrix is restricted to be defined as the Kronecker product of two covariance matrices. This makes its parameter space a lower-dimensional curved subset of the full multivariate normal distribution [@existenceMLEKronecker].
+
 By default, the initial values for the parameters are chosen in different ways. The location parameter $\mathcal{M}$ is started as the median of the draws. This is because the mean of the draws is dependent on the skew and parameters. Each covariance matrix is initialized by centering by the median, matricizing along the corresponding dimension, and adding up the scatter matrix across all of the draws. This total is normalized to have a trace equal to its dimension to ensure the scale is not disproportionate. Initial values for the parameters are set to be conservative and specific to the distribution. For example, for the skewed t, $\nu = 20$. Finally, the skew parameter $\mathcal{A}$ is computed as a function of the expected value of the draws, $\mathcal{M}$, and the relevant parameters for that distribution. 
 
-Convergence checks are done by comparing the change in likelihood relative to the previous iteration. At the $t$th iteration, the equation used is
+The individual covariance matrices in a Kronecker product are not defined uniquely. Multiplying one covariance matrix by a constant and another by the inverse of that constant produces the same full covariance matrix. The package addresses this by normalizing the trace of each covariance matrix except the final one to equal its corresponding mode dimension. This preserves the overall Kronecker covariance while giving the individual mode covariance estimates a consistent scale.
+
+For the matrix variate normal model, differentiating the likelihood gives the updates
+\[
+\hat{\mat{V}} = \frac{1}{Np} \sum_{i=1}^{N}
+\mat{X}_{ic}^{T}\hat{\mat{U}}^{-1}\mat{X}_{ic}
+\]
+and
+\[
+\hat{\mat{U}} = \frac{1}{Nn} \sum_{i=1}^{N}
+\mat{X}_{ic}\hat{\mat{V}}^{-1}\mat{X}_{ic}^{T}.
+\]
+Each estimate depends on the other, which leads to the iterative flip-flop algorithm. If $N > \max(n,p)$, then the flip-flop algorithm has only one solution and the MLEs are unique under the conditions described by @estimateTestKronecker.
+
+Convergence checks are done by comparing the change in likelihood relative to the previous iteration. At the $t$-th iteration, the equation used is
 
 $$A = \frac{\text{loglik}_{t} - \text{loglik}_{t-1}}{\text{loglik}_{t-1}}$$
 
@@ -334,7 +483,7 @@ If a tensor normal covariance structure is present, then the multivariate and te
 
 The function `mahalanobis_dist()`{.R} computes both distances using fitted MLEs, and `mahalanobis_test()`{.R} performs a two-sample Kolmogorov-Smirnov test to compare their empirical distributions.
 
-```{r}
+```{r generate_data}
 S1 <- crossprod(matrix(data = c(1, 0.5, 0.5, 1), nrow = 2))
 
 multivar_draws <- rtnorm(n = 1000, mu = c(2, 3), sigmas = list(S1))
@@ -351,7 +500,7 @@ matrix_nocovar_draws <- lapply(1:1e3, function(i) {
 ```
 
 
-```{r}
+```{r mahalanobis}
 plot_malanobis <- function(draws, title = "Dist") {
   distances <- mahalanobis_dist(draws)
   test <- mahalanobis_test(distances)
@@ -363,7 +512,7 @@ plot_malanobis <- function(draws, title = "Dist") {
 ```
 
 
-```{r}
+```{r plot_mahalanobis}
 par(mfcol = c(1, 4))
 plot_malanobis(multivar_draws, title = "Multivar")
 plot_malanobis(matrix_draws, title = "Mat norm")
@@ -384,7 +533,7 @@ $$2\{\ell(\hat\theta_{\mathrm{full}}) - \ell(\hat\theta_{\mathcal{R}})\}
 
 If the $p$-value is large, then we fail to reject the null hypothesis and conclude the restricted model fits the data as well as the unrestricted model. If the $p$-value is small, we reject the null hypothesis, which states the unrestricted model has a significantly better fit than the restricted model.
 
-```{r}
+```{r lrt_setup}
 true_str <- kronecker(S3, S2) |> kronecker(S1)
   
 test_restrict <- function(draws, restrict) {
@@ -407,7 +556,7 @@ test_restrict <- function(draws, restrict) {
 ```
 
 
-```{r}
+```{r lrt_test}
 lrt_test <- function(draws, restrict) {
   full_model <- tensor_mle(draws, model = "normal")
   restrict_model <- tensor_mle(draws, model = "normal", restrict = restrict)
@@ -439,15 +588,146 @@ map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
 
 # Performance and validation
 
-Report numerical validation, simulation results, benchmarks, or comparisons
-with established implementations. Clearly distinguish package features from
-claims supported by experiments.
+This section checks the tensor variate normal implementation in two ways. First, we compare the density computed by \pkg{tensormodels} to the density from an established multivariate normal implementation after vectorizing each tensor. Second, we use repeated simulations to examine recovery of the mean tensor, the mode-specific covariance matrices, and the full Kronecker covariance matrix.
+
+## Density agreement after vectorization
+
+If $\tensor{X}$ follows a tensor variate normal distribution, then $\operatorname{vec}(\tensor{X})$ follows a multivariate normal distribution. Therefore, `dtnorm()` should return the same density as `mvtnorm::dmvnorm()` when the tensor is vectorized and the full covariance matrix is constructed as a Kronecker product [@genzBretz].
+
+The following example uses a $2 \times 3$ matrix variate normal distribution. With R's column-major vectorization convention, the full covariance matrix is $\Sigma_2 \otimes \Sigma_1$.
+
+```{r density-validation, results='asis'}
+set.seed(2026)
+
+val_mu <- matrix(c(-1, 0, 1, 2, -0.5, 0.5), nrow = 2)
+val_S1 <- matrix(c(1, 0.4, 0.4, 2), nrow = 2)
+val_S2 <- matrix(c(1, 0.25, 0.1,
+                   0.25, 1.5, 0.35,
+                   0.1, 0.35, 1.2), nrow = 3)
+
+val_draws <- rtnorm(
+  n = 25,
+  mu = val_mu,
+  sigmas = list(val_S1, val_S2)
+)
+
+tensor_log_density <- vapply(
+  val_draws,
+  dtnorm,
+  numeric(1),
+  mu = val_mu,
+  sigmas = list(val_S1, val_S2),
+  log = TRUE
+)
+
+vector_log_density <- mvtnorm::dmvnorm(
+  x = t(vapply(val_draws, c, numeric(length(val_mu)))),
+  mean = c(val_mu),
+  sigma = kronecker(val_S2, val_S1),
+  log = TRUE
+)
+
+density_agreement <- data.frame(
+  `Maximum absolute difference` =
+    format(
+      max(abs(tensor_log_density - vector_log_density)),
+      scientific = TRUE,
+      digits = 3
+    ),
+  check.names = FALSE
+)
+
+knitr::kable(
+  density_agreement,
+  format = "pipe",
+  caption = "Agreement between tensor and vectorized multivariate log-densities."
+)
+```
+
+The difference is at the level of floating-point precision, providing a numerical check that the determinant and quadratic-form calculations in `dtnorm()` agree with the corresponding multivariate normal calculation.
+
+## Parameter recovery
+
+We next simulate data from the same $2 \times 3$ tensor variate normal distribution and estimate its parameters using `tensor_mle()`. We use sample sizes $n = 50$, $150$, and $500$, with 10 independent simulations for each sample size.
+
+The individual factors in a Kronecker covariance are not identifiable without a scale convention. If
+\[
+c_1 = \frac{\operatorname{tr}(\Sigma_1)}{n_1},
+\]
+then the equivalent normalized factors used for comparison are
+\[
+\Sigma_1^* = \frac{\Sigma_1}{c_1}
+\quad \text{and} \quad
+\Sigma_2^* = c_1\Sigma_2.
+\]
+This gives $\operatorname{tr}(\Sigma_1^*) = n_1$ while preserving
+$\Sigma_2^* \otimes \Sigma_1^* = \Sigma_2 \otimes \Sigma_1$, matching the scale convention used by the package.
+
+```{r parameter-recovery, results='asis'}
+set.seed(2026)
+
+val_scale1 <- sum(diag(val_S1)) / nrow(val_S1)
+val_S1_scaled <- val_S1 / val_scale1
+val_S2_scaled <- val_S2 * val_scale1
+val_full_sigma <- kronecker(val_S2, val_S1)
+
+sample_sizes <- c(50, 150, 500)
+simulation_repetitions <- 10
+
+recovery_results <- map_dfr(sample_sizes, function(sample_size) {
+  map_dfr(seq_len(simulation_repetitions), function(repetition) {
+    current_draws <- rtnorm(
+      n = sample_size,
+      mu = val_mu,
+      sigmas = list(val_S1, val_S2)
+    )
+
+    current_fit <- tensor_mle(current_draws, model = "normal")
+    estimated_full_sigma <- kronecker(
+      current_fit$sigmas[[2]],
+      current_fit$sigmas[[1]]
+    )
+
+    tibble(
+      n = sample_size,
+      repetition = repetition,
+      mean_tensor = mean((current_fit$mu - val_mu)^2),
+      first_covariance =
+        mean((current_fit$sigmas[[1]] - val_S1_scaled)^2),
+      second_covariance =
+        mean((current_fit$sigmas[[2]] - val_S2_scaled)^2),
+      full_covariance =
+        mean((estimated_full_sigma - val_full_sigma)^2)
+    )
+  })
+})
+
+recovery_summary <-
+  recovery_results |>
+  group_by(n) |>
+  summarize(
+    `Mean tensor` = mean(mean_tensor),
+    `First covariance` = mean(first_covariance),
+    `Second covariance` = mean(second_covariance),
+    `Full covariance` = mean(full_covariance),
+    .groups = "drop"
+  )
+
+knitr::kable(
+  recovery_summary,
+  format = "pipe",
+  digits = 4,
+  caption = "Mean squared error over 10 simulations for each sample size."
+)
+```
+
+The mean squared errors decrease as the sample size increases. This is visible for the mean tensor, both scale-normalized covariance factors, and the reconstructed full Kronecker covariance matrix. These simulations provide a basic numerical validation of parameter recovery; they are not intended to be a complete finite-sample study of the estimators.
 
 # Examples
 
 Now that we have set up our tensor distributions, we can use them on a real-world example. The CIFAR 100 dataset contains images of a set of 100 common objects. In this case, we will only be using the maple trees, which have an ID value of 48.
 
-```{r, echo = FALSE}
+```{r plot_functions, echo = FALSE}
 library(torchvision)
 library(patchwork)
 library(tidyverse)
@@ -486,7 +766,7 @@ plot_matrix <- function(input) { # function to plot matrices
 Once we have the CIFAR dataset loaded in from torchvision, we can plot 20 example images. The images are stored as an array of size 32 x 32 x 3. This is an image that is 32 x 32 pixels, and the last mode represents the red, green, and blue color values. 
 
 his is an image that is 32 x 32 pixels stored as red, green, and blue values. The values vary from 0 to 255 and represent the intensity of that color. 
-```{r, echo = FALSE}
+```{r cifar, echo = FALSE}
 cifar100 <- cifar100_dataset(download = TRUE)
 
 maple_idx <- which(cifar100$y == 48)
@@ -503,7 +783,7 @@ wrap_plots(lapply(maple_trees[1:20], plot_image), ncol = 5)
 
 
 We can fit the best model to this set of images. The function `model_compare()`{.R} takes in a dataset and fits all of the possible tensor models. It returns the result as a data frame with columns containing the name of the model, log likelihood, number of parameters denoted as k, AIC, BIC, and the model object itself. We can then select the model with the lowest BIC to proceed. 
-```{r, cache = TRUE}
+```{r model_compare, cache = TRUE}
 model_compare <- function(draws) {
   res_normal <- tensor_mle(draws, model = "normal", quiet = FALSE)
   res_skewt <- tensor_mle(draws, model = "skewt", quiet = FALSE)

@@ -19,34 +19,33 @@ theme_update(plot.title = element_text(hjust = 0.5))
 
 ## Poisson Sim for EM
 
-Let $X_{i} \sim \text{Poisson}(\lambda_{i})$ and $Y_{i} \sim \text{Poisson}(\beta \lambda_{i})$ be independent draws. Denote the vector of observations as $\textbf{x}$ and $\textbf{y}$, along with the vector of true $\lambda_{i}$ values as $\mathbf{\lambda}$. 
+Let $X_{i} \sim \text{Poisson}(\lambda_{i})$ and $Y_{i} \sim \text{Poisson}(\beta \lambda_{i})$ be independent draws. Denote the vector of observations as $\textbf{x}$ and $\textbf{y}$, along with the vector of true $\lambda_{i}$ values as $\mathbf{\lambda}$.
 
-If we have all of the data, then we can compute the MLEs. 
+If we have all of the data, then we can compute the MLEs.
 
 $$f(\textbf{X}, \textbf{Y}|\beta, \mathbf{\lambda}) = \left[\prod_{i=1}^{n} \frac{e^{-\beta \lambda_{i}} (\beta \lambda_{i})^{y_{i}}}{y_{i}!} \right] \left[\frac{e^{-\lambda_{i}} (\lambda_{i})^{x_{i}}}{x_{i}!}\right]$$
 
-To compute the MLEs, it is easier to take the log likelihood. 
+To compute the MLEs, it is easier to take the log likelihood.
 
 $$\ell(\beta, \mathbf{\lambda}| \textbf{x}, \textbf{y}) = \sum_{i=1}^{n} \bigg[(-\beta \lambda_{i}) + y_{i} \log(\beta \lambda_{i}) - \log(y_{i}!) - \lambda_{i} + x_{i} \log(\lambda_{i}) - \log(x_{i}!)\bigg]\\
  = \sum_{i=1}^{n} \bigg[-\lambda_{i}(\beta + 1) + y_{i} \log(\beta) + (x_{i} + y_{i}) \log(\lambda_{i}) - \log(y_{i}!) - \log(x_{i}!) \bigg]$$
- 
-Now that we have the log likelihood, we can take the derivative relative to each parameter to obtain the MLEs. 
+
+Now that we have the log likelihood, we can take the derivative relative to each parameter to obtain the MLEs.
 
 $$\frac{\partial}{\partial \beta} \ell(\beta, \mathbf{\lambda}|\textbf{x}, \textbf{y}) = \sum_{i=1}^{n} \bigg[-\lambda_{i} + \frac{y_{i}}{\beta} \bigg] = 0 \\ \sum_{i=1}^{n} \bigg[-\beta \lambda_{i}\bigg] = \sum_{i=1}^{n} \bigg[-y_{i} \bigg] \\
 \sum_{i=1}^{n} \bigg[\beta \bigg] = \sum_{i=1}^{n} \bigg[\frac{y_{i}}{\lambda_{i}} \bigg] \\ 
 \frac{\partial}{\partial \mathbf{\lambda}} \ell(\beta, \mathbf{\lambda}|\textbf{x}, \textbf{y}) =\sum_{i=1}^{n} \bigg[-(\beta + 1) + \frac{(x_{i} + y_{i})}{\lambda_{i}} \bigg] = 0 \\
 \sum_{i=1}^{n} \bigg[-\lambda_{i} (\beta + 1) + (x_{i} + y_{i})\bigg] = 0 \\
-\sum_{i=1}^{n} \bigg[-\lambda_{i} (\beta + 1)\bigg] = -\sum_{i=1}^{n} \bigg[x_{i} + y_{i}\bigg]
-$$
+\sum_{i=1}^{n} \bigg[-\lambda_{i} (\beta + 1)\bigg] = -\sum_{i=1}^{n} \bigg[x_{i} + y_{i}\bigg]$$
 
-$$\hat{\beta} = \frac{\sum_{i=1}^{n} y_{i}}{\sum_{i=1}^{n} x_{i}}$$ 
+$$\hat{\beta} = \frac{\sum_{i=1}^{n} y_{i}}{\sum_{i=1}^{n} x_{i}}$$
 
 and $$\hat{\lambda}_{i} = \frac{x_{i} + y_{i}}{\hat{\beta} + 1}.$$
 
 ```{r}
 n <- 20
 
-lambdas <- 30 * runif(n = 20)
+lambdas <- 30 * runif(n = n)
 beta <- 0.2
 
 x <- rpois(n = n, lambda = lambdas)
@@ -55,12 +54,9 @@ y <- rpois(n = n, lambda = beta * lambdas)
 beta_hat <- sum(y)/sum(x)
 
 lambdas_hat <- (x + y)/(beta_hat + 1)
-
-sqrt(mean((lambdas_hat - lambdas)^2))
 ```
 
-
-Now, suppose we are missing $x_{1}$ and still want to estimate $\lambda_{1}$. The incomplete likelihood is now 
+Now, suppose we are missing $x_{1}$ and still want to estimate $\lambda_{1}$. The incomplete likelihood is now
 
 $$L(\beta, \lambda_{1}, \lambda_{2}, \dots, \lambda_{n}|y_{1}, (x_{2}, y_{2}), \dots, (x_{n}, y_{n}) = \\ \left[\prod_{i=1}^{n} \frac{e^{-\beta \lambda_{i}} (\beta \lambda_{i}^{y_{i}})}{y_{i}!} \right] \left[\prod_{i=2}^{n} \frac{e^{-\lambda_{i}} (\lambda_{i}^{x_{i}})}{_{i}!}\right]$$
 
@@ -99,7 +95,7 @@ fit_beta_lambda <- function(x, y) {
   list(beta = beta_hat, lambda = lambda_hat)
 }
 
-fit_beta_lambda(x_missing, y)
+optim_mles <- fit_beta_lambda(x_missing, y)
 ```
 
 ### EM
@@ -146,9 +142,41 @@ fit_beta_lambda_em <- function(x, y, max_iter = 1000, tol = 1e-8) {
   list(beta = beta, lambda = lambda)
 }
 
-fit_beta_lambda_em(x_missing, y)
+em_mles <- fit_beta_lambda_em(x_missing, y)
 ```
 
+
+```{r}
+tibble(true_lam = lambdas, optim_lam = optim_mles$lambda) |> 
+  ggplot() + 
+  geom_point(aes(x = lambdas, y = optim_lam)) +
+  geom_abline(color = "red", lty = 2) +
+  labs(x = "True Lambdas", y = "Optim Lambdas") +
+  theme_minimal() +
+tibble(true_lam = lambdas, em_lam = em_mles$lambda) |> 
+  ggplot() + 
+  geom_point(aes(x = lambdas, y = em_lam)) +
+  geom_abline(color = "red", lty = 2) +
+  labs(x = "True Lambdas", y = "EM Lambdas") +
+  theme_minimal() +
+tibble(true_lam = lambdas, mle_lam = lambdas_hat) |> 
+  ggplot() + 
+  geom_point(aes(x = lambdas, y = mle_lam)) +
+  geom_abline(color = "red", lty = 2) +
+  labs(x = "True Lambdas", y = "MLE Lambdas") +
+  theme_minimal()     
+
+
+tibble(true_lam = lambdas, mle_lam = lambdas_hat,
+       optim_lam = optim_mles$lambda, em_lam = em_mles$lambda) |> 
+  mutate(id_lam = row_number()) |> 
+  pivot_longer(cols = true_lam:em_lam) |>   
+  mutate(id_lam = factor(id_lam), name = factor(name)) |>
+  ggplot() +
+  geom_point(aes(x = id_lam, y = value, color = name)) +
+  facet_grid(~name) +
+  theme_minimal()
+```
 
 ## Plots of distributions
 
@@ -212,7 +240,6 @@ mean_mix <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, nu = 4) {
 }
 ```
 
-
 ### dunifmix no skew vs skew
 
 ```{r}
@@ -262,7 +289,6 @@ bind_rows(noskew_draws_pos |> mutate(setting = "No Skew"),
   theme_minimal() +
   theme(plot.title = element_text(hjust = 0.5))
 ```
-
 
 ### dtskewt no skew vs skew
 
@@ -324,7 +350,6 @@ tibble(eval_points, multivar_dtnoskewt, multivar_dtskewt) |>
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
-
 ### dtskewt hdr no skew vs skew
 
 ```{r}
@@ -357,7 +382,6 @@ ggplot() +
   coord_fixed(xlim = c(-4, 8), ylim = c(-2, 6)) +
   theme_minimal()
 ```
-
 
 ### dtskewt different nu
 
@@ -412,7 +436,6 @@ ggplot(skewt_density, aes(x = x11, y = x21)) +
         plot.subtitle = element_text(hjust = 0.5))
 ```
 
-
 ### dtskewt matrix variate
 
 ```{r}
@@ -465,7 +488,6 @@ mat_skewt_density |>
   theme(plot.title = element_text(hjust = 0.5))
 ```
 
-
 ```{r}
 plot_density(x12 = seq(-4, 6, by = 1),
              x22 = seq(-4, 6, by = 1),
@@ -474,7 +496,6 @@ plot_density(x12 = seq(-4, 6, by = 1),
              mu = mu, sigmas = list(s1, s2),
              model = "skewt", skew = skew, nu = 20)
 ```
-
 
 ### dtnorm matrix variate
 
@@ -486,7 +507,6 @@ plot_density(x12 = seq(0, 10, by = 1),
              mu = mu, sigmas = list(s1, s2),
              model = "normal")
 ```
-
 
 ```{r}
 dtnorm_density <- vector("numeric", nrow(eval_points))
@@ -519,7 +539,6 @@ mat_normal_density |>
       title = "Normal") +
   theme_minimal(base_size = 9)
 ```
-
 
 ### dtskewt multivar for different skew
 
