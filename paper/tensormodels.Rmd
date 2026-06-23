@@ -1,6 +1,6 @@
 ---
 title: "tensormodels: Statistical Models for Tensor-Valued Data"
-date: "2026-06-21"
+date: "2026-06-22"
 header-includes:
   - |
       \newcommand{\coleq}{\mathrel{\mathop:}=}
@@ -13,23 +13,44 @@ header-includes:
       \newcommand{\tensor}[1]{\mathcal{#1}}
       \newcommand{\oneTensor}[1]{#1}
       \newcommand{\vs}[1]{\mathcal{#1}}
+      \newcommand{\nProd}[1]{\mathbin{\boldsymbol{\times}_{#1}}}
       \newcommand{\mn}[2]{\sideset{_{#1}}{_{#2}}{\mathop{\boldsymbol{\times}}}}
 abstract: >
   tensormodels is an R package for simulation, maximum likelihood estimation, and model diagnostics for tensor-variate distributions arising in multiway array data. The package implements the tensor-variate normal distribution and several normal variance–mean mixture families, including the skew-t, generalized hyperbolic, variance gamma, and normal inverse Gaussian distributions. Estimation is performed via likelihood-based and expectation–maximization algorithms under a Kronecker-separable covariance model, yielding mode-specific covariance estimates through iterative updates. Model assessment tools include distance-based diagnostics, such as Mahalanobis distance plots constructed from tensor-whitened residuals. In addition, tensormodels provides implementations of widely used tensor decompositions for approximation and dimension reduction, including Tensor-Train decomposition via TT-SVD, Higher-Order Singular Value Decomposition (HOSVD), and Parallel Factor Analysis (CP/PARAFAC) computed using alternating least squares. It includes common linear algebra and tensor operations, such as matricization, the n-mode products, and the Khatri-Rao product.
 draft: true
 author:
-  - name: "Anupama Kannan, Dr. David Kahle, Dr. Michael Gallaugher"
+  - name: "Anupama Kannan"
     affiliation: "Baylor University"
     address:
       - "Department of Statistics"
       - "Waco, Texas"
     email: "Anupama_Kannan1@baylor.edu"
     orcid: "0000-0003-2789-6997"
+  - name: "David Kahle"
+    affiliation: "Baylor University"
+    address:
+      - "Department of Statistics"
+      - "Waco, Texas"
+    email: "David_Kahle@baylor.edu"
+    orcid: "0000-0002-9999-1558"
+  - name: "Michael Gallaugher"
+    affiliation: "Baylor University"
+    address:
+      - "Department of Statistics"
+      - "Waco, Texas"
+    email: "Michael_Gallaugher@baylor.edu"
+    orcid: "0000-0002-5487-8965"
 type: package
 output:
-  rjtools::rjournal_article:
+  rjtools::rjournal_pdf_article:
+    toc: no
+  rjtools::rjournal_web_article:
     self_contained: yes
     toc: no
+# output:
+#   bookdown::pdf_document2:
+#     keep_tex: true
+#     number_sections: true
 bibliography: tensormodels.bib
 packages:
   cran: []
@@ -51,6 +72,7 @@ knitr::opts_chunk$set(
 
 library(tensormodels)
 library(tidyverse)
+set.seed(2026)
 ```
 
 # Introduction
@@ -61,9 +83,9 @@ The package \pkg{tensormodels} aims to assist with both of these issues. Firstly
 
 In the following sections, we will explain the theory behind tensor variate distributions, explain some unique choices in the package design, show a simulation set up, and apply the models to a real-world problem. 
 
-Explain the statistical or computational problem that motivates
-\pkg{tensormodels}. State who the package is for and summarize its main
-contributions. End this section with a short roadmap of the paper.
+<!-- Explain the statistical or computational problem that motivates -->
+<!-- \pkg{tensormodels}. State who the package is for and summarize its main -->
+<!-- contributions. End this section with a short roadmap of the paper. -->
 
 # Background and related work
 
@@ -102,7 +124,7 @@ Consider a third-order tensor. In R, we would need to specify three indices to p
 
 \begin{figure}[htbp]
 \centering
-\includegraphics[width=0.4\textwidth]{images/tensorA.pdf}
+\includegraphics[width=0.2\textwidth]{images/tensorA.pdf}
 \caption{A $4 \times 3 \times 2$ tensor $\tensor{A}$}
 \end{figure}
 
@@ -179,13 +201,13 @@ Note that this operation is different from the tensor product. It is like the $n
 \begin{align*}
 \text{Let } \mat{A} =
 \begin{bmatrix}
-\color{red}{1} & \color{orange}{3} \\
-\color{red}{2} & \color{orange}{4}
+1 & 3 \\
+2 & 4
 \end{bmatrix} & \text{, }
 \ve{b} =
 \begin{bmatrix}
-\color{blue}{5} \\
-\color{blue}{6}
+5 \\
+6
 \end{bmatrix}.
 \end{align*}
 
@@ -256,13 +278,29 @@ There are several tensor variate distributions that are generalizations of matri
 
 ### Tensor variate normal
 
-The tensor variate normal distribution can be considered a generalization of the multivariate and matrix variate normal distributions. If $\tensor{X}$ has dimensions $n_1 \times \cdots \times n_D$, then
+The tensor variate normal distribution can be considered a generalization of the multivariate and matrix variate normal distributions. 
+
+Let $\tensor{Z}$ be an order-$D$ tensor with IID standard normal entries and $\mat{\Sigma}_{1}, \dots, \mat{\Sigma}_{D}$ be positive definite matrices describing the variance-covariance structure along each mode. For each mode, choose $\mat{A}_{j}$ such that $\mat{\Sigma}_{j} = \mat{A}_{j}\mat{A}_{j}^{T}, \qquad j = 1,\dots,D$. 
+
+Then we can define $\tensor{X}$ as 
+
+$$\tensor{X} = \tensor{M} + \tensor{Z} \nProd{1}\mat{A}_{1} \nProd{2}\mat{A}_{2} \cdots \nProd{D}\mat{A}_{D}.$$
+
+This ensures that 
+$$
+\text{vec}(\tensor{X}) \sim N\left( \text{vec}(\tensor{M}), \mat{\Sigma}_{D}\otimes\cdots\otimes\mat{\Sigma}_{2}\otimes\mat{\Sigma}_{1} \right)
+$$
+
+Thus, the tensor variate normal is obtained by transforming a tensor of IID standard normal draws along each mode
+
+If $\tensor{X}$ has dimensions $n_1 \times \cdots \times n_D$, then
 \[
 \operatorname{vec}(\tensor{X}) \sim
 N_{n^*}\left(\operatorname{vec}(\tensor{M}),
 \bigotimes_{d=1}^{D}\Sigma_d\right),
 \qquad n^* = \prod_{d=1}^{D} n_d.
 \]
+
 The density function of the multilinear normal distribution is [@tensornormprop]
 \[
 f(\tensor{X}) =
@@ -292,14 +330,43 @@ where $\tensor{M}$ is a location tensor, $\tensor{A}$ is a skewness tensor, $\te
 
 The mixing distributions and their parameters for each of the skewed tensor variate distributions are summarized below. In each case, the support of $W$ is $(0, \infty)$.
 
-| Distribution | Distribution of $W$ | Parameters | Parameter support |
-|:-------------|:--------------------|:-----------|:------------------|
-| Tensor variate skewed-t | $\operatorname{Inv\text{-}Gamma}(\nu/2,\nu/2)$ | $\nu$ | $\nu > 0$ |
-| Tensor variate generalized hyperbolic | $I(\omega,1,\lambda)$ | $\lambda,\omega$ | $\lambda \in \mathbb{R},\ \omega > 0$ |
-| Tensor variate variance gamma | $\operatorname{Gamma}(\gamma,\gamma)$ | $\gamma$ | $\gamma > 0$ |
-| Tensor variate normal inverse Gaussian | $\operatorname{IG}(1,\kappa)$ | $\kappa$ | $\kappa > 0$ |
 
-Table: Mixing distributions used to construct the skewed tensor variate distributions. \label{tab:mixing-distributions}
+
+```{r, echo=FALSE, results='asis'}
+mixing_table <- data.frame(
+  Distribution = c(
+    "Tensor variate skewed-t",
+    "Tensor variate generalized hyperbolic",
+    "Tensor variate variance gamma",
+    "Tensor variate normal inverse Gaussian"
+  ),
+  `Distribution of W` = c(
+    "$\\text{Inv-Gamma}(\\nu/2,\\nu/2)$",
+    "$\\text{Gen Inv Gaussian}{Gen Inv Gaussian}(\\omega,1,\\lambda)$",
+    "$\\text{Gamma}(\\gamma,\\gamma)$",
+    "$\\text{Inv Gaussian}(1,\\kappa)$"
+  ),
+  Parameters = c("$\\nu$", "$\\lambda, \\omega$", "$\\gamma$", "$\\kappa$"),
+  `Parameter support` = c(
+    "$\\nu > 0$",
+    "$\\omega > 0, \\ \\lambda \\in \\mathbb{R}$",
+    "$\\gamma > 0$",
+    "$\\kappa > 0$"
+  ),
+  check.names = FALSE
+)
+
+knitr::kable(
+  mixing_table,
+  escape = FALSE,
+  booktabs = TRUE,
+  caption = "Mixing distributions used to construct the skewed tensor variate distributions."
+) |>
+  kableExtra::column_spec(
+    c(1, 2, 3, 4),
+    width = c("2.2in", "1.55in", "0.8in", "1.4in")
+  )
+```
 
 The tensor variate skewed-t distribution can be generated by setting $W \sim \text{Inv-Gamma}(\nu/2, \nu/2)$ in Equation \ref{eq-skewmix}. We then say that $\tensor{X} \sim \text{TVST}_n(\tensor{M}, \tensor{A}, \bigotimes_{d=1}^{D} \Sigma_d, \nu)$.
 
@@ -311,22 +378,20 @@ The tensor variate normal inverse Gaussian distribution can be generated by sett
 
 These choices of $W$ give the four skewed families implemented in \pkg{tensormodels}. Their common representation also makes it possible to use a shared estimation framework while changing the distribution of the latent mixing variable.
 
-
-
-Introduce the tensor notation and modeling ideas needed by the reader. Compare
-the package with the closest existing R software and cite relevant literature
-using Pandoc citations, for example [@r-base].
+<!-- Introduce the tensor notation and modeling ideas needed by the reader. Compare -->
+<!-- the package with the closest existing R software and cite relevant literature -->
+<!-- using Pandoc citations, for example [@r-base]. -->
 
 # Package design
 
 The main goal of tensortools is to provide functions for random number generation, density computation, and MLE estimation for common tensor variate distributions. Additionally, the package provides diagnostic tests for the structure of input data. 
 
 
-One intentional decision was to store independent, identically distributed draws from a tensor variate distribution as a list. For example, if we generate $n = 100$ draws from a tensor variate normal distribution of dimension $2 \times 3 \ times 4$, the resulting R object will be a list of length 100. Each element in the list is a base R array object of dimension $2 \times 3 \times 4$. Other packages in this space created unique S3 and S4 class objects to store these types of draws. However, these choices are difficult for the average R user, as they have unique interactions and functions. 
+One intentional decision was to store independent, identically distributed draws from a tensor variate distribution as a list. For example, if we generate $n = 100$ draws from a tensor variate normal distribution of dimension $2 \times 3 \times 4$, the resulting R object will be a list of length 100. Each element in the list is a base R array object of dimension $2 \times 3 \times 4$. Other packages in this space created unique S3 and S4 class objects to store these types of draws. However, these choices are difficult for the average R user, as they have unique interactions and functions. 
 
 Another option would be to output a tensor of size $100 \times 2 \times 3 \times 4$; that is, create a tensor of one higher dimension where the first mode represents the index of the draw. The choice to have the first mode rpresent the draw is arbitrary and could potentially confuse users, especially if they permute the dimensions. 
 
-```{r tensor_random}
+```{r tensor-random}
 three_dim_iid <- rtnorm(n = 100, mu = array(1:12, dim = c(2, 3, 4)))
 
 length(three_dim_iid)
@@ -354,24 +419,15 @@ sigmas_true <- list(S1, S2, S3)
 
 tvn_draws <- rtnorm(n = 1e3, mu = mu_true,
                     sigmas = sigmas_true)
-
-tvn_draws[[1]]
 ```
 
 
 Given a list of draws, the package can estimate the MLEs using the function `tensor_mle()`{.R}. The model argument is required to know which distribution to fit to the data. 
 
-```{r tensor_mle_normal}
+```{r tensor-mle-normal}
 tvn_mles <- tensor_mle(tvn_draws, model = "normal")
 
-mean((tvn_mles$mu - mu_true)^2)
-
-for(i in 1:3) {
-  true_scaled <- sigmas_true[[i]] / sum(diag(sigmas_true[[i]]))
-  est_scaled <- tvn_mles$sigmas[[i]] / sum(diag(tvn_mles$sigmas[[i]]))
-  
-  print(mean((est_scaled - true_scaled)^2))
-}
+str(tvn_mles)
 ```
 
 
@@ -425,10 +481,8 @@ The Tensor-Train decomposition factorizes an $N$-th order tensor $\tensor{A}$ in
 \]
 The package computes this decomposition using the TT-SVD algorithm. The user can provide the ranks directly or allow them to be selected using an approximation accuracy.
 
-
-
-Show the smallest useful end-to-end example. Keep examples reproducible and
-fast enough that the full article can be rebuilt in under ten minutes.
+<!-- Show the smallest useful end-to-end example. Keep examples reproducible and -->
+<!-- fast enough that the full article can be rebuilt in under ten minutes. -->
 
 
 # Model fitting and inference
@@ -483,7 +537,7 @@ If a tensor normal covariance structure is present, then the multivariate and te
 
 The function `mahalanobis_dist()`{.R} computes both distances using fitted MLEs, and `mahalanobis_test()`{.R} performs a two-sample Kolmogorov-Smirnov test to compare their empirical distributions.
 
-```{r generate_data}
+```{r generate-data, echo = FALSE}
 S1 <- crossprod(matrix(data = c(1, 0.5, 0.5, 1), nrow = 2))
 
 multivar_draws <- rtnorm(n = 1000, mu = c(2, 3), sigmas = list(S1))
@@ -500,7 +554,7 @@ matrix_nocovar_draws <- lapply(1:1e3, function(i) {
 ```
 
 
-```{r mahalanobis}
+```{r mahalanobis, echo = FALSE}
 plot_malanobis <- function(draws, title = "Dist") {
   distances <- mahalanobis_dist(draws)
   test <- mahalanobis_test(distances)
@@ -512,7 +566,9 @@ plot_malanobis <- function(draws, title = "Dist") {
 ```
 
 
-```{r plot_mahalanobis}
+The figure below shows the Mahalanobis distance-distance plots along with the KS test statistic and $p$-value. From left to right, the input data is a multivariate normal, matrix variate normal with a separable covariance structure, matrix variate with nonseparable covariance matrices, and tensor variate normal with a separable covariance structure. 
+
+```{r plot-mahalanobis, echo = FALSE}
 par(mfcol = c(1, 4))
 plot_malanobis(multivar_draws, title = "Multivar")
 plot_malanobis(matrix_draws, title = "Mat norm")
@@ -520,7 +576,7 @@ plot_malanobis(matrix_nocovar_draws, title = "Mat no covar norm")
 plot_malanobis(tvn_draws, title = "Tensor norm")
 ```
 
-We are also interested in performing a likelihood ratio test. We are curious if one of the covariance matrices might be the identity matrix. Thus, we run the algorithm and restrict these matrices. 
+We are also interested in performing a likelihood ratio test to see if one of the covariance matrices might be the identity matrix. Thus, we run the algorithm and restrict these matrices. 
 
 For a restriction set \(\mathcal{R} \subset \{1,\ldots,D\}\), the restricted model fixes \(\Sigma_r = I_{n_r}\) for every \(r \in \mathcal{R}\), while all other covariance matrices are estimated. The likelihood ratio test compares 
 
@@ -533,201 +589,77 @@ $$2\{\ell(\hat\theta_{\mathrm{full}}) - \ell(\hat\theta_{\mathcal{R}})\}
 
 If the $p$-value is large, then we fail to reject the null hypothesis and conclude the restricted model fits the data as well as the unrestricted model. If the $p$-value is small, we reject the null hypothesis, which states the unrestricted model has a significantly better fit than the restricted model.
 
-```{r lrt_setup}
-true_str <- kronecker(S3, S2) |> kronecker(S1)
-  
+```{r lrt-function, echo = FALSE}
 test_restrict <- function(draws, restrict) {
-  curr_restrict <- tensor_mle(draws, restrict = restrict, model = "normal")
+  full_mod <- tensor_mle(draws, restrict = NULL, model = "normal")
+  
+  curr_mod <- tensor_mle(draws, restrict = restrict, model = "normal")
   
   if(is.null(restrict)) restrict <- "None"
 
-  curr_str <- with(curr_restrict, kronecker(sigmas[[3]], sigmas[[2]]) |>
-                                  kronecker(sigmas[[1]]))
-
-  tibble(mse = mean((curr_str - true_str)^2),
-         loglik = curr_restrict$loglik,
-         k = curr_restrict$k,
-         BIC = curr_restrict$BIC,
-         restrict = paste(restrict, collapse = ", "))
+  tibble(restrict = paste(restrict, collapse = ", "),
+         statistic = 2 * (full_mod$loglik - curr_mod$loglik),
+         df = full_mod$k - curr_mod$k,
+         `p-val` = pchisq(statistic, df = df, lower.tail = FALSE))
 }
-
-(res <- map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
-        draws = tvn_draws, test_restrict))
 ```
 
 
-```{r lrt_test}
-lrt_test <- function(draws, restrict) {
-  full_model <- tensor_mle(draws, model = "normal")
-  restrict_model <- tensor_mle(draws, model = "normal", restrict = restrict)
-  
-  pval <- pchisq(2 * (full_model$loglik - restrict_model$loglik), 
-                 df = full_model$k - restrict_model$k, lower.tail = FALSE)
-  
-  tibble(restrict = paste(restrict, collapse = ", "), 
-         pval = pval)
-}
+As expected, all of the restrictions lead to a model that is significantly different from the full model. All the covariance matrices are not the diagonal to best model the draws.
+```{r lrt-test-all, cache = TRUE}
+res <- map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
+        draws = tvn_draws, test_restrict)
 
-map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
-        draws = tvn_draws, lrt_test)
+knitr::kable(
+  res,
+  digits = 3,
+  escape = FALSE,
+  booktabs = TRUE,
+  caption = "LRT for Full Tensor Variate")
 ```
 
 
-```{r}
-true_str <- kronecker(S3, diag(3)) |> kronecker(S1)
-
+Now, we generate data where the second covariance matrix is diagonal. The model that restricts the 2nd covariance to be diagonal has a $p-val > 0.05$, meaning it is does not have a significantly smaller likelihood than the full unrestricted model. 
+```{r lrt-test-2, cache = TRUE, echo = FALSE}
 second_identity <- rtnorm(n = 1e3, mu = mu_true, 
                           sigmas = list(S1, diag(3), S3))
 
-map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)), 
-        draws = second_identity, test_restrict)
+res_second_identity <-
+  map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)), 
+          draws = second_identity, test_restrict)
 
-map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
-        draws = second_identity, lrt_test)
+knitr::kable(
+  res_second_identity,
+  digits = 3,
+  escape = FALSE,
+  booktabs = TRUE,
+  caption = "LRT for Second Sigma Identity")
 ```
+
 
 # Performance and validation
 
-This section checks the tensor variate normal implementation in two ways. First, we compare the density computed by \pkg{tensormodels} to the density from an established multivariate normal implementation after vectorizing each tensor. Second, we use repeated simulations to examine recovery of the mean tensor, the mode-specific covariance matrices, and the full Kronecker covariance matrix.
-
-## Density agreement after vectorization
-
-If $\tensor{X}$ follows a tensor variate normal distribution, then $\operatorname{vec}(\tensor{X})$ follows a multivariate normal distribution. Therefore, `dtnorm()` should return the same density as `mvtnorm::dmvnorm()` when the tensor is vectorized and the full covariance matrix is constructed as a Kronecker product [@genzBretz].
-
-The following example uses a $2 \times 3$ matrix variate normal distribution. With R's column-major vectorization convention, the full covariance matrix is $\Sigma_2 \otimes \Sigma_1$.
-
-```{r density-validation, results='asis'}
-set.seed(2026)
-
-val_mu <- matrix(c(-1, 0, 1, 2, -0.5, 0.5), nrow = 2)
-val_S1 <- matrix(c(1, 0.4, 0.4, 2), nrow = 2)
-val_S2 <- matrix(c(1, 0.25, 0.1,
-                   0.25, 1.5, 0.35,
-                   0.1, 0.35, 1.2), nrow = 3)
-
-val_draws <- rtnorm(
-  n = 25,
-  mu = val_mu,
-  sigmas = list(val_S1, val_S2)
-)
-
-tensor_log_density <- vapply(
-  val_draws,
-  dtnorm,
-  numeric(1),
-  mu = val_mu,
-  sigmas = list(val_S1, val_S2),
-  log = TRUE
-)
-
-vector_log_density <- mvtnorm::dmvnorm(
-  x = t(vapply(val_draws, c, numeric(length(val_mu)))),
-  mean = c(val_mu),
-  sigma = kronecker(val_S2, val_S1),
-  log = TRUE
-)
-
-density_agreement <- data.frame(
-  `Maximum absolute difference` =
-    format(
-      max(abs(tensor_log_density - vector_log_density)),
-      scientific = TRUE,
-      digits = 3
-    ),
-  check.names = FALSE
-)
-
-knitr::kable(
-  density_agreement,
-  format = "pipe",
-  caption = "Agreement between tensor and vectorized multivariate log-densities."
-)
-```
-
-The difference is at the level of floating-point precision, providing a numerical check that the determinant and quadratic-form calculations in `dtnorm()` agree with the corresponding multivariate normal calculation.
 
 ## Parameter recovery
 
-We next simulate data from the same $2 \times 3$ tensor variate normal distribution and estimate its parameters using `tensor_mle()`. We use sample sizes $n = 50$, $150$, and $500$, with 10 independent simulations for each sample size.
+To validate the distributions, we can compare the MLEs to the true values used to generate draws. 
+```{r}
+mean((tvn_mles$mu - mu_true)^2)
 
-The individual factors in a Kronecker covariance are not identifiable without a scale convention. If
-\[
-c_1 = \frac{\operatorname{tr}(\Sigma_1)}{n_1},
-\]
-then the equivalent normalized factors used for comparison are
-\[
-\Sigma_1^* = \frac{\Sigma_1}{c_1}
-\quad \text{and} \quad
-\Sigma_2^* = c_1\Sigma_2.
-\]
-This gives $\operatorname{tr}(\Sigma_1^*) = n_1$ while preserving
-$\Sigma_2^* \otimes \Sigma_1^* = \Sigma_2 \otimes \Sigma_1$, matching the scale convention used by the package.
-
-```{r parameter-recovery, results='asis'}
-set.seed(2026)
-
-val_scale1 <- sum(diag(val_S1)) / nrow(val_S1)
-val_S1_scaled <- val_S1 / val_scale1
-val_S2_scaled <- val_S2 * val_scale1
-val_full_sigma <- kronecker(val_S2, val_S1)
-
-sample_sizes <- c(50, 150, 500)
-simulation_repetitions <- 10
-
-recovery_results <- map_dfr(sample_sizes, function(sample_size) {
-  map_dfr(seq_len(simulation_repetitions), function(repetition) {
-    current_draws <- rtnorm(
-      n = sample_size,
-      mu = val_mu,
-      sigmas = list(val_S1, val_S2)
-    )
-
-    current_fit <- tensor_mle(current_draws, model = "normal")
-    estimated_full_sigma <- kronecker(
-      current_fit$sigmas[[2]],
-      current_fit$sigmas[[1]]
-    )
-
-    tibble(
-      n = sample_size,
-      repetition = repetition,
-      mean_tensor = mean((current_fit$mu - val_mu)^2),
-      first_covariance =
-        mean((current_fit$sigmas[[1]] - val_S1_scaled)^2),
-      second_covariance =
-        mean((current_fit$sigmas[[2]] - val_S2_scaled)^2),
-      full_covariance =
-        mean((estimated_full_sigma - val_full_sigma)^2)
-    )
-  })
-})
-
-recovery_summary <-
-  recovery_results |>
-  group_by(n) |>
-  summarize(
-    `Mean tensor` = mean(mean_tensor),
-    `First covariance` = mean(first_covariance),
-    `Second covariance` = mean(second_covariance),
-    `Full covariance` = mean(full_covariance),
-    .groups = "drop"
-  )
-
-knitr::kable(
-  recovery_summary,
-  format = "pipe",
-  digits = 4,
-  caption = "Mean squared error over 10 simulations for each sample size."
-)
+for(i in 1:3) {
+  true_scaled <- sigmas_true[[i]] / sum(diag(sigmas_true[[i]]))
+  est_scaled <- tvn_mles$sigmas[[i]] / sum(diag(tvn_mles$sigmas[[i]]))
+  
+  print(mean((est_scaled - true_scaled)^2))
+}
 ```
 
-The mean squared errors decrease as the sample size increases. This is visible for the mean tensor, both scale-normalized covariance factors, and the reconstructed full Kronecker covariance matrix. These simulations provide a basic numerical validation of parameter recovery; they are not intended to be a complete finite-sample study of the estimators.
 
 # Examples
 
 Now that we have set up our tensor distributions, we can use them on a real-world example. The CIFAR 100 dataset contains images of a set of 100 common objects. In this case, we will only be using the maple trees, which have an ID value of 48.
 
-```{r plot_functions, echo = FALSE}
+```{r plot-functions, echo = FALSE}
 library(torchvision)
 library(patchwork)
 library(tidyverse)
@@ -783,7 +715,7 @@ wrap_plots(lapply(maple_trees[1:20], plot_image), ncol = 5)
 
 
 We can fit the best model to this set of images. The function `model_compare()`{.R} takes in a dataset and fits all of the possible tensor models. It returns the result as a data frame with columns containing the name of the model, log likelihood, number of parameters denoted as k, AIC, BIC, and the model object itself. We can then select the model with the lowest BIC to proceed. 
-```{r model_compare, cache = TRUE}
+```{r model-compare, cache = TRUE}
 model_compare <- function(draws) {
   res_normal <- tensor_mle(draws, model = "normal", quiet = FALSE)
   res_skewt <- tensor_mle(draws, model = "skewt", quiet = FALSE)
@@ -831,15 +763,18 @@ plot_image(with(best_mod, mu + skew/kappa)) +
 
 
 We can also create summary plots of the skew $\mathcal{A}$ and the covariance matrices $\Sigma$ from the model. We converted the covariance matrices to correlation matrices to make it easier to interpret each matrix, since this places them on the same scale. 
-```{r, cache = TRUE, echo = FALSE}
+```{r plot-skew, cache = TRUE, echo = FALSE, fig.width=8, fig.height=3}
 plot_matrix(best_mod$skew[, , 1]) +
   plot_matrix(best_mod$skew[, , 2]) +
   plot_matrix(best_mod$skew[, , 3]) + 
   plot_layout(guides = 'collect') &
-  scale_fill_gradient2(#low = "blue", mid = "white", high = "red",
+  scale_fill_gradient2(
     midpoint = 0,
     limits = c(min(best_mod$skew), max(best_mod$skew)))
+```
 
+
+```{r plot-corr, cache = TRUE, echo = FALSE, fig.width=8, fig.height=3}
 sig_corr <- lapply(best_mod$sigmas, cov2cor)
 
 plot_matrix(sig_corr[[1]]) +
@@ -887,7 +822,7 @@ wrap_plots(lapply(maple_trees[which(all_lik >= 9000)], plot_image),
 
 
 
-```{r, cache=TRUE, echo = FALSE}
+```{r, cache = TRUE, echo = FALSE}
 library(ggplot2)
 library(dplyr)
 library(tibble)
@@ -932,9 +867,9 @@ ggplot(maple_plot_data,
 ```
 
 
-Use one or two examples that demonstrate what the package makes possible.
-Prefer datasets that can be included with the submission or downloaded from a
-stable public archive.
+<!-- Use one or two examples that demonstrate what the package makes possible. -->
+<!-- Prefer datasets that can be included with the submission or downloaded from a -->
+<!-- stable public archive. -->
 
 
 # Discussion
