@@ -224,10 +224,9 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
 
     # Step 5: Check convergence
 
-    eval_dtgenhyper <- .make_dtgenhyper_evaluator(
-      mu, skew, sigmas, lambda, omega
-    )
-    logliks[t] <- sum(eval_dtgenhyper(data, log = TRUE))
+    logliks[t] <- sum(dtgenhyper(data, mu = mu, skew = skew,
+                                 sigmas = sigmas, lambda = lambda,
+                                 omega = omega, log = TRUE))
 
     if(t >= 3) {
       ll_rel <- abs(logliks[t] - logliks[t - 1]) /

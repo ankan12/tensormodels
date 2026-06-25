@@ -191,8 +191,9 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
 
     # Step 5: Check convergence
 
-    eval_dtinvgauss <- .make_dtinvgauss_evaluator(mu, skew, sigmas, kappa)
-    logliks[t] <- sum(eval_dtinvgauss(data, log = TRUE))
+    logliks[t] <- sum(dtinvgauss(data, mu = mu, skew = skew,
+                                 sigmas = sigmas, kappa = kappa,
+                                 log = TRUE))
 
     if(t >= 3) {
       ll_rel <- abs(logliks[t] - logliks[t - 1]) / (abs(logliks[t - 1]) + 1e-8)

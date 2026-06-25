@@ -73,6 +73,18 @@ knitr::opts_chunk$set(
 library(tensormodels)
 library(tidyverse)
 set.seed(2026)
+
+plot_matrix <- function(input) { # function to plot matrices
+  input |>
+    as_tibble(.name_repair = ~ paste0("V", seq_along(.))) |>
+    mutate(row = row_number()) |>
+    pivot_longer(-row, names_to = "col", values_to = "value") |>
+    mutate(col = as.integer(str_remove(col, "^V"))) |>
+    ggplot(aes(x = col, y = row, fill = value)) +
+    geom_tile(color = "black", lwd = 0.1) +
+    scale_y_reverse() +
+    theme_minimal()
+}
 ```
 
 # Introduction
@@ -657,8 +669,8 @@ for(i in 1:3) {
 
 # Examples
 
-
-```{r}
+Now that we have set up our tensor distributions, we can use them on a real-world example. This data set is called "Condition monitoring of hydraulic systems" from the UC Irvine Machine Learning Repository. It has data from 6 sensors that measure pressure. Each pressure sensor is represented as a text file containing 2205 cycles and 6000 measurements, where the 6000 is 100 measurements per second taken over 60 seconds. 
+```{r hydraulic-tensor-matrix}
 profile <- read.table("paper/hydraulic_systems/profile.txt")
 
 names(profile) <- c("cooler",
@@ -667,7 +679,7 @@ names(profile) <- c("cooler",
                     "accumulator",
                     "stable")
 
-optimal_ids <- which(
+optimal_ids <- which( # find similar cycles
   profile$cooler == 100 &
   profile$valve >= 90 &
   profile$pump_leakage == 0 &
@@ -676,7 +688,7 @@ optimal_ids <- which(
 
 all_ps <- array(dim = c(6, 40, 60, 100))
 
-for(i in 1:6) {
+for(i in 1:6) { # read in data from 6 sensors
   file_curr <- paste0("paper/hydraulic_systems/PS", i, ".txt")
   ps_curr <- as.matrix(read.table(file_curr))
   
@@ -687,135 +699,51 @@ for(i in 1:6) {
 }
 
 perm_ps <- aperm(all_ps, c(2, 1, 3, 4))
-perm_ps <- perm_ps[, , , seq(1, 100, by = 2)]
 
-pressure_draws <- vector("list", dim(perm_ps)[1])
+# take 50 measurements per second instead of 100, too many data points
+perm_ps <- perm_ps[, , , seq(1, 100, by = 2)] 
 
+pressure_list <- vector("list", dim(perm_ps)[1])
 
-for (k in seq_along(pressure_draws)) {
-  pressure_draws[[k]] <- perm_ps[k, , , , drop = TRUE]
+for (k in seq_along(pressure_draws)) { # store as list for tensor analysis
+  pressure_list[[k]] <- perm_ps[k, , , , drop = TRUE]
 }
 
-res_norm <- tensor_mle(pressure_draws, model = "normal", quiet = FALSE)
-```
+perm_ps_mat <- array(perm_ps, dim = c(40, 6, 60 * 50))
 
+press_mat <- vector("list", dim(perm_ps_mat)[1])
 
-```{r}
-all_ps |> dim()
-
-ps1 <- as.matrix(read.table("paper/hydraulic_systems/PS1.txt"))
-ps2 <- as.matrix(read.table("paper/hydraulic_systems/PS2.txt"))
-ps3 <- as.matrix(read.table("paper/hydraulic_systems/PS3.txt"))
-ps4 <- as.matrix(read.table("paper/hydraulic_systems/PS4.txt"))
-ps5 <- as.matrix(read.table("paper/hydraulic_systems/PS5.txt"))
-ps6 <- as.matrix(read.table("paper/hydraulic_systems/PS6.txt"))
-
-
-all_ps <- array(data = c(ps1, ps2, ps3, ps4, ps5, ps6), 
-                dim = c(2205, 6000, 6)) |> 
-          aperm(c(3, 1, 2))
-
-plot_matrix(all_ps[1, 1, , ])
-
-#6 x 2205 x 6000
-#sensor x cycle x time 
-dim(all_ps)
-```
-
-
-```{r}
-res_norm$sigmas[[2]] |>
-  as_tibble(.name_repair = ~ paste0("V", seq_along(.))) |>
-  mutate(row = row_number()) |>
-  pivot_longer(-row, names_to = "col", values_to = "value") |>
-  mutate(col = as.integer(str_remove(col, "^V"))) |> 
-  filter(value > 10)
-
-res_norm$sigmas[[2]] |> c() |> as_tibble() |> 
-  ggplot() +
-  geom_histogram(aes(x = value), bins = 10) +
-  theme_minimal()
-
-res_norm$sigmas[[2]] |> c() |> as_tibble() |> 
-  filter(value > 10)
-
-# 40 x 6 x 100 x 60
-plot_matrix(res_norm$sigmas[[1]]) +
- plot_matrix(res_norm$sigmas[[2]]) +
- plot_matrix(res_norm$sigmas[[3]]) +
- theme_minimal()
-
-plot_matrix(res_norm$sigmas[[1]]) +
-  theme_minimal()
-
-plot_matrix(res_norm$sigmas[[3]]) +
-  scale_fill_viridis_c(limits = c(0, 0.4)) +
-  theme_minimal()
-
-plot_matrix(res_norm$sigmas[[3]]) +
-  theme_minimal()
-
-```
-
-
-
-<!-- Now that we have set up our tensor distributions, we can use them on a real-world example. The CIFAR 100 dataset contains images of a set of 100 common objects. In this case, we will only be using the maple trees, which have an ID value of 48. -->
-
-<!-- ```{r plot-functions, echo = FALSE} -->
-<!-- library(torchvision) -->
-<!-- library(patchwork) -->
-<!-- library(tidyverse) -->
-
-<!-- plot_image <- function(img) { -->
-<!--   rgb_image <- -->
-<!--     expand_grid(x = seq_len(dim(img)[1]), -->
-<!--                 y = seq_len(dim(img)[2])) |> -->
-<!--     mutate(r = as.vector(img[, , 1]),  -->
-<!--            g = as.vector(img[, , 2]), -->
-<!--            b = as.vector(img[, , 3]), -->
-<!--            fill = rgb(r, g, b)) -->
-
-<!--   ggplot(rgb_image, aes(x = x, y = y, fill = fill)) + -->
-<!--     geom_raster(interpolate = TRUE) + -->
-<!--     scale_fill_identity() + -->
-<!--     coord_fixed(expand = FALSE) + -->
-<!--     scale_y_reverse() + -->
-<!--     theme_void() -->
-<!-- } -->
-```{r}
-plot_matrix <- function(input) { # function to plot matrices
-  input |>
-    as_tibble(.name_repair = ~ paste0("V", seq_along(.))) |>
-    mutate(row = row_number()) |>
-    pivot_longer(-row, names_to = "col", values_to = "value") |>
-    mutate(col = as.integer(str_remove(col, "^V"))) |>
-    ggplot(aes(x = col, y = row, fill = value)) +
-    geom_tile(color = "black", lwd = 0.1) +
-    scale_y_reverse() 
+for (k in seq_along(press_mat)) { # store as list for matrix analysis
+  press_mat[[k]] <- perm_ps_mat[k, , , drop = TRUE]
 }
 ```
 
 
-<!-- Once we have the CIFAR dataset loaded in from torchvision, we can plot 20 example images. The images are stored as an array of size 32 x 32 x 3. This is an image that is 32 x 32 pixels, and the last mode represents the red, green, and blue color values.  -->
+We are only interested in modeling when the system is working properly, so after filtering for that condition, we are left with 40 cycles. We assume that these 40 cycles are independent, identically distributed draws - that is, each of these cycles represents the same distribution of pressure values whenever the hydraulic test rig is working as intended. We also split the column containing 6000 measurements into a matrix of $60 \times 50$, to represent the covariance structure of the repeated measurements taken within a second. 
 
-<!-- his is an image that is 32 x 32 pixels stored as red, green, and blue values. The values vary from 0 to 255 and represent the intensity of that color.  -->
-<!-- ```{r cifar, echo = FALSE} -->
-<!-- cifar100 <- cifar100_dataset(download = TRUE) -->
+Now we can fit a tensor variate normal and a matrix variate normal to the data. The log likelihood for the tensor variate model is much higher than the matrix variate, and its BIC is also much lower as it estimates less parameters than the matrix variate model. This shows a situation where restructuring the data into a tensor can lead to much better model fit results. 
+```{r normal-models}
+# tensor and matrix models
+res_norm_tensor <- tensor_mle(pressure_draws, model = "normal", quiet = FALSE)
+res_norm_matrix <- tensor_mle(press_mat, model = "normal", quiet = FALSE)
 
-<!-- maple_idx <- which(cifar100$y == 48) -->
-
-<!-- maple_trees <- vector("list", length(maple_idx)) -->
-
-<!-- # store as a list of images -->
-<!-- for (i in seq_along(maple_idx)) { -->
-<!--   maple_trees[[i]] <- cifar100[[maple_idx[i]]]$x/255 -->
-<!-- } -->
-
-<!-- wrap_plots(lapply(maple_trees[1:20], plot_image), ncol = 5) -->
-<!-- ``` -->
+tibble(model = c("Tensor", "Matrix"),
+       loglik = c(res_norm_tensor$loglik, res_norm_matrix$loglik),
+       BIC = c(res_norm_tensor$BIC, res_norm_matrix$BIC),
+       model_obj = list(res_norm_tensor, res_norm_matrix))
+```
 
 
-<!-- We can fit the best model to this set of images. The function `model_compare()`{.R} takes in a dataset and fits all of the possible tensor models. It returns the result as a data frame with columns containing the name of the model, log likelihood, number of parameters denoted as k, AIC, BIC, and the model object itself. We can then select the model with the lowest BIC to proceed.  -->
+```{r normal-models-cov}
+plot_matrix(cov2cor(res_norm_tensor$sigmas[[1]])) +
+  labs(title = expression(R[1])) +
+plot_matrix(cov2cor(res_norm_tensor$sigmas[[2]])) +
+  labs(title = expression(R[2])) +
+plot_matrix(cov2cor(res_norm_tensor$sigmas[[3]])) +
+  labs(title = expression(R[3]))
+```
+
+
 ```{r model-compare, cache = TRUE}
 model_compare <- function(draws) {
   res_normal <- tensor_mle(draws, model = "normal", quiet = FALSE)
@@ -829,7 +757,7 @@ model_compare <- function(draws) {
     loglik = c(res_normal$loglik, res_skewt$loglik,
                res_vargam$loglik, res_invgauss$loglik, res_genhyper$loglik),
     k = c(res_normal$k, res_skewt$k,
-          res_vargam$k, res_invgauss$k, res_gsenhyper$k),
+          res_vargam$k, res_invgauss$k, res_genhyper$k),
     AIC = c(res_normal$AIC, res_skewt$AIC,
             res_vargam$AIC, res_invgauss$AIC, res_genhyper$AIC),
     BIC = c(res_normal$BIC, res_skewt$BIC,
@@ -848,15 +776,22 @@ best_mod
 ```
 
 
-```{r model-compare, cache = TRUE}
-plot_matrix(best_mod$sigmas[[1]]) +
-  theme_minimal()
+```{r model-compare-matrix, cache = TRUE}
+res_mat <- model_compare(press_mat)
 
-plot_matrix(best_mod$sigmas[[2]]) +
-  theme_minimal()
+best_mod_mat <- (res_mat |> arrange(BIC) |> slice_head(n = 1))$mod_obj[[1]]
 
-plot_matrix(best_mod$sigmas[[3]]) +
-  theme_minimal()
+best_mod_mat
+```
+
+
+```{r plot-best-covariances, cache = TRUE}
+plot_matrix(cov2cor(best_mod$sigmas[[1]])) +
+  labs(title = expression(R[1])) +
+plot_matrix(cov2cor(best_mod$sigmas[[2]])) +
+  labs(title = expression(R[2])) +
+plot_matrix(cov2cor(best_mod$sigmas[[3]])) +
+labs(title = expression(R[3]))
 ```
 
 

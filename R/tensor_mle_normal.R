@@ -50,8 +50,8 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
     array_data <- aperm(simplify2array(data), c(2, 1))
     mu <- apply(array_data, 2, mean)
     sigma <- cov(array_data) * (n - 1)/n
-    eval_dtnorm <- .make_dtnorm_evaluator(mu, list(sigma))
-    total_loglik <- sum(eval_dtnorm(data, log = TRUE))
+    total_loglik <- sum(dtnorm(data, mu = mu, sigmas = list(sigma),
+                               log = TRUE))
     k <- dims + dims * (dims + 1)/2
     return(list(
       mu = mu,
@@ -130,9 +130,7 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
     }
 
     # Step 5: Check convergence
-
-    eval_dtnorm <- .make_dtnorm_evaluator(mu, sigmas)
-    logliks[t] <- sum(eval_dtnorm(data, log = TRUE))
+    logliks[t] <- sum(dtnorm(data, mu = mu, sigmas = sigmas, log = TRUE))
 
     if(t >= 3) {
       ll_rel <- abs(logliks[t] - logliks[t - 1]) / (abs(logliks[t - 1]) + 1e-8)

@@ -1,4 +1,7 @@
 .tensor_dims <- function(x) {
+  x_is_list <- is.list(x)
+
+
   dims <- dim(x)
   if(is.null(dims)) {
     return(length(x))
