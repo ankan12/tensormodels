@@ -32,7 +32,15 @@ Rcpp::NumericVector n_prod(Rcpp::NumericVector tensor,
   using namespace Rcpp;
 
   // --- Step 1: Extract and validate tensor dimensions ---
-  IntegerVector dimsA = tensor.attr("dim");
+  SEXP dimsA_attr = tensor.attr("dim");
+  IntegerVector dimsA;
+
+  if (Rf_isNull(dimsA_attr)) {
+    dimsA = IntegerVector::create(tensor.size());
+  } else {
+    dimsA = IntegerVector(dimsA_attr);
+  }
+
   int NdA = dimsA.size();
   if (n < 1 || n > NdA)
     stop("Invalid mode index: n must be between 1 and %d", NdA);

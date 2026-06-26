@@ -72,6 +72,7 @@ knitr::opts_chunk$set(
 
 library(tensormodels)
 library(tidyverse)
+library(patchwork)
 set.seed(2026)
 
 plot_matrix <- function(input) { # function to plot matrices
@@ -105,7 +106,7 @@ The tensor space is still being established, with works using conflicting notati
 
 ## Order
 
-The order of a tensor is the number of indices needed to specify a value. A vector has order 1 and a matrix has order 2, while the order of a tensor is 3 or more. Another way to define the order is the number of values needed in R's subsetting operator to pull out a specific element.
+The order of a tensor is the number of indices needed to identify an entry. This is hte same as the numvber of values needed inside R's subsetting brackets to pull one element out. A vector is a first-order tensor, a matrix is a second-order tensor, and any object beyond that is a higher-order tensor. 
 
 
 For example, take the vector $\ve{a} = (1, 2, 3)$. To extract a specific element, you only require one value, so it has an order 1.
@@ -117,13 +118,11 @@ a[2]
 ```
 
 
-Now consider the matrix
+The matrix
 $$\mat{A} = \begin{bmatrix}
   1 & 2 & 3 \\
   4 & 5 & 6 \end{bmatrix}.$$
-
-In R, we would need to specify two indices to pull out an element - the first represents the row, and the second represents the column.
-
+has order two, since its entries are indexed by row and column. 
 
 ```{r matrix}
 A <- matrix(data = 1:6, nrow = 2, ncol = 3)
@@ -132,7 +131,7 @@ A[2, 1]
 ```
 
 
-Consider a third-order tensor. In R, we would need to specify three indices to pull out an element.
+A third-order tensor requires three indices. The following tensor has dimensions $4 \times 3 \times 2$, so we need to specify a position along each mode to pull an element. 
 
 \begin{figure}[htbp]
 \centering
@@ -151,98 +150,54 @@ A[3, 1, 1]
 
 ## Mode
 
-The mode of an object is its specific axis. For a matrix, it is common terminology to refer to the first mode as the rows and the second mode as the columns. However, since a tensor can have three or more dimensions, we now need a term for the specific dimension being referred to.
+The mode is a specific axis of a tensor. For a matrix, the two modes are usually called rows and columns. However, since a tensor can have three or more dimensions, we now need a term for the specific dimension being referred to.
 
-Consider a tensor $\tensor{A} \in \mathbb{k}^{4 \times 2 \times 3}$. We would say the first mode is 4, the second mode is 2, and the third mode is 3. Note that the modes of a tensor are dependent on the structure of the object. For example, we could keep the same data in $\tensor{A}$ but permute the modes, leading to a new tensor $\tensor{B} \in \mathbb{k}^{4 \times 3 \times 2}$. When communicating a tensor, it is important to keep the modes consistent and keep track of what each mode represents.
+Consider a tensor $\tensor{A} \in \mathbb{k}^{4 \times 2 \times 3}$. We would say the first mode has dimension 4, the second mode has dimension 2, and the third mode has dimension 3. Note that the modes of a tensor are dependent on the structure of the object. For example, we could keep the same data in $\tensor{A}$ but permute the modes, leading to a new tensor $\tensor{B} \in \mathbb{k}^{4 \times 3 \times 2}$. When communicating a tensor, it is important to keep the modes consistent and keep track of what each mode represents. For example, the modes of a tensor could represent a specific sensor ID, time of measurement, and spatial location. 
 
 
 ## $n$-mode product
 
-The $n$-mode matrix product of a tensor $\tensor{A} \in \field{k}^{I_1 \times I_2 \times ... \times I_n}$ with a matrix $\mat{U} \in \field{k}^{J \times I_n}$
-is
-$$(\tensor{A} \times_n \mat{U}) \in \field{k}^{I_1 \times ... \times I_{n-1} \times J \times I_{n+1} \times ... \times I_N}$$ with entries $$(\tensor{A} \times_n \mat{U})_{i_1, ..., i_{n-1}, j, i_{n+1}, ... I_N} = \sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_N} u_{j, i_n}.$$ The tensor and matrix share one mode in common, denoted here as $I_n$. This operation is also called the tensor times matrix product.
+In regular matrix multiplication, we can multiply two matrices as long as the number of columns in the first matrix matches the rows of the second matrix. Now, suppose we want to multiply a tensor and a matrix. Now, we need a new operator to specify which mode from the tensor should line up with the matrix. The $n$-mode product specifies that the $n$-th mode of a tensor should have the same size as the columns of a matrix.   
 
-\begin{figure}[htbp]
-\centering
-\includegraphics{images/nModeProd.pdf}
-\caption{$n$-mode product}
-\end{figure}
+Let tensor $\tensor{A} \in \field{k}^{I_1 \times I_2 \times ... \times I_n}$ and let a matrix $\mat{U} \in \field{k}^{J \times I_n}$. Then the $n$-mode product of $\tensor{A}$ and $\mat{U}$ can be defined as
 
-\subsubsection{Example} \label{sec_1.3.3.1}
+$$(\tensor{A} \times_n \mat{U}) \in \field{k}^{I_1 \times ... \times I_{n-1} \times J \times I_{n+1} \times ... \times I_N}.$$ Note that the modes of the result stay the same as $\tensor{A}$ other than the $n$-th mode being replaced with $J$. 
 
-Let $\ve{a} = \begin{bmatrix} 1 \\ 2 \\ 3 \end{bmatrix} \in \field{k}^3$ and $\mat{U} = \begin{bmatrix} 4 & 6 & 8 \\ 5 & 7 & 9 \end{bmatrix} \in \field{k}^{2\times 3}$.
+Its entries are
 
-$$ \ve{a} \times_{1} \mat{U} =
-\begin{bmatrix}
-           1 \\
-           2 \\
-           3
-\end{bmatrix} \times_{1}
-\begin{bmatrix}
-           4 & 6 & 8 \\
-           5 & 7 & 9
-\end{bmatrix} =
-\begin{bmatrix}
-           1(4) + 2(6) + 3(8) \\
-           1(5) + 2(7) + 3(9)
-\end{bmatrix} =
-\begin{bmatrix}
-           40 \\
-           46
-\end{bmatrix}$$
+$$(\tensor{A} \times_{n} \mat{U})_{i_1, ..., i_{n-1}, j, i_{n+1}, ... I_N} = \sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_N} u_{j, i_n}.$$ 
+
+The tensor and matrix share one mode in common, denoted here as $I_n$. This operation is also called the tensor times matrix product.
+
+This function is called `n_prod()` in the package `tensormodels`. It accepts a tensor, a matrix, and a value $n$ specifying which mode to multiply across. For example, let us take $\ve{a} \in \field{k}^3$ and $\mat{U} \in \field{k}^{2\times 3}.$ Then if we compute $\ve{a} \times_{1} \mat{U}$, we expect the final result to be $\in \field{k}^{2 \times 1}.$
+
+```{r}
+a_vec <- c(1, 2, 3) 
+u_mat <- matrix(4:9, ncol = 3)
+
+n_prod(tensor = a_vec, mat = u_mat, n = 1)
+```
 
 
-## $nm$-mode product
+We can also do a more complex example with a tensor and a matrix. Here, $\tensor{A} \in \field{k}^{2 \times 3 \times 4}.$ Then if we compute $\tensor{A} \times_{2} \mat{U}$, we expect the final result to be $\in \field{k}^{2 \times 2 \times 4}.$
+```{r}
+A_tensor <- array(1:24, dim = c(2, 3, 4))
 
-The $\mn{n}{m}$-product of a tensor $\tensor{A} \in \field{k}^{I_1 \times I_2 \times ... \times I_N}$ with a tensor $\tensor{B} \in \field{k}^{J_1 \times J_2 \times ... \times J_M}$ such that $I_n = J_m$, is defined as
-$\tensor{C} = \tensor{A} \mn{n}{m} \tensor{B}.$
-It has entries
-\begin{align*}
-  &\mathcal{C}(i_1, ..., i_{n-1}, ..., i_N, j_1, ..., j_{m-1}, j_{m+1}, ..., j_M =
-  \\ &\sum_{i_n=1}^{I_n} \tensor{A}(i_1, ..., i_{n-1}, i_n, i_{n+1}, ..., i_N) \tensor{B}(j_1, ..., j_{m-1}, i_n, j_{m+1}, ..., j_M)
- \end{align*}
-Note that this operation is different from the tensor product. It is like the $n$-mode product, except now a mode $m$ also has to be specified since we are indexing over two tensors.
+dim(n_prod(A_tensor, u_mat, n = 2))
+```
 
-\begin{figure}[htbp]
-\centering
-\includegraphics{images/mChooseN.pdf}
-\caption{$\mn{n}{m}$-product}
-\end{figure}
 
-\subsubsection{Example} \label{sec_1.3.4.1}
-\begin{align*}
-\text{Let } \mat{A} =
-\begin{bmatrix}
-1 & 3 \\
-2 & 4
-\end{bmatrix} & \text{, }
-\ve{b} =
-\begin{bmatrix}
-5 \\
-6
-\end{bmatrix}.
-\end{align*}
+In `tensormodels`, the $n$-mode product is used internally to apply covariance transformations one mode at a time. For random generation, independent standard normal tensors are multiplied by Cholesky factors along each mode to induce the desired covariance structure. For density evaluation and model diagnostics, centered tensors are multiplied by inverse covariance factors along each mode, producing standardized tensor residuals and Mahalanobis distances.
 
-$$\mat{A} \mn{1}{1} \ve{b} =
- \begin{bmatrix}
- 1(5) + 2(6) \\
- 3(5) + 4(6)
- \end{bmatrix} =
- \begin{bmatrix}
- 5 + 12 \\
- 15 + 24
- \end{bmatrix} =
- \begin{bmatrix}
- 17 \\
- 39
- \end{bmatrix}
- $$
- 
+
 ## Matricization
+
+Matricization, also called unfolding, collapses a tensor into a matrix. It accepts an argument $k$ that determines which mode to place in the rows, and then combines every other mode into the columns. This allows us to focus on variation along a specific mode. 
 
 Let $\tensor{A} \in \field{k}^{I_1 \times ... \times I_N}$ be an $N$-th order tensor. The $k$-th matricization of $\tensor{A}$ is a matrix $\mat{A}_k \in \field{k}^{I_1I_2,...,I_k \times I_{k+1} \times I_{k+2} \times... \times I_N}$, whose elements are taken column-wise from A. The elements are
 $\mat{A}_{(k)}(i_1 ..., i_k, i_{k+1}, ...., i_N) = \tensor{A}(i_1,..., i_k, i_{k+1}, ..., i_N).$
-This operation allows us to collapse a tensor into a matrix. However, this loses information about how the dimensions are related. Another name for it is unfolding.
+
+In `tensormodels`, this function is called `matricization().` It accepts a tensor and $k$. 
 
 \subsubsection{Example} \label{sec_1.3.5.1}
 
@@ -266,13 +221,16 @@ $$A_{(1)} = \begin{bmatrix} 1 & 5 & 9 & 13 & 17 & 21 \\
                             3 & 7 & 11 & 15 & 19 & 23 \\
                             4 & 8 & 12 & 16 & 20 & 24
             \end{bmatrix}$$
+            
+```{r}
+A <- array(1:24, dim = c(4, 3, 2))
 
-## Frobenius norm
+matricization(A, k = 1)
+```
+            
 
-Let $\tensor{A} \in \field{k}^{I_1 \times I_2 \times \dots \times I_N}$ be a tensor. The Frobenius norm of this tensor is defined as [@tensorDecomp]
-$$\|\tensor{A}\| = \sqrt{\sum_{i_1 = 1}^{I_1} \sum_{i_2 = 1}^{I_2} \dots \sum_{i_N = 1}^{I_N} a(i_1, i_2, \dots i_N)^2}.$$
+In `tensormodels`, matricization is used to initialize and update mode-specific covariance matrices through ordinary matrix crossproducts.
 
-This notation means that we take every value in the tensor, square them, add them up, and then take the square root of that sum. Another way to think about this is vectorizing the tensor, squaring the elements, adding them up, and then taking the square root.
 
 ## Existing tensor packages
 
@@ -288,42 +246,52 @@ The \pkg{tensormodels} package complements this existing software by focusing on
 
 There are several tensor variate distributions that are generalizations of matrix variate distributions. This section introduces the distributions that are used by \pkg{tensormodels}.
 
-### Tensor variate normal
-
 The tensor variate normal distribution can be considered a generalization of the multivariate and matrix variate normal distributions. 
 
+### Univariate Normal
+First, consider a standard univariate normal draw $Z \sim N(0, 1).$ If we shift and scale it to generate $X = \mu + \sigma Z$, then $X \sim N(\mu, \sigma^2).$ That is, an affine transformation of a standard univariate normal draw describes all possible univariate normal distributions. 
+
+
+### Multivariate Normal
+That generated one element. Now let $\mat{Z}$ be a $p \times 1$ vector containing IID standard normal draws. Then $\ve{Z} \sim N_{p}(\textbf{0}, \mat{I}_p)$. If we let $\mat{A}\mat{A}^{T} = \Sigma$, then define $\ve{X} = \mathbf{\mu} + \mat{A}\ve{Z}.$ Now $\ve{X} \sim  N_{p}(\mathbf{\mu}, \mathbf{\Sigma}).$ That is, $\ve{X}$ defines all the possible multivariate normal distributions. 
+
+
+### Matrix Variate Normal
+Let $\mat{Z}$ be a $p \times q$ matrix with IID standard normal entries. Choose matrices $\mat{A}$ and $\mat{B}$ such that $\mat{U} = \mat{A}\mat{A}^{T}, \qquad \mat{V} = \mat{B}\mat{B}^{T}$. Now define $\mat{X} = \mat{M} + \mat{A}\mat{Z}\mat{B}^{T}.$ We say that  $\mat{X} \sim N_{pq}(\mat{M}, \mat{U}, \mat{V}).$ That is, $\mat{X}$ defines all the possible matrix variate normal distributions. 
+
+
+### Tensor Variate Normal
 Let $\tensor{Z}$ be an order-$D$ tensor with IID standard normal entries and $\mat{\Sigma}_{1}, \dots, \mat{\Sigma}_{D}$ be positive definite matrices describing the variance-covariance structure along each mode. For each mode, choose $\mat{A}_{j}$ such that $\mat{\Sigma}_{j} = \mat{A}_{j}\mat{A}_{j}^{T}, \qquad j = 1,\dots,D$. 
 
-Then we can define $\tensor{X}$ as 
+Then we can define $\tensor{X}$ as  $\tensor{X} = \tensor{M} + \tensor{Z} \nProd{1}\mat{A}_{1} \nProd{2}\mat{A}_{2} \cdots \nProd{D}\mat{A}_{D}.$ That is, $\tensor{X}$ defines all the possible tensor variate normal distributions. 
 
-$$\tensor{X} = \tensor{M} + \tensor{Z} \nProd{1}\mat{A}_{1} \nProd{2}\mat{A}_{2} \cdots \nProd{D}\mat{A}_{D}.$$
 
-This ensures that 
-$$
-\text{vec}(\tensor{X}) \sim N\left( \text{vec}(\tensor{M}), \mat{\Sigma}_{D}\otimes\cdots\otimes\mat{\Sigma}_{2}\otimes\mat{\Sigma}_{1} \right)
-$$
+<!-- This ensures that  -->
+<!-- $$ -->
+<!-- \text{vec}(\tensor{X}) \sim N\left( \text{vec}(\tensor{M}), \mat{\Sigma}_{D}\otimes\cdots\otimes\mat{\Sigma}_{2}\otimes\mat{\Sigma}_{1} \right) -->
+<!-- $$ -->
 
-Thus, the tensor variate normal is obtained by transforming a tensor of IID standard normal draws along each mode
+<!-- Thus, the tensor variate normal is obtained by transforming a tensor of IID standard normal draws along each mode -->
 
-If $\tensor{X}$ has dimensions $n_1 \times \cdots \times n_D$, then
-\[
-\operatorname{vec}(\tensor{X}) \sim
-N_{n^*}\left(\operatorname{vec}(\tensor{M}),
-\bigotimes_{d=1}^{D}\Sigma_d\right),
-\qquad n^* = \prod_{d=1}^{D} n_d.
-\]
+<!-- If $\tensor{X}$ has dimensions $n_1 \times \cdots \times n_D$, then -->
+<!-- \[ -->
+<!-- \operatorname{vec}(\tensor{X}) \sim -->
+<!-- N_{n^*}\left(\operatorname{vec}(\tensor{M}), -->
+<!-- \bigotimes_{d=1}^{D}\Sigma_d\right), -->
+<!-- \qquad n^* = \prod_{d=1}^{D} n_d. -->
+<!-- \] -->
 
-The density function of the multilinear normal distribution is [@tensornormprop]
-\[
-f(\tensor{X}) =
-(2\pi)^{-n^*/2}
-\left(\prod_{d=1}^{D} |\Sigma_d|^{-n^*/(2n_d)}\right)
-\exp\left\{-\frac{1}{2}
-\operatorname{vec}(\tensor{X}-\tensor{M})^T
-\left(\bigotimes_{d=1}^{D}\Sigma_d^{-1}\right)
-\operatorname{vec}(\tensor{X}-\tensor{M})\right\}.
-\]
-Each $\Sigma_d$ is positive definite and describes the covariance structure corresponding to mode $d$.
+<!-- The density function of the multilinear normal distribution is [@tensornormprop] -->
+<!-- \[ -->
+<!-- f(\tensor{X}) = -->
+<!-- (2\pi)^{-n^*/2} -->
+<!-- \left(\prod_{d=1}^{D} |\Sigma_d|^{-n^*/(2n_d)}\right) -->
+<!-- \exp\left\{-\frac{1}{2} -->
+<!-- \operatorname{vec}(\tensor{X}-\tensor{M})^T -->
+<!-- \left(\bigotimes_{d=1}^{D}\Sigma_d^{-1}\right) -->
+<!-- \operatorname{vec}(\tensor{X}-\tensor{M})\right\}. -->
+<!-- \] -->
+<!-- Each $\Sigma_d$ is positive definite and describes the covariance structure corresponding to mode $d$. -->
 
 ### Skewed distributions as transformations of the tensor variate normal
 
@@ -578,9 +546,8 @@ plot_malanobis <- function(draws, title = "Dist") {
 ```
 
 
-The figure below shows the Mahalanobis distance-distance plots along with the KS test statistic and $p$-value. From left to right, the input data is a multivariate normal, matrix variate normal with a separable covariance structure, matrix variate with nonseparable covariance matrices, and tensor variate normal with a separable covariance structure. 
-
-```{r plot-mahalanobis, echo = FALSE}
+The figure below shows the Mahalanobis distance-distance plots along with the KS test statistic and $p$-value.
+```{r plot-mahalanobis, echo = FALSE, fig.cap="From left to right, the input data is a multivariate normal, matrix variate normal with a separable covariance structure, matrix variate with nonseparable covariance matrices, and tensor variate normal with a separable covariance structure. When there is a separablec covariance structure, the tensor variate distances should be comparable to the vector distances, leading to a small D value and a large p-value."}
 par(mfcol = c(1, 4))
 plot_malanobis(multivar_draws, title = "Multivar")
 plot_malanobis(matrix_draws, title = "Mat norm")
@@ -671,7 +638,13 @@ for(i in 1:3) {
 
 Now that we have set up our tensor distributions, we can use them on a real-world example. This data set is called "Condition monitoring of hydraulic systems" from the UC Irvine Machine Learning Repository. It has data from 6 sensors that measure pressure. Each pressure sensor is represented as a text file containing 2205 cycles and 6000 measurements, where the 6000 is 100 measurements per second taken over 60 seconds. 
 ```{r hydraulic-tensor-matrix}
-profile <- read.table("paper/hydraulic_systems/profile.txt")
+hydraulic_dir <- if (dir.exists("hydraulic_systems")) {
+  "hydraulic_systems"
+} else {
+  "paper/hydraulic_systems"
+}
+
+profile <- read.table(file.path(hydraulic_dir, "profile.txt"))
 
 names(profile) <- c("cooler",
                     "valve",
@@ -689,12 +662,14 @@ optimal_ids <- which( # find similar cycles
 all_ps <- array(dim = c(6, 40, 60, 100))
 
 for(i in 1:6) { # read in data from 6 sensors
-  file_curr <- paste0("paper/hydraulic_systems/PS", i, ".txt")
+  file_curr <- file.path(hydraulic_dir, paste0("PS", i, ".txt"))
   ps_curr <- as.matrix(read.table(file_curr))
   
   for (j in 1:40) {
     curr_id <- optimal_ids[j]
-    all_ps[i, j, , ] <- matrix(ps_curr[curr_id, ], nrow = 60, ncol = 100)
+    all_ps[i, j, , ] <- matrix(ps_curr[curr_id, ],
+                               nrow = 60, ncol = 100,
+                               byrow = TRUE)
   }
 }
 
@@ -705,8 +680,8 @@ perm_ps <- perm_ps[, , , seq(1, 100, by = 2)]
 
 pressure_list <- vector("list", dim(perm_ps)[1])
 
-for (k in seq_along(pressure_draws)) { # store as list for tensor analysis
-  pressure_list[[k]] <- perm_ps[k, , , , drop = TRUE]
+for (k in 1:dim(perm_ps)[1]) { # store as list for tensor analysis
+  pressure_list[[k]] <- perm_ps[k, , ,]
 }
 
 perm_ps_mat <- array(perm_ps, dim = c(40, 6, 60 * 50))
@@ -722,9 +697,9 @@ for (k in seq_along(press_mat)) { # store as list for matrix analysis
 We are only interested in modeling when the system is working properly, so after filtering for that condition, we are left with 40 cycles. We assume that these 40 cycles are independent, identically distributed draws - that is, each of these cycles represents the same distribution of pressure values whenever the hydraulic test rig is working as intended. We also split the column containing 6000 measurements into a matrix of $60 \times 50$, to represent the covariance structure of the repeated measurements taken within a second. 
 
 Now we can fit a tensor variate normal and a matrix variate normal to the data. The log likelihood for the tensor variate model is much higher than the matrix variate, and its BIC is also much lower as it estimates less parameters than the matrix variate model. This shows a situation where restructuring the data into a tensor can lead to much better model fit results. 
-```{r normal-models}
+```{r normal-models, eval = FALSE}
 # tensor and matrix models
-res_norm_tensor <- tensor_mle(pressure_draws, model = "normal", quiet = FALSE)
+res_norm_tensor <- tensor_mle(pressure_list, model = "normal", quiet = FALSE)
 res_norm_matrix <- tensor_mle(press_mat, model = "normal", quiet = FALSE)
 
 tibble(model = c("Tensor", "Matrix"),
@@ -734,7 +709,7 @@ tibble(model = c("Tensor", "Matrix"),
 ```
 
 
-```{r normal-models-cov}
+```{r normal-models-cov, fig.cap="The MLE correlation matrices from the tensor variate normal model", eval = FALSE}
 plot_matrix(cov2cor(res_norm_tensor$sigmas[[1]])) +
   labs(title = expression(R[1])) +
 plot_matrix(cov2cor(res_norm_tensor$sigmas[[2]])) +
@@ -744,7 +719,7 @@ plot_matrix(cov2cor(res_norm_tensor$sigmas[[3]])) +
 ```
 
 
-```{r model-compare, cache = TRUE}
+```{r model-compare, cache = TRUE, eval = FALSE}
 model_compare <- function(draws) {
   res_normal <- tensor_mle(draws, model = "normal", quiet = FALSE)
   res_skewt <- tensor_mle(draws, model = "skewt", quiet = FALSE)
@@ -768,24 +743,33 @@ model_compare <- function(draws) {
   all_mod
 }
 
-res <- model_compare(pressure_draws)
+res <- model_compare(pressure_list)
 
 best_mod <- (res |> arrange(BIC) |> slice_head(n = 1))$mod_obj[[1]]
-
-best_mod
 ```
 
 
-```{r model-compare-matrix, cache = TRUE}
-res_mat <- model_compare(press_mat)
+In this case, the best model was the variance gamma. 
 
-best_mod_mat <- (res_mat |> arrange(BIC) |> slice_head(n = 1))$mod_obj[[1]]
+```{r, eval = FALSE}
+normal_mean <- res_norm_tensor$mu
 
-best_mod_mat
+vargam_mean <- best_mod$mu + best_mod$skew
+
+plot_matrix(best_mod$mu[1, , ]) +
+  labs(title = "VG fitted mean, sensor 1")
+
+plot_matrix(normal_mean[1, , ]) +
+  labs(title = "Normal fitted mean, sensor 1") +
+plot_matrix(vargam_mean[1, , ]) +
+  labs(title = "VG fitted mean, sensor 1")
+
+plot_matrix(vargam_mean[1, , ] - normal_mean[1, , ]) +
+  labs(title = "VG mean - normal mean, sensor 1")
 ```
 
 
-```{r plot-best-covariances, cache = TRUE}
+```{r, eval = FALSE}
 plot_matrix(cov2cor(best_mod$sigmas[[1]])) +
   labs(title = expression(R[1])) +
 plot_matrix(cov2cor(best_mod$sigmas[[2]])) +
@@ -794,17 +778,15 @@ plot_matrix(cov2cor(best_mod$sigmas[[3]])) +
 labs(title = expression(R[3]))
 ```
 
+<!-- ```{r model-compare-matrix, cache = TRUE} -->
+<!-- res_mat <- model_compare(press_mat) -->
 
+<!-- best_mod_mat <- (res_mat |> arrange(BIC) |> slice_head(n = 1))$mod_obj[[1]] -->
 
-<!-- #res |> select(model, loglik, BIC) -->
-
-<!-- #best_mod <- res$mod_obj[[which.min(res$BIC)]] -->
-
-<!-- best_mod <- tensor_mle(maple_trees, model = "invgauss", quiet = FALSE) -->
+<!-- best_mod_mat -->
 <!-- ``` -->
 
 
-<!-- In this case, the best model was the normal inverse Gaussian. The expected value of its draws is $\mathcal{M} + \mathcal{A}/\kappa$, where $\mathcal{M}$ is the location parameter and $\mathcal{A}$ is the skew parameter. The plot below contains three images: the first is the empirical average of all of the maple trees without a model assumption. The second is the location parameter $\mathcal{M}$ from the model. Lastly, we have $E[X]$, which is the expected average from the model.  -->
 
 <!-- $\mathcal{M}$ is closer to a traditional green maple tree. This seems to be a good starting point to model the variety of colors of the maples, from green to red. Once we add the skew parameter, the $E[X]$ appears similar to the empirical average. -->
 <!-- ```{r, cache = TRUE, echo = FALSE} -->

@@ -21,8 +21,24 @@ using namespace Rcpp;
 // [[Rcpp::export]]
 NumericVector nm_prod(NumericVector A, NumericVector B, int n, int m) {
   // --- Dimensions and checks ---
-  IntegerVector dimsA = A.attr("dim");
-  IntegerVector dimsB = B.attr("dim");
+  SEXP dimsA_attr = A.attr("dim");
+  SEXP dimsB_attr = B.attr("dim");
+
+  IntegerVector dimsA;
+  IntegerVector dimsB;
+
+  if (Rf_isNull(dimsA_attr)) {
+    dimsA = IntegerVector::create(A.size());
+  } else {
+    dimsA = IntegerVector(dimsA_attr);
+  }
+
+  if (Rf_isNull(dimsB_attr)) {
+    dimsB = IntegerVector::create(B.size());
+  } else {
+    dimsB = IntegerVector(dimsB_attr);
+  }
+
   int ndA = dimsA.size();
   int ndB = dimsB.size();
 
