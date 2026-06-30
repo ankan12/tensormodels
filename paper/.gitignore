@@ -1,5 +1,7 @@
 RJwrapper.*
 missfont.log
+*.aux
+*.toc
 tensormodels.R
 tensormodels.html
 tensormodels.log
@@ -9,3 +11,5 @@ tensormodels.tex
 **/tensormodels_files/
 **/tensormodels_cache/
 hydraulic_systems
+tensormodels.aux
+tensormodels.toc
