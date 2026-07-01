@@ -170,7 +170,7 @@ $$(\tensor{A} \times_{n} \mat{U})_{i_1, ..., i_{n-1}, j, i_{n+1}, ... I_N} = \su
 
 The tensor and matrix share one mode in common, denoted here as $I_n$. This operation is also called the tensor times matrix product.
 
-This function is called `n_prod()` in the package `tensormodels`. It accepts a tensor, a matrix, and a value $n$ specifying which mode to multiply across. For example, let us take $\ve{a} \in \field{k}^3$ and $\mat{U} \in \field{k}^{2\times 3}.$ Then if we compute $\ve{a} \times_{1} \mat{U}$, we expect the final result to be $\in \field{k}^{2 \times 1}.$
+This function is called `n_prod()` in the package \pkg{tensormodels}. It accepts a tensor, a matrix, and a value $n$ specifying which mode to multiply across. For example, let us take $\ve{a} \in \field{k}^3$ and $\mat{U} \in \field{k}^{2\times 3}.$ Then if we compute $\ve{a} \times_{1} \mat{U}$, we expect the final result to be $\in \field{k}^{2 \times 1}.$
 
 ```{r}
 a_vec <- c(1, 2, 3) 
@@ -188,7 +188,7 @@ dim(n_prod(A_tensor, u_mat, n = 2))
 ```
 
 
-In `tensormodels`, the $n$-mode product is used internally to apply covariance transformations one mode at a time. For random generation, independent standard normal tensors are multiplied by Cholesky factors along each mode to induce the desired covariance structure. For density evaluation and model diagnostics, centered tensors are multiplied by inverse covariance factors along each mode, producing standardized tensor residuals and Mahalanobis distances.
+In \pkg{tensormodels}, the $n$-mode product is used internally to apply covariance transformations one mode at a time. For random generation, independent standard normal tensors are multiplied by Cholesky factors along each mode to induce the desired covariance structure. For density evaluation and model diagnostics, centered tensors are multiplied by inverse covariance factors along each mode, producing standardized tensor residuals and Mahalanobis distances.
 
 
 ## Matricization
@@ -198,7 +198,7 @@ Matricization, also called unfolding, collapses a tensor into a matrix. It accep
 Let $\tensor{A} \in \field{k}^{I_1 \times ... \times I_N}$ be an $N$-th order tensor. The $k$-th matricization of $\tensor{A}$ is a matrix $\mat{A}_k \in \field{k}^{I_1I_2,...,I_k \times I_{k+1} \times I_{k+2} \times... \times I_N}$, whose elements are taken column-wise from A. The elements are
 $\mat{A}_{(k)}(i_1 ..., i_k, i_{k+1}, ...., i_N) = \tensor{A}(i_1,..., i_k, i_{k+1}, ..., i_N).$
 
-In `tensormodels`, this function is called `matricization().` It accepts a tensor and $k$. 
+In \pkg{tensormodels}, this function is called `matricization().` It accepts a tensor and $k$. 
 
 \subsubsection{Example} \label{sec_1.3.5.1}
 
@@ -230,7 +230,7 @@ matricization(A, k = 1)
 ```
             
 
-In `tensormodels`, matricization is used to initialize and update mode-specific covariance matrices through ordinary matrix crossproducts.
+In \pkg{tensormodels}, matricization is used to initialize and update mode-specific covariance matrices through ordinary matrix crossproducts.
 
 
 ## Tensor variate distributions
@@ -355,11 +355,17 @@ These choices of $W$ give the four skewed families implemented in \pkg{tensormod
 
 # Tensor software across programming languages
 
-Software for tensors exists in several programming languages, but most packages emphasize tensor algebra, tensor decompositions, tensor networks, or machine-learning backends rather than probability models for tensor-valued observations. This distinction is important for \pkg{tensormodels}: many packages can unfold a tensor, multiply along a mode, or compute CP/Tucker/Tensor-Train decompositions, but they usually do not provide tensor-variate normal and skewed density functions, random generation, likelihood estimation, and model diagnostics in one statistical interface.
+There are several existing software packages for tensors in several programming languages, but most emphasize tensor algebra or decompositions over probability models. The unique aspect of \pkg{tensormodels} is the support for tensor-variate normal and skewed tensor-variate distributions. These include random number generation, density functions, likelihood estimation, and model diagnostics. 
 
-The clearest object-oriented reference point is the Tensor Toolbox for MATLAB [@matlabTensorToolbox; @bader2006algorithm862]. In that toolbox, a dense tensor is an instance of the `tensor` class. Users typically construct it from a multidimensional MATLAB array, for example `X = tensor(A)`. The object stores the entries and dimensions together, so methods such as `size`, `ndims`, subscripting, `double`, `norm`, `unfold`, `ttm`, `mttkrp`, `cp_als`, `tucker_als`, and `hosvd` can dispatch on the tensor object. Tensor Toolbox also defines separate intentional classes for other tensor formats: `sptensor` for sparse tensors, `ktensor` for Kruskal/CP factored tensors, and `ttensor` for Tucker factored tensors [@bader2007sparseFactored]. This means that the representation carries mathematical meaning: a `ktensor` is not just an array, but a set of weights and factor matrices representing a CP structure.
+One of the most popular softwares is is the Tensor Toolbox for MATLAB [@matlabTensorToolbox; @bader2006algorithm862]. This toolbox introduces a `tensor` class to generate dense tensors from a multidimensional MATLAB array. This class object has unique attributes so that the user can use methods such as `size`, `ndims`, `norm`, `unfold`, and `ttm`. It also supports decompositions on the tensor object with methods like `mttkrp`, `cp_als`, `tucker_als`, and `hosvd`. Tensor Toolbox also defines separate intentional classes for other tensor formats: `sptensor` for sparse tensors, `ktensor` for Kruskal/CP factored tensors, and `ttensor` for Tucker factored tensors [@bader2007sparseFactored].
 
-Other systems make different tradeoffs. Tensorlab for MATLAB focuses on numerical algorithms such as canonical polyadic decomposition (`cpd`) and low multilinear rank approximation (`lmlra`) while using MATLAB data structures and model descriptions suited to optimization workflows [@tensorlab]. TensorLy in Python provides a functional API over backend tensor objects, so the same high-level calls, such as `tensorly.unfold`, `tensorly.tenalg.mode_dot`, `parafac`, `tucker`, and `tensor_train`, can run on backends such as NumPy, PyTorch, TensorFlow, JAX, or CuPy [@tensorly2019]. The Python Tensor Toolbox, \pkg{pyttb}, is closer in spirit to MATLAB Tensor Toolbox and exposes dense, sparse, CP/Kruskal, and Tucker tensor classes with familiar decomposition functions [@pyttb]. In Julia, TensorToolbox.jl follows many MATLAB Tensor Toolbox conventions, TensorOperations.jl provides index-notation tensor contractions through macros such as `@tensor`, and ITensors.jl defines tensors with named `Index` objects for tensor-network computations [@juliaTensorToolbox; @juliaTensorOperations; @itensors2022]. In R, \pkg{rTensor} supplies an S4 `Tensor` class with multilinear algebra and decomposition methods, while \pkg{ttTensor} focuses on Tensor-Train algorithms such as `TTSVD`, `TTCross`, and `TTWOPT` [@rTensorCRAN; @ttTensorCRAN]. The former \pkg{tensorr} package is now archived on CRAN, but it is useful historical context because it separated dense and sparse tensor storage into specialized classes [@tensorrCRAN].
+TensorLy in Python is similar to the Tensor Toolbox for MATLAB. It contains basic tensor operations and common decompositions including CP, Tucker, and Tensor-Train. A major pr oof TensorLy is that it has backend support across other common frameworks in Pythin, including NumPy, PyTorch, and TensorFlow. This makes it easier for the user to run functions on their GPU or along multiple machines [@tensorly2019]. TensorFlow is another well-known package in Python, but it primarily uses the tensor object as inputs for machine learning methodologies rather than trying to expand on operations and decompositions. 
+
+The Python Tensor Toolbox, \pkg{pyttb} is a refactoring of the Tensor Toolbox for MATLAB. Thus, it ports the common functions from Tensor Toolbox into Python, including the various unique tensor classes and decompositions [@pyttb]. 
+
+In Julia, \pkg{TensorOperations.jl} have support for tensor contractions and \pkg{TensorToolbox.jl} is Julia's port of the MATLAB Tensor Toolbox [@juliaTensorToolbox; @juliaTensorOperations].
+
+In R, \pkg{rTensor} has an S4 `Tensor` class and includes common operations and decompositions. It contains the CP, Tucker, and HOSVD [@rTensorCRAN]. \pkg{ttTensor} adds the Tensor-Train decomposition to this framework [@ttTensorCRAN]. \pkg{tensorr} is now archived on CRAN, but it originally provided support for S4 sparse tensor and dense tensor classes.
 
 ```{r software-object-models, echo=FALSE, results='asis'}
 software_object_models <- data.frame(
@@ -427,10 +433,10 @@ software_function_crosswalk <- data.frame(
     "Tensor-variate distributions"
   ),
   `tensormodels` = c(
-    "`tensor()`, `as_tensor()`, or ordinary R arrays",
+    "Uses base R array object",
     "No separate sparse/factored tensor class; decomposition results are ordinary lists",
     "`matricization()`",
-    "`n_prod()`, `nm_prod()`, `%x1%`, `%x2%`, `%x3%`",
+    "`n_prod()`, `nm_prod()`",
     "`khatri_rao()`; used internally by decomposition code",
     "`cp()`, `cp_reconstruct()`",
     "`tucker()`, `hosvd()`, `tucker_reconstruct()`, `hosvd_reconstruct()`",
@@ -446,7 +452,7 @@ software_function_crosswalk <- data.frame(
     "MATLAB Tensor Toolbox `cp_als`; Tensorlab `cpd`; TensorLy `parafac`; rTensor `cp`",
     "MATLAB Tensor Toolbox `tucker_als` and `hosvd`; Tensorlab `lmlra`; TensorLy `tucker`; rTensor `hosvd`",
     "TensorLy `tensor_train`; ttTensor `TTSVD`, `TTCross`, `TTWOPT`",
-    "Limited support in the general tensor software above; this is the main modeling niche of tensormodels"
+    "Limited support in the general tensor software above"
   ),
   check.names = FALSE
 )
@@ -454,16 +460,14 @@ software_function_crosswalk <- data.frame(
 knitr::kable(
   software_function_crosswalk,
   escape = TRUE,
-  booktabs = TRUE,
-  caption = "Function-level crosswalk between tensormodels and representative tensor software."
-) |>
+  booktabs = TRUE) |>
   kableExtra::kable_styling(font_size = 8) |>
   kableExtra::column_spec(1, width = "1.05in") |>
   kableExtra::column_spec(2, width = "2.1in") |>
   kableExtra::column_spec(3, width = "2.6in")
 ```
 
-The comparison also explains the class design adopted in \pkg{tensormodels}. Packages such as MATLAB Tensor Toolbox and \pkg{rTensor} make the tensor class central: users create a tensor object first, and then methods dispatch on that object. \pkg{tensormodels} keeps the tensor class intentionally lightweight. The constructor `tensor()` returns a base R array with class `"tensor"`, while `as_tensor()` adds the class to an existing array. The class mostly improves printing and structure summaries through `print.tensor()` and `str.tensor()`; it is not required for density evaluation, random generation, estimation, or decompositions. This keeps \pkg{tensormodels} close to ordinary R array workflows while still giving users an optional tensor label when display methods are helpful.
+The comparison also explains the class design adopted in \pkg{tensormodels}. Packages such as MATLAB Tensor Toolbox and \pkg{rTensor} make the tensor class central: users create a tensor object first, and then methods dispatch on that object. \pkg{tensormodels} uses the base R array so that users do not have to learn the S4 class. This keeps \pkg{tensormodels} close to ordinary R array workflows.
 
 \FloatBarrier
 
@@ -471,7 +475,7 @@ The comparison also explains the class design adopted in \pkg{tensormodels}. Pac
 
 The main goal of \pkg{tensormodels} is to provide functions for random number generation, density computation, and maximum likelihood estimation for common tensor variate distributions. Additionally, the package provides diagnostic tests for the structure of input data. 
 
-The public API is organized around functions rather than model objects. Distribution functions follow familiar R naming conventions: names beginning with `r` generate random draws, names beginning with `d` evaluate densities, and `tensor_mle()` fits a selected tensor-variate model. Tensor algebra helpers such as `matricization()`, `n_prod()`, `nm_prod()`, `tensor_prod()`, and `khatri_rao()` are available to users and are also used internally by the likelihood and decomposition routines. Decomposition functions are grouped with explicit reconstruction helpers: `cp()` and `cp_reconstruct()`, `tucker()` and `tucker_reconstruct()`, `hosvd()` and `hosvd_reconstruct()`, and `tt()` and `tt_reconstruct()`.
+Distribution functions follow familiar R naming conventions: names beginning with `r` generate random draws, names beginning with `d` evaluate densities, and `tensor_mle()` fits a selected tensor-variate model. Tensor algebra helpers such as `matricization()`, `n_prod()`, `nm_prod()`, `tensor_prod()`, and `khatri_rao()` are available to users and are also used internally by the likelihood and decomposition routines. Decomposition functions are grouped with explicit reconstruction helpers: `cp()` and `cp_reconstruct()`, `tucker()` and `tucker_reconstruct()`, `hosvd()` and `hosvd_reconstruct()`, and `tt()` and `tt_reconstruct()`.
 
 One intentional decision was to store independent, identically distributed draws from a tensor variate distribution as a list. For example, if we generate $n = 100$ draws from a tensor variate normal distribution of dimension $2 \times 3 \times 4$, the resulting R object will be a list of length 100. Each element in the list is a base R array object of dimension $2 \times 3 \times 4$. Other packages in this space created unique S3 and S4 class objects to store these types of draws. However, these choices are difficult for the average R user, as they have unique interactions and functions. 
 
@@ -1039,11 +1043,7 @@ Add funding, contributor, and institutional acknowledgments here.
 
 ## Derivation of EM 
 
-The idea of EM is that, if we had the complete data, maximizing the complete likelihood would be simpler to account for the missing data. In this case, we simulate our tensor variate normal variance-mean mixtures as
-
-\[
-\tensor{X} = \tensor{M} + W \tensor{A} + \sqrt{W} \tensor{V}.
-\]
+The idea of EM is that, if we had the complete data, maximizing the complete likelihood would be simpler to account for the missing data. In this case, we simulate our tensor variate normal variance-mean mixtures as $\tensor{X} = \tensor{M} + W \tensor{A} + \sqrt{W} \tensor{V}.$
 
 If we knew the latent draws $W$, then the distribution of $\tensor{X}$ would be normal. More specifically $X|W \sim N(\tensor{M} + w \tensor{A}, w \bigotimes_{d=1}^{D} \Sigma_{d}).$ We are interested in maximizing the joint probability function $f(X, W) = f(X|W) f(W)$. 
 
@@ -1051,24 +1051,11 @@ In the expectation step, we will estimate the $w$ values that are most likely.
 
 Earlier, we stated the probability distribution for a tensor variate normal. Now, we state the distribution for $f(\tensor{X}|w)$.
 
-\[
-f(\tensor{X}|w) =
-(2\pi)^{-n^*/2}
-\left(\prod_{d=1}^{D} |\Sigma_d|^{-n^*/(2n_d)}\right)
-\exp\left\{
--\frac{1}{2}
-\operatorname{vec}(\tensor{X}-\tensor{M} - w \tensor{A})^T
-\left(\bigotimes_{d=1}^{D}\Sigma_d^{-1}\right)
-\operatorname{vec}(\tensor{X}-\tensor{M} - w \tensor{A})
-\right\}.
-\]
+$f(\tensor{X}|w) = (2\pi)^{-n^*/2} \left(\prod_{d=1}^{D} |\Sigma_d|^{-n^*/(2n_d)}\right) \exp\left\{-\frac{1}{2} \operatorname{vec}(\tensor{X}-\tensor{M} - w \tensor{A})^T \left(\bigotimes_{d=1}^{D}\Sigma_d^{-1}\right) \operatorname{vec}(\tensor{X}-\tensor{M} - w \tensor{A}) \right\}.$
 
 And so, 
 
-\[
-\ell(\theta; \tensor{X}, w)
-= \log f(\tensor{X}|w) + \log f(w).
-\]
+$\ell(\theta; \tensor{X}, w) = \log f(\tensor{X}|w) + \log f(w).$
 
 
 ## Proof of Flip-Flop for TVN
