@@ -256,6 +256,65 @@ Let $\tensor{Z}$ be an order-$D$ tensor with IID standard normal entries and $\m
 
 Then we can define $\tensor{X}$ as  $\tensor{X} = \tensor{M} + \tensor{Z} \nProd{1}\mat{A}_{1} \nProd{2}\mat{A}_{2} \cdots \nProd{D}\mat{A}_{D}.$ That is, $\tensor{X}$ defines all the possible tensor variate normal distributions. 
 
+<!-- Setting this restriction leads to a curved exponential family. To see this, first consider the ordinary multivariate normal distribution. If $\boldsymbol{y} \sim(\boldsymbol{\mu}, \boldsymbol{\Sigma}) \in \mathbb{R}^{np}$, then -->
+<!-- \[ -->
+<!-- f(\boldsymbol{y}; \boldsymbol{\mu}, \boldsymbol{\Sigma}) -->
+<!-- = (2\pi)^{-np/2}|\boldsymbol{\Sigma}|^{-1/2} -->
+<!-- \exp\left\{-\frac{1}{2}(\boldsymbol{y}-\boldsymbol{\mu})^T -->
+<!-- \boldsymbol{\Sigma}^{-1}(\boldsymbol{y}-\boldsymbol{\mu})\right\}. -->
+<!-- \] -->
+<!-- In exponential family form, the natural parameters are functions of $\boldsymbol{\Sigma}^{-1}\boldsymbol{\mu}$ and $\boldsymbol{\Sigma}^{-1}$. When $\boldsymbol{\Sigma}$ is unrestricted, $\boldsymbol{\Sigma}^{-1}$ can be any positive definite $np \times np$ matrix. -->
+
+<!-- Now let $\mat{X} \sim N(\boldsymbol{\mu}, \mat{U}, \mat{V}) \in \mathbb{R}^{n \times p}$ and set $\boldsymbol{y} = \mathrm{vec}(\mat{X})$. The matrix variate normal distribution imposes the separable covariance restriction -->
+<!-- \[ -->
+<!-- \boldsymbol{\Sigma} = \mat{V} \otimes \mat{U}, -->
+<!-- \] -->
+<!-- where $\mat{U}$ is the row covariance matrix and $\mat{V}$ is the column covariance matrix. Therefore -->
+<!-- \[ -->
+<!-- \mathrm{vec}(\mat{X}) \sim -->
+<!-- N_{np}\left(\mathrm{vec}(\mat{M}), \mat{V} \otimes \mat{U}\right), -->
+<!-- \] -->
+<!-- and the density becomes -->
+<!-- \[ -->
+<!-- f(\mat{X}; \mat{M}, \mat{U}, \mat{V}) -->
+<!-- = (2\pi)^{-np/2} -->
+<!-- |\mat{V} \otimes \mat{U}|^{-1/2} -->
+<!-- \exp\left\{-\frac{1}{2} -->
+<!-- \mathrm{vec}(\mat{X}-\mat{M})^T -->
+<!-- (\mat{V}^{-1} \otimes \mat{U}^{-1}) -->
+<!-- \mathrm{vec}(\mat{X}-\mat{M})\right\}. -->
+<!-- \] -->
+<!-- Equivalently, using $|\mat{V}\otimes\mat{U}|=|\mat{V}|^n|\mat{U}|^p$, this is -->
+<!-- \[ -->
+<!-- f(\mat{X}; \mat{M}, \mat{U}, \mat{V}) -->
+<!-- = (2\pi)^{-np/2} -->
+<!-- |\mat{U}|^{-p/2}|\mat{V}|^{-n/2} -->
+<!-- \exp\left\{-\frac{1}{2} -->
+<!-- \mathrm{tr}\left[ -->
+<!-- \mat{V}^{-1}(\mat{X}-\mat{M})^T -->
+<!-- \mat{U}^{-1}(\mat{X}-\mat{M}) -->
+<!-- \right]\right\}. -->
+<!-- \] -->
+
+This is a nonlinear restriction on the natural parameter space of the full multivariate normal family. For the matrix variate normal, the covariance matrix is restricted to be defined as the Kronecker product of two covariance matrices. This makes its parameter space a lower-dimensional curved subset of the full multivariate normal distribution. \citep{existenceMLEKronecker}
+
+<!-- Since $(c Phi) \otimes (c^{-1} \Phi) = \Phi \otimes \Sigma$, the parameters of $\Phi$ and $\Sigma$ are not defined uniquely. We assume that $\psi_{qq}$ = 1. As stated before, this makes the distribution a curved exponential family. -->
+
+<!-- By differentiating the likelihood, we can obtain the MLEs for $\Phi$ and $\Sigma$. -->
+
+<!-- $$\hat{\Phi} = \frac{1}{Np} \sum_{i=1}^{N} X'_{ic} \hat{\Sigma}^{-1} X_{ic}$$ -->
+
+<!-- $$\hat{\Sigma} = \frac{1}{Nq} \sum_{i=1}^{N} X_{ic} \hat{\Phi}^{-1} X'_{ic}$$ -->
+
+<!-- If $N > \text{max}(p, q)$, then the flip-flop algorithm has only one solution and the MLEs are unique \citep{estimateTestKronecker}. -->
+
+<!-- For the tensor variate normal model with $k$ modes, if we identify each precision matrix by setting the restriction $\text{det} \Sigma_{1}^{1/d_{1}} = \text{det} \Sigma_{2}^{1/d_{2}} \dots = \text{det} \Sigma_{k}^{1/d_{k}}$,then there are results about the convergence for each precision matrix. -->
+
+<!-- For universal constants $C, c_{1}, c_{2} > 0$ and suppose that $t \ge 1$ and $n \ge C k^2 \frac{d^{3}_{\text{max}}}{D} t^{2}$. -->
+
+<!-- Then with probability at least $1 - ke^{-c_{1} t^{2} d_{\text{max}}} - k^{2} \left(\frac{\sqrt{nD}}{k d_{\text{max}}}\right)^{-c_{2} d_{\text{min}}}$, the MLE $\hat{\Sigma}$ for $n$ independent samples with precision matrix $\Sigma$ is unique and satisfies \citep{covarConverge} -->
+
+<!-- $$d_{\text{FR}}(\hat{\Sigma}, \Sigma) = O\left(\frac{\sqrt{k} d_{\text{max}}}{\sqrt{n}} t\right) \quad \text{and} \quad d_{\text{FR}}(\hat{\Sigma}_{a}, \Sigma_{a}) = O\left(\frac{\sqrt{k d_{a}} d_{\text{max}}}{\sqrt{nD}} t\right), \text{ for all } a \in [k]$$ -->
 
 <!-- This ensures that  -->
 <!-- $$ -->
@@ -1043,19 +1102,26 @@ Add funding, contributor, and institutional acknowledgments here.
 
 ## Derivation of EM 
 
-The idea of EM is that, if we had the complete data, maximizing the complete likelihood would be simpler to account for the missing data. In this case, we simulate our tensor variate normal variance-mean mixtures as $\tensor{X} = \tensor{M} + W \tensor{A} + \sqrt{W} \tensor{V}.$
+The idea of EM is that, if we had the complete data, maximizing the complete likelihood would be simpler to account for the missing data. For the skewed tensor variate distributions, the missing values are the positive mixing variables $W_1,\dots,W_N$. The model is
 
-If we knew the latent draws $W$, then the distribution of $\tensor{X}$ would be normal. More specifically $X|W \sim N(\tensor{M} + w \tensor{A}, w \bigotimes_{d=1}^{D} \Sigma_{d}).$ We are interested in maximizing the joint probability function $f(X, W) = f(X|W) f(W)$. 
+$$
+\tensor{X}_{i} = \tensor{M} + W_{i} \tensor{A} + \sqrt{W_{i}}\tensor{V}_{i},
+\qquad
+\tensor{V}_{i} \sim \mathcal{N}_{n^*}
+\left(\mathbb{O}, \bigotimes_{d=1}^{D}\Sigma_{d}\right),
+$$
 
-In the expectation step, we will estimate the $w$ values that are most likely. 
+where
 
-Earlier, we stated the probability distribution for a tensor variate normal. Now, we state the distribution for $f(\tensor{X}|w)$.
+$$
+n^*=\prod_{d=1}^{D} n_d.
+$$
 
-$f(\tensor{X}|w) = (2\pi)^{-n^*/2} \left(\prod_{d=1}^{D} |\Sigma_d|^{-n^*/(2n_d)}\right) \exp\left\{-\frac{1}{2} \operatorname{vec}(\tensor{X}-\tensor{M} - w \tensor{A})^T \left(\bigotimes_{d=1}^{D}\Sigma_d^{-1}\right) \operatorname{vec}(\tensor{X}-\tensor{M} - w \tensor{A}) \right\}.$
+If we knew the latent draws $W_{i} = w_{i}$, then the distribution of $X_{i}$ is tensor variate normal. 
 
-And so, 
+$$\tensor{X}_{i}$$
 
-$\ell(\theta; \tensor{X}, w) = \log f(\tensor{X}|w) + \log f(w).$
+Conditional on $W_i=w_i$, the vectorized tensor is multivariate normal
 
 
 ## Proof of Flip-Flop for TVN
