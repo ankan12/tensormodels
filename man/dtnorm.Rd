@@ -7,7 +7,7 @@
 dtnorm(x, mu = NULL, sigmas = NULL, log = FALSE)
 }
 \arguments{
-\item{x}{An array of quantiles.}
+\item{x}{An array of quantiles or a list of arrays.}
 
 \item{mu}{An array of the mean.}
 

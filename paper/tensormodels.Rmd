@@ -870,10 +870,89 @@ Now we can fit a tensor variate normal and a matrix variate normal to the data. 
 res_norm_tensor <- tensor_mle(pressure_list, model = "normal", quiet = FALSE)
 res_norm_matrix <- tensor_mle(press_mat, model = "normal", quiet = FALSE)
 
-tibble(model = c("Tensor", "Matrix"),
-       loglik = c(res_norm_tensor$loglik, res_norm_matrix$loglik),
-       BIC = c(res_norm_tensor$BIC, res_norm_matrix$BIC),
-       model_obj = list(res_norm_tensor, res_norm_matrix))
+
+```
+
+
+```{r}
+n <- length(dist_normal)
+df <- prod(dim(actually_normal[[1]]))
+
+qq_df <- tibble::tibble(
+  theoretical = qchisq(ppoints(n), df = df),
+  observed = sort(dist_normal)
+)
+
+qq_df |> 
+  ggplot() +
+  geom_point(aes(x = theoretical, y = observed)) +
+  geom_abline(color = "red", lty = 2) +
+  theme_minimal()
+```
+
+
+```{r}
+n <- 40
+
+qq_df <- tibble::tibble(
+  theoretical = qchisq(ppoints(n), df = 18000),
+  observed = sort(tensor_dist)
+)
+
+qq_df |> 
+  ggplot() +
+  geom_point(aes(x = theoretical, y = observed)) +
+  geom_abline(color = "red", lty = 2) +
+  theme_minimal()
+```
+
+
+```{r}
+tibble(d2 = tensor_dist) |> 
+  ggplot() +
+  geom_histogram(aes(x = d2, y = after_stat(density)), bins = 10, 
+                 color = "black", fill = "pink") +
+  geom_function(fun = dchisq, args = list(df = prod(dim(pressure_list[[1]]))),
+                color = "red") +
+  theme_minimal()
+  
+  theme_minimal()
+       expected = p, 
+       p_value = pchisq(d2, df = p, lower.tail = FALSE)) |>
+  arrange(p_value)
+
+actually_normal <- rtnorm(n = 1e3, mu = array(1:24, dim = c(2, 3, 4)),
+                          sigmas = list(crossprod(matrix(rnorm(4), nrow = 2)),
+                                        crossprod(matrix(rnorm(9), nrow = 3)),
+                                        crossprod(matrix(rnorm(16), nrow = 4))))
+
+dist_normal <- mahalanobis_dist(actually_normal)
+
+tibble(d2 = dist_normal) |> 
+  ggplot() +
+  geom_histogram(aes(x = d2, y = after_stat(density)), bins = 10, 
+                 color = "black", fill = "pink") +
+  geom_function(fun = dchisq, args = list(df = 24),
+                color = "red") +
+  theme_minimal()
+
+ks.test(tensor_dist, "pchisq", df = 18000)
+ks.test(dist_normal, "pchisq", df = 24)
+
+
+pchisq(dist_normal, df = 24, lower.tail = FALSE)
+```
+
+
+```{r normal-models, eval = FALSE}
+res_models <- 
+  tibble(model = c("Tensor", "Matrix"),
+         loglik = c(res_norm_tensor$loglik, res_norm_matrix$loglik),
+         BIC = c(res_norm_tensor$BIC, res_norm_matrix$BIC),
+         model_obj = list(res_norm_tensor, res_norm_matrix))
+
+res_models$loglik[1]
+res_models$loglik[2]
 ```
 
 
@@ -1121,7 +1200,602 @@ If we knew the latent draws $W_{i} = w_{i}$, then the distribution of $X_{i}$ is
 
 $$\tensor{X}_{i}$$
 
-Conditional on $W_i=w_i$, the vectorized tensor is multivariate normal
+Conditional on $W_i=w_i$, the vectorized tensor is multivariate normal:
+
+$$
+\ve{x}_i \mid w_i
+\sim
+N_{n^*}
+\left(
+\ve{m}+w_i\ve{a},
+w_i\mat{K}_{\Sigma}
+\right).
+$$
+
+The important point is that $w_i$ scales the full vectorized covariance matrix once. It is not the same as multiplying every mode covariance matrix by $w_i$, because
+
+$$
+\bigotimes_{d=1}^{D}(w_i\Sigma_d)
+=
+w_i^D
+\bigotimes_{d=1}^{D}\Sigma_d.
+$$
+
+The intended covariance is instead
+
+$$
+w_i
+\bigotimes_{d=1}^{D}\Sigma_d.
+$$
+
+Equivalently, the same full covariance could be represented by putting $w_i$ into one mode covariance,
+
+$$
+(w_i\Sigma_1)\otimes \Sigma_2 \otimes \cdots \otimes \Sigma_D
+=
+w_i
+\bigotimes_{d=1}^{D}\Sigma_d,
+$$
+
+or by distributing $w_i^{1/D}$ across all modes,
+
+$$
+\bigotimes_{d=1}^{D}(w_i^{1/D}\Sigma_d)
+=
+w_i
+\bigotimes_{d=1}^{D}\Sigma_d.
+$$
+
+The following matrix properties are used to derive the conditional density.
+
+1. If $\mat{B}$ is a $p \times p$ matrix and $c>0$ is a scalar, then
+
+$$
+|c\mat{B}|=c^p|\mat{B}|.
+$$
+
+This holds because multiplying a $p \times p$ matrix by $c$ multiplies each of its $p$ rows by $c$.
+
+2. If $\mat{B}$ is $p \times p$ and $\mat{C}$ is $q \times q$, then
+
+$$
+|\mat{B}\otimes\mat{C}|
+=
+|\mat{B}|^q|\mat{C}|^p.
+$$
+
+One way to see this is through eigenvalues. The eigenvalues of $\mat{B}\otimes\mat{C}$ are all products $\lambda_r(\mat{B})\lambda_s(\mat{C})$, so their product is $|\mat{B}|^q|\mat{C}|^p$.
+
+Applying this property repeatedly gives
+
+$$
+\left|
+\bigotimes_{d=1}^{D}\Sigma_d
+\right|
+=
+\prod_{d=1}^{D}
+|\Sigma_d|^{n^*/n_d}.
+$$
+
+3. The inverse of a scalar multiple and the inverse of a Kronecker product are
+
+$$
+(w_i\mat{K}_{\Sigma})^{-1}
+=
+\frac{1}{w_i}\mat{K}_{\Sigma}^{-1},
+\qquad
+\left(\bigotimes_{d=1}^{D}\Sigma_d\right)^{-1}
+=
+\bigotimes_{d=1}^{D}\Sigma_d^{-1}.
+$$
+
+The second identity follows from the mixed-product property
+
+$$
+(\mat{B}\otimes\mat{C})(\mat{D}\otimes\mat{E})
+=
+(\mat{B}\mat{D})\otimes(\mat{C}\mat{E}).
+$$
+
+Using the multivariate normal density with covariance $w_i\mat{K}_{\Sigma}$ gives
+
+$$
+\begin{aligned}
+f(\tensor{X}_i \mid w_i)
+=&
+(2\pi)^{-n^*/2}
+\left|w_i\mat{K}_{\Sigma}\right|^{-1/2} \\
+&\times
+\exp\left\{
+-\frac{1}{2}
+\left(\ve{x}_i-\ve{m}-w_i\ve{a}\right)^T
+\left(w_i\mat{K}_{\Sigma}\right)^{-1}
+\left(\ve{x}_i-\ve{m}-w_i\ve{a}\right)
+\right\}.
+\end{aligned}
+$$
+
+Now apply the determinant properties:
+
+$$
+\begin{aligned}
+\left|w_i\mat{K}_{\Sigma}\right|^{-1/2}
+&=
+\left(w_i^{n^*}|\mat{K}_{\Sigma}|\right)^{-1/2} \\
+&=
+w_i^{-n^*/2}
+\left|\mat{K}_{\Sigma}\right|^{-1/2} \\
+&=
+w_i^{-n^*/2}
+\prod_{d=1}^{D}
+|\Sigma_d|^{-n^*/(2n_d)}.
+\end{aligned}
+$$
+
+Also,
+
+$$
+\left(w_i\mat{K}_{\Sigma}\right)^{-1}
+=
+\frac{1}{w_i}\mat{P}_{\Sigma}.
+$$
+
+Therefore the correct conditional density is
+
+$$
+\begin{aligned}
+f(\tensor{X}_i \mid w_i)
+=&
+(2\pi)^{-n^*/2}
+w_i^{-n^*/2}
+\left(
+\prod_{d=1}^{D}
+|\Sigma_d|^{-n^*/(2n_d)}
+\right) \\
+&\times
+\exp\left\{
+-\frac{1}{2w_i}
+\operatorname{vec}(\tensor{X}_i-\tensor{M}-w_i\tensor{A})^T
+\left(\bigotimes_{d=1}^{D}\Sigma_d^{-1}\right)
+\operatorname{vec}(\tensor{X}_i-\tensor{M}-w_i\tensor{A})
+\right\}.
+\end{aligned}
+$$
+
+For the complete data, the joint density factors as
+
+$$
+f(\tensor{X}_i,w_i)
+=
+f(\tensor{X}_i\mid w_i)f_W(w_i).
+$$
+
+Let
+
+$$
+\ve{r}_i=\ve{x}_i-\ve{m},
+\qquad
+\delta_i=\ve{r}_i^T\mat{P}_{\Sigma}\ve{r}_i,
+\qquad
+\rho=\ve{a}^T\mat{P}_{\Sigma}\ve{a},
+\qquad
+\xi_i=\ve{r}_i^T\mat{P}_{\Sigma}\ve{a}.
+$$
+
+The quadratic term expands as
+
+$$
+\begin{aligned}
+-\frac{1}{2w_i}
+(\ve{r}_i-w_i\ve{a})^T
+\mat{P}_{\Sigma}
+(\ve{r}_i-w_i\ve{a})
+&=
+-\frac{1}{2w_i}
+\left(
+\delta_i
+-2w_i\xi_i
++w_i^2\rho
+\right) \\
+&=
+-\frac{1}{2w_i}\delta_i
++\xi_i
+-\frac{w_i}{2}\rho.
+\end{aligned}
+$$
+
+This is where the middle cross term loses its visible $w_i$: the $w_i$ from the shifted mean cancels with the $1/w_i$ from the conditional precision.
+
+Summing over $N$ observations, the complete log-likelihood can be written as
+
+$$
+\begin{aligned}
+\ell_C(\theta;\tensor{X},\ve{w})
+=&
+C
+-
+\sum_{d=1}^{D}
+\frac{Nn^*}{2n_d}\log|\Sigma_d|
++ h(\ve{w}\mid \theta_W) \\
+&+
+\sum_{i=1}^{N}\xi_i
+-
+\frac{1}{2}
+\sum_{i=1}^{N}
+\frac{1}{w_i}\delta_i
+-
+\frac{1}{2}
+\sum_{i=1}^{N}
+w_i\rho,
+\end{aligned}
+$$
+
+where the terms involving only the latent mixing distribution and the normalizing factor in $w_i$ are collected into
+
+$$
+h(\ve{w}\mid \theta_W)
+=
+\sum_{i=1}^{N}\log f_W(w_i;\theta_W)
+-
+\frac{n^*}{2}
+\sum_{i=1}^{N}\log w_i.
+$$
+
+This explains why the determinant contribution from $w_i$ is not shown beside the $\log|\Sigma_d|$ terms in the compact complete log-likelihood: it is part of $h(\ve{w}\mid\theta_W)$.
+
+### E-step
+
+At iteration $t$, the E-step takes conditional expectations with respect to
+
+$$
+W_i \mid \tensor{X}_i,\theta^{(t)}.
+$$
+
+The three expectations needed in the common M-step are
+
+$$
+\eta_i
+=
+E(W_i\mid\tensor{X}_i,\theta^{(t)}),
+\qquad
+\tau_i
+=
+E(W_i^{-1}\mid\tensor{X}_i,\theta^{(t)}),
+\qquad
+\zeta_i
+=
+E(\log W_i\mid\tensor{X}_i,\theta^{(t)}).
+$$
+
+Using the complete log-likelihood, the conditional density of $W_i$ is proportional to
+
+$$
+f(w_i\mid \tensor{X}_i,\theta^{(t)})
+\propto
+w_i^{-n^*/2}
+\exp\left\{
+-\frac{\delta_i}{2w_i}
+-\frac{\rho w_i}{2}
+\right\}
+f_W(w_i;\theta_W^{(t)}).
+$$
+
+The term $\exp(\xi_i)$ does not appear in this kernel because it does not depend on $w_i$.
+
+For the four skewed models implemented here, this posterior kernel is a generalized inverse Gaussian distribution. We use the parameterization
+
+$$
+W \sim \operatorname{GIG}(\lambda,\chi,\psi)
+$$
+
+with density proportional to
+
+$$
+w^{\lambda-1}
+\exp\left\{
+-\frac{1}{2}
+\left(
+\frac{\chi}{w}
++\psi w
+\right)
+\right\},
+\qquad
+w>0.
+$$
+
+Under this parameterization,
+
+$$
+E(W^q)
+=
+\left(\frac{\chi}{\psi}\right)^{q/2}
+\frac{
+K_{\lambda+q}(\sqrt{\chi\psi})
+}{
+K_{\lambda}(\sqrt{\chi\psi})
+},
+$$
+
+where $K_{\lambda}$ is the modified Bessel function of the third kind. This identity follows by multiplying the GIG density by $w^q$; the resulting integral has the same normalizing form with $\lambda$ replaced by $\lambda+q$.
+
+Setting $q=1$ gives
+
+$$
+\eta_i
+=
+E(W_i\mid\tensor{X}_i)
+=
+\sqrt{\frac{\chi_i}{\psi_i}}
+\frac{
+K_{\lambda_i+1}(\sqrt{\chi_i\psi_i})
+}{
+K_{\lambda_i}(\sqrt{\chi_i\psi_i})
+}.
+$$
+
+Setting $q=-1$ and using the Bessel recurrence relation gives
+
+$$
+\tau_i
+=
+E(W_i^{-1}\mid\tensor{X}_i)
+=
+\sqrt{\frac{\psi_i}{\chi_i}}
+\frac{
+K_{\lambda_i+1}(\sqrt{\chi_i\psi_i})
+}{
+K_{\lambda_i}(\sqrt{\chi_i\psi_i})
+}
+-
+\frac{2\lambda_i}{\chi_i}.
+$$
+
+Differentiating $E(W^q)$ at $q=0$ gives
+
+$$
+\zeta_i
+=
+E(\log W_i\mid\tensor{X}_i)
+=
+\frac{1}{2}\log\left(\frac{\chi_i}{\psi_i}\right)
++
+\frac{\partial}{\partial \lambda_i}
+\log K_{\lambda_i}(\sqrt{\chi_i\psi_i}).
+$$
+
+The posterior GIG parameters are obtained by combining the conditional normal kernel above with the prior density of $W_i$:
+
+$$
+\begin{array}{c|c|c|c}
+\text{Model} & \lambda_i & \chi_i & \psi_i \\
+\hline
+\text{Skewed-t} &
+-(\nu+n^*)/2 &
+\delta_i+\nu &
+\rho \\
+\text{Variance gamma} &
+\gamma-n^*/2 &
+\delta_i &
+\rho+2\gamma \\
+\text{Normal inverse Gaussian} &
+-(n^*+1)/2 &
+\delta_i+1 &
+\rho+\kappa^2 \\
+\text{Generalized hyperbolic} &
+\lambda-n^*/2 &
+\delta_i+\omega &
+\rho+\omega
+\end{array}
+$$
+
+### M-step
+
+In the M-step, replace $w_i$, $w_i^{-1}$, and $\log w_i$ in the complete log-likelihood by $\eta_i$, $\tau_i$, and $\zeta_i$. The common part of the expected complete log-likelihood is
+
+$$
+\begin{aligned}
+Q(\theta\mid\theta^{(t)})
+=&
+C
+-
+\sum_{d=1}^{D}
+\frac{Nn^*}{2n_d}\log|\Sigma_d| \\
+&+
+\sum_{i=1}^{N}
+\ve{r}_i^T\mat{P}_{\Sigma}\ve{a}
+-
+\frac{1}{2}
+\sum_{i=1}^{N}
+\tau_i
+\ve{r}_i^T\mat{P}_{\Sigma}\ve{r}_i
+-
+\frac{1}{2}
+\sum_{i=1}^{N}
+\eta_i
+\ve{a}^T\mat{P}_{\Sigma}\ve{a}
++
+Q_W,
+\end{aligned}
+$$
+
+where $Q_W$ contains the terms from $E\{\log f_W(W_i;\theta_W)\mid\tensor{X}_i\}$.
+
+First hold the covariance matrices fixed and differentiate with respect to $\ve{m}$ and $\ve{a}$. The two first-order equations are
+
+$$
+\sum_{i=1}^{N}
+\tau_i(\ve{x}_i-\ve{m})
+-
+N\ve{a}
+=
+\ve{0},
+$$
+
+and
+
+$$
+\sum_{i=1}^{N}
+(\ve{x}_i-\ve{m})
+-
+\left(\sum_{i=1}^{N}\eta_i\right)\ve{a}
+=
+\ve{0}.
+$$
+
+Let
+
+$$
+\bar{\eta}
+=
+\frac{1}{N}\sum_{i=1}^{N}\eta_i,
+\qquad
+\bar{\tau}
+=
+\frac{1}{N}\sum_{i=1}^{N}\tau_i.
+$$
+
+Solving the two linear equations gives the updates
+
+$$
+\hat{\tensor{M}}
+=
+\frac{
+\sum_{i=1}^{N}
+(\bar{\eta}\tau_i-1)\tensor{X}_i
+}{
+\sum_{i=1}^{N}
+(\bar{\eta}\tau_i-1)
+},
+$$
+
+and
+
+$$
+\hat{\tensor{A}}
+=
+\frac{
+\sum_{i=1}^{N}
+(\bar{\tau}-\tau_i)\tensor{X}_i
+}{
+\sum_{i=1}^{N}
+(\bar{\tau}\eta_i-1)
+}.
+$$
+
+The covariance updates are a weighted version of the tensor normal flip-flop update. Let
+
+$$
+\tensor{R}_i
+=
+\tensor{X}_i-\hat{\tensor{M}},
+$$
+
+and let $\Sigma_{-j}$ denote the Kronecker product of all covariance matrices except $\Sigma_j$, ordered to match the mode-$j$ matricization. Define
+
+$$
+\begin{aligned}
+\mat{S}_j
+=
+\sum_{i=1}^{N}
+\bigg[
+&\tau_i
+\tensor{R}_{i(j)}
+\Sigma_{-j}^{-1}
+\tensor{R}_{i(j)}^T \\
+&-
+\tensor{R}_{i(j)}
+\Sigma_{-j}^{-1}
+\hat{\tensor{A}}_{(j)}^T
+-
+\hat{\tensor{A}}_{(j)}
+\Sigma_{-j}^{-1}
+\tensor{R}_{i(j)}^T \\
+&+
+\eta_i
+\hat{\tensor{A}}_{(j)}
+\Sigma_{-j}^{-1}
+\hat{\tensor{A}}_{(j)}^T
+\bigg].
+\end{aligned}
+$$
+
+The part of $Q$ involving $\Sigma_j$ can be written as
+
+$$
+Q(\Sigma_j)
+=
+-
+\frac{Nn^*}{2n_j}\log|\Sigma_j|
+-
+\frac{1}{2}
+\operatorname{tr}
+\left(
+\Sigma_j^{-1}\mat{S}_j
+\right).
+$$
+
+Using the differential identities
+
+$$
+d\log|\Sigma_j|
+=
+\operatorname{tr}(\Sigma_j^{-1}d\Sigma_j),
+$$
+
+and
+
+$$
+d\operatorname{tr}(\Sigma_j^{-1}\mat{S}_j)
+=
+-
+\operatorname{tr}
+\left(
+\Sigma_j^{-1}
+d\Sigma_j
+\Sigma_j^{-1}
+\mat{S}_j
+\right),
+$$
+
+we get
+
+$$
+dQ(\Sigma_j)
+=
+\frac{1}{2}
+\operatorname{tr}
+\left[
+\left(
+-
+\frac{Nn^*}{n_j}\Sigma_j^{-1}
++
+\Sigma_j^{-1}\mat{S}_j\Sigma_j^{-1}
+\right)
+d\Sigma_j
+\right].
+$$
+
+Setting this equal to zero for every $d\Sigma_j$ gives
+
+$$
+-
+\frac{Nn^*}{n_j}\Sigma_j^{-1}
++
+\Sigma_j^{-1}\mat{S}_j\Sigma_j^{-1}
+=
+\mat{0}.
+$$
+
+Multiplying on the left and right by $\Sigma_j$ gives
+
+$$
+\hat{\Sigma}_j
+=
+\frac{n_j}{Nn^*}
+\mat{S}_j.
+$$
+
+Since the individual Kronecker factors are identifiable only up to compensating scale changes, the algorithm rescales the covariance matrices after each update. In \pkg{tensormodels}, the traces of the first $D-1$ covariance matrices are normalized to their mode dimensions, and the final covariance matrix absorbs the product of the removed scales so that the full Kronecker covariance is preserved.
 
 
 ## Proof of Flip-Flop for TVN

@@ -18,7 +18,7 @@ plot_density(
   kappa = NULL,
   lambda = NULL,
   omega = NULL,
-  contour_bins = 5,
+  contour_bins = NULL,
   interpolate = TRUE
 )
 }

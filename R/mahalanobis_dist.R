@@ -1,18 +1,16 @@
 #' mahalanobis_dist
 #'
-#' Computes the vector and tensor Mahalanobis distance for data using the MLE.
+#' Computes the Mahalanobis distances for data using the MLE.
 #'
 #' @param data A list of arrays containing the independent, identically distributed draws.
 #'
-#' @return A data frame with one column containing the vector distances and
-#'         one column containing the tensor distances.
+#' @return A vector of distances.
 #'
 #' @examples
 #' s1 <- matrix(rnorm(4), nrow = 2) |> crossprod()
 #' s2 <- matrix(rnorm(16), nrow = 4) |> crossprod()
 #' matnorm_draws <- rtnorm(n = 10, mu = matrix(1:8, nrow = 2), sigmas = list(s1, s2))
 #' (mahalanobis_dist(matnorm_draws))
-#' @seealso [plot_dist()] to create a plot of the Malahanobis distances.
 #'
 #' @export
 mahalanobis_dist <- function(data) {
@@ -43,23 +41,5 @@ mahalanobis_dist <- function(data) {
     tensor_dist[i] <- c(centered_curr) %*% c(centered_multiply)
   }
 
-  # transform to array of n draws
-  if(o == 1 && dims == 1) {
-    data_array <- simplify2array(data)
-  } else {
-    data_array <- simplify2array(data) |> aperm(c(o+1, 1:o))
-  }
-
-  # compute vector Mahalanobis
-  vec_data <- matrix(data = data_array, nrow = n, ncol = n_star)
-
-  mu_vec <- apply(vec_data, MARGIN = 2, FUN = mean)
-
-  vec_dist <- mahalanobis(vec_data, center = mu_vec,
-                          cov = invert_safe(cov(vec_data)), inverted = TRUE)
-
-  # scaling factor is divide by number of elements in a draw
-  tensor_dist <- tensor_dist * mean(vec_dist) / mean(tensor_dist)
-
-  data.frame(vec = vec_dist, tensor = tensor_dist)
+  tensor_dist
 }
