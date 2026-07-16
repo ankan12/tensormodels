@@ -20,6 +20,6 @@ A tensor that was assigned.
 Assign a tensor.
 }
 \examples{
-A <- tensor(1:24, dim = c(2, 3, 4))
+A <- tensor(array(1:24, dim = c(2, 3, 4)))
 A[1, ] <- array(1:12, dim = c(3, 4))
 }

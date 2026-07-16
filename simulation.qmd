@@ -1,0 +1,266 @@
+---
+title: "simulation"
+format: pdf
+editor: visual
+---
+
+```{r, setup, echo = FALSE}
+library(tensormodels)
+library(patchwork)
+library(tidyverse)
+library(scales)
+
+safe_tensor_mle <- function(draws, model) {
+  tryCatch(
+    tensor_mle(draws, model = model, quiet = FALSE),
+    error = function(e) {
+      list(
+        mu = NA,
+        sigmas = NA,
+        loglik = NA_real_,
+        k = NA_real_,
+        AIC = NA_real_,
+        BIC = NA_real_,
+        failed = TRUE,
+        error = conditionMessage(e)
+      )
+    }
+  )
+}
+
+model_compare <- function(draws) {
+  res_normal <- safe_tensor_mle(draws, model = "normal")
+  res_skewt <- safe_tensor_mle(draws, model = "skewt")
+  res_vargam <- safe_tensor_mle(draws, model = "vargamma")
+  res_invgauss <- safe_tensor_mle(draws, model = "invgauss")
+  res_genhyper <- safe_tensor_mle(draws, model = "genhyper")
+
+  all_mod <-
+    tibble(
+      model = c("Normal", "Skewt", "Vargamma", "Invgauss", "Genhyper"),
+      loglik = c(
+        res_normal$loglik,
+        res_skewt$loglik,
+        res_vargam$loglik,
+        res_invgauss$loglik,
+        res_genhyper$loglik
+      ),
+      k = c(
+        res_normal$k,
+        res_skewt$k,
+        res_vargam$k,
+        res_invgauss$k,
+        res_genhyper$k
+      ),
+      AIC = c(
+        res_normal$AIC,
+        res_skewt$AIC,
+        res_vargam$AIC,
+        res_invgauss$AIC,
+        res_genhyper$AIC
+      ),
+      BIC = c(
+        res_normal$BIC,
+        res_skewt$BIC,
+        res_vargam$BIC,
+        res_invgauss$BIC,
+        res_genhyper$BIC
+      ),
+      failed = c(
+        isTRUE(res_normal$failed),
+        isTRUE(res_skewt$failed),
+        isTRUE(res_vargam$failed),
+        isTRUE(res_invgauss$failed),
+        isTRUE(res_genhyper$failed)
+      ),
+      error = c(
+        res_normal$error %||% NA_character_,
+        res_skewt$error %||% NA_character_,
+        res_vargam$error %||% NA_character_,
+        res_invgauss$error %||% NA_character_,
+        res_genhyper$error %||% NA_character_
+      ),
+      mod_obj = list(
+        res_normal,
+        res_skewt,
+        res_vargam,
+        res_invgauss,
+        res_genhyper
+      )
+    )
+
+  all_mod
+}
+```
+
+# Random Draw Validation with Density
+
+```{r, draw-hyper}
+lambda <- 2
+omega <- 2
+
+mu_true <- array(1:24, dim = c(2, 3, 4))
+skew_true <- array(seq(-2, 2, length.out = 24), dim = c(2, 3, 4))
+sigmas_true <- list(crossprod(matrix(rnorm(4), nrow = 2)),
+                    crossprod(matrix(rnorm(9), nrow = 3)),
+                    crossprod(matrix(rnorm(16), nrow = 4)))
+
+draws <- rtgenhyper( #generate rtgenhyper draws
+  n = 5e4,
+  mu = mu_true,
+  skew = skew_true,
+  sigmas = sigmas_true,
+  lambda = lambda,
+  omega = omega
+)
+```
+
+```{r plot-density-hyper}
+dgh_scalar <- function(x, mu_y, skew_y, sigma_y, lambda, omega) {
+  vapply(x, function(z) {
+    dtgenhyper(
+      x = array(z, dim = 1),
+      mu = array(mu_y, dim = 1),
+      skew = array(skew_y, dim = 1),
+      sigmas = list(matrix(sigma_y, 1, 1)),
+      lambda = lambda,
+      omega = omega
+    )
+  }, numeric(1))
+}
+
+xmat <- do.call(rbind, lapply(draws, as.vector))
+Sigma_kron <- Reduce(kronecker, rev(sigmas_true))
+
+dims <- dim(mu_true)
+idx <- seq_len(prod(dims))
+
+index_labels <- apply(arrayInd(idx, .dim = dims), 1, function(z) {
+  paste0("[", paste(z, collapse = ", "), "]")
+})
+
+plot_val <- function(index) {
+  y <- xmat[, index] #pull element 
+
+  mu_y <- as.vector(mu_true)[index] #true mean
+  skew_y <- as.vector(skew_true)[index] #true skew
+  sigma_y <- Sigma_kron[index, index] #true covar
+
+  ggplot(data.frame(y = y), aes(x = y)) +
+     geom_density(color = "black") +
+    # geom_histogram(aes(y = after_stat(density)), bins = 80, 
+    #                color = "black", fill = "pink") + #plot draws
+    geom_function(fun = dgh_scalar, #plot true density at element
+                  args = list(mu_y, skew_y, sigma_y, lambda, omega),
+                  color = "red", linewidth = 0.4, lty = 2) +
+    theme_minimal() +
+    labs(x = paste0("Index ", index_labels[index]), y = "Density")
+}
+
+plots <- lapply(idx[seq(1, 24, by = 3)], plot_val) #list of all plots
+
+wrap_plots(plots, ncol = 4) #wrap together with patchwork
+```
+
+# Normal Sim
+
+```{r, normal_sim}
+N_grid <- c(50)#, 100, 150)
+
+dims_grid <- list(
+  c(2, 3, 4),
+  c(3, 4, 4),
+  c(3, 4, 5)
+)
+
+n_reps <- 25
+
+one_run <- function(N, dims, rep_id) {
+  mu_true <- array(seq_len(prod(dims)) / 10, dim = dims)
+  sigmas_true <- lapply(dims, diag)
+
+  draws <- rtnorm(
+    n = N,
+    mu = mu_true,
+    sigmas = sigmas_true
+  )
+
+  model_compare(draws) |>
+    mutate(
+      N = N,
+      n_star = prod(dims),
+      dims = paste(dims, collapse = " x "),
+      rep = rep_id,
+      rank = rank(BIC, ties.method = "first")
+    )
+}
+
+sim_res <- crossing(N = N_grid,
+                    dims_id = seq_along(dims_grid),
+                    rep = seq_len(n_reps)) |>
+  mutate(dims = map(dims_id, \(i) dims_grid[[i]])) |>
+  pmap_dfr(\(N, dims_id, rep, dims) one_run(N, dims, rep))
+```
+
+```{r, normal_sim}
+sim_res |> 
+  filter(!is.na(BIC)) |> 
+  summarize(mean_BIC = mean(BIC), .by = c(model, n_star, N)) |> 
+  mutate(model = factor(model, c("Normal", "Genhyper", "Invgauss", "Skewt", "Vargamma")),
+         n_star = factor(n_star, c(24, 48, 60)),
+         bic_label = label_scientific(digits = 3)(mean_BIC)) |> 
+  ungroup() |> 
+  ggplot(aes(x = n_star, y = model)) +
+  geom_point(aes(fill = mean_BIC), shape = 21, size = 4, color = "black") +
+  geom_text(aes(label = bic_label), nudge_y = -0.22, size = 3, color = "gray30") + 
+  facet_grid(. ~ N, switch = "x", scales = "free_x") +
+  scale_fill_viridis_c() +
+  labs(x = expression("n^* by N"), y = "Model") +
+  theme_minimal()
+```
+
+```{r}
+model_compare <- function(draws) {
+  res_normal <- tensor_mle(draws, model = "normal", quiet = FALSE)
+  res_skewt <- tensor_mle(draws, model = "skewt", quiet = FALSE)
+  res_vargam <- tensor_mle(draws, model = "vargamma", quiet = FALSE)
+  res_invgauss <- tensor_mle(draws, model = "invgauss", quiet = FALSE)
+  res_genhyper <- tensor_mle(draws, model = "genhyper", quiet = FALSE)
+
+  all_mod <-
+    tibble(model = c("Normal", "Skewt", "Vargamma", "Invgauss", "Genhyper"),
+    loglik = c(res_normal$loglik, res_skewt$loglik,
+               res_vargam$loglik, res_invgauss$loglik, res_genhyper$loglik),
+    k = c(res_normal$k, res_skewt$k,
+          res_vargam$k, res_invgauss$k, res_genhyper$k),
+    AIC = c(res_normal$AIC, res_skewt$AIC,
+            res_vargam$AIC, res_invgauss$AIC, res_genhyper$AIC),
+    BIC = c(res_normal$BIC, res_skewt$BIC,
+            res_vargam$BIC, res_invgauss$BIC, res_genhyper$BIC),
+    mod_obj = list(res_normal, res_skewt, res_vargam, res_invgauss, res_genhyper)
+  )
+
+  all_mod
+}
+```
+
+```{r}
+true_mu <- array(1:24, dim = c(2, 3, 4))
+true_sigmas <- list(crossprod(matrix(rnorm(4), nrow = 2)),
+                    crossprod(matrix(rnorm(9), nrow = 3)),
+                    crossprod(matrix(rnorm(16), nrow = 4)))
+true_skew <- array(seq(0, 2, by = 24), dim = c(2, 3, 4))
+
+gam_sim <- rtvargamma(n = 1e3, mu = true_mu, 
+                      sigmas = true_sigmas,
+                      skew = true_skew)
+```
+
+```{r}
+# res_all <- model_compare(gam_sim) #5 models
+# 
+# res_all |> arrange(BIC)
+# 
+# best_mod <- (res_all |> arrange(BIC) |> slice_head(n = 1))$mod_obj[[1]]
+# mean((true_mu - best_mod$mu)^2)
+```

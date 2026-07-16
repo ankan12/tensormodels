@@ -45,13 +45,8 @@ dtnorm <- function(x, mu = NULL, sigmas = NULL, log = FALSE) {
 
   for (k in seq_along(sigmas)) {
     sigd <- sigmas[[k]]
-    det_sigd <- det(sigd)
-
-    if (det_sigd == 0) {
-      det_sigd <- 1e-8
-    }
-
-    all_det <- all_det + (n_star / (2 * nrow(sigd))) * log(det_sigd)
+    logdet_sigd <- .logdet_safe(sigd, eps = 1e-10, warn = FALSE)
+    all_det <- all_det + (n_star / (2 * nrow(sigd))) * logdet_sigd
   }
 
   const <- -n_star / 2 * log(2 * pi) - all_det

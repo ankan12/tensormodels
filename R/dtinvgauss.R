@@ -54,7 +54,7 @@ dtinvgauss <- function(x, mu, skew, sigmas, kappa, log = FALSE) {
 
     skew_tmp <- n_prod(skew_tmp, inv_sigmas[[k]], k)
 
-    all_det <- all_det + (n_star/(2 * nrow(sigd))) * log(det(sigd))
+    all_det <- all_det + (n_star/(2 * nrow(sigd))) * .logdet_safe(sigd)
   }
 
   skew_tmp <- as.numeric(skew_tmp)

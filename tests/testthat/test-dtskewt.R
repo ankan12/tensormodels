@@ -74,6 +74,28 @@ test_that("density functions accept vector-valued inputs", {
                          lambda = 2, omega = 2), "double")
 })
 
+test_that("skewed density functions warn and regularize singular covariance log determinants", {
+  x <- c(1, 2)
+  mu <- c(0, 0)
+  skew <- c(1, 1)
+  sigmas <- list(matrix(c(1, 0, 0, 0), nrow = 2))
+  skew_densities <- list(
+    dtinvgauss = function(...) dtinvgauss(..., kappa = 2, log = TRUE),
+    dtskewt = function(...) dtskewt(..., nu = 4, log = TRUE),
+    dtvargamma = function(...) dtvargamma(..., scale = 2, log = TRUE),
+    dtgenhyper = function(...) dtgenhyper(..., lambda = 2, omega = 2, log = TRUE)
+  )
+
+  for (density in skew_densities) {
+    expect_warning(
+      value <- density(x, mu = mu, skew = skew, sigmas = sigmas),
+      "ridge regularization",
+      fixed = TRUE
+    )
+    expect_true(is.finite(value))
+  }
+})
+
 test_that("random generation functions check parameter dimensions", {
   mu <- array(0, dim = c(2, 3))
   skew <- array(1, dim = c(2, 3))

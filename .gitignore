@@ -46,3 +46,11 @@ data
 cifar_image_10x.png
 smooth_tensor_image.png
 all_ps.RData
+
+# Include only the compact processed GRABMyo sample required to build the
+# R Journal article; all other data directories remain ignored.
+!paper/data/
+paper/data/*
+!paper/data/GRABMyo/
+paper/data/GRABMyo/*
+!paper/data/GRABMyo/grabmyo_session1_tensors_16x28x16.rds

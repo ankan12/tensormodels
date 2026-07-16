@@ -1,11 +1,11 @@
 #' tensor_mle
 #'
-#' Estimates the mean array and covariance matrices from an array of tensor
-#' variate draws. If tensor variate normal, uses the flop-flop algorithm. Otherwise,
+#' Estimates the mean array and covariance matrices from tensor-valued
+#' observations. If tensor variate normal, uses the flop-flop algorithm. Otherwise,
 #' uses the expectation-maximization algorithm.
 #'
-#' @param draws An array containing the draws, where the first mode represents
-#'   each draw.
+#' @param draws A `tensor_samples` object, where the first mode represents each
+#'   observation.
 #' @param max_iter A max number of iterations to try to get covariance matrices
 #'   that converge.
 #' @param tol A tolerance level to define the convergence of matrices.
@@ -17,28 +17,21 @@
 #' @export
 tensor_mle <- function(draws, max_iter = 1000, tol = 1e-4, quiet = TRUE,
                        model, restrict = NULL) {
+  if (!inherits(draws, "tensor_samples")) {
+    stop(
+      "`draws` must be a `tensor_samples` object. Use `tensor_samples()` first.",
+      call. = FALSE
+    )
+  }
+
   if (!model %in% c("normal", "skewt", "vargamma", "invgauss", "genhyper")) {
     stop("Not a valid model. Must be normal, skewt, vargamma, invgauss, or genhyper")
   } # check there is a real model
 
-  if (!is.list(draws) || length(draws) == 0) {
-    stop("Draws must be a non-empty list.")
-  } # check the draws are in a list
+  n <- n_draws(draws)
 
-  n <- length(draws)
-
-  dim_first <- dim(draws[[1]])
-
-  for(i in 2:n) { # check all draws are same dimension
-    curr_dim <- dim(draws[[i]])
-
-    if(!all.equal(dim_first, curr_dim)) {
-        stop(sprintf(
-        "All draws must have the same dimensions. Draw 1 has dimensions %s, but draw %d has dimensions %s.",
-        paste(dim_first, collapse = " x "), i,
-        paste(curr_dim, collapse = " x "))
-      )
-    }
+  if (n == 0L) {
+    stop("`draws` must contain at least one observation.", call. = FALSE)
   }
 
   # call the correct MLE function based on model

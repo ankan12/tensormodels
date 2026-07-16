@@ -7,7 +7,7 @@
 #' @return A tensor that was subset.
 #'
 #' @examples
-#' A <- tensor(1:24, dim = c(2, 3, 4))
+#' A <- tensor(array(1:24, dim = c(2, 3, 4)))
 #' A[1, ]
 #' @export
 #' @method [ tensor

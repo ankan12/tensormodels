@@ -16,6 +16,7 @@ header-includes:
       \newcommand{\nProd}[1]{\mathbin{\boldsymbol{\times}_{#1}}}
       \newcommand{\mn}[2]{\sideset{_{#1}}{_{#2}}{\mathop{\boldsymbol{\times}}}}
       \usepackage{placeins}
+      \usepackage{float}
 abstract: >
   tensormodels is an R package for simulation, maximum likelihood estimation, and model diagnostics for tensor-variate distributions arising in multiway array data. The package implements the tensor-variate normal distribution and several normal variance–mean mixture families, including the skew-t, generalized hyperbolic, variance gamma, and normal inverse Gaussian distributions. Estimation is performed via likelihood-based and expectation–maximization algorithms under a Kronecker-separable covariance model, yielding mode-specific covariance estimates through iterative updates. Model assessment tools include distance-based diagnostics, such as Mahalanobis distance plots constructed from tensor-whitened residuals. In addition, tensormodels provides implementations of widely used tensor decompositions for approximation and dimension reduction, including Tensor-Train decomposition via TT-SVD, Higher-Order Singular Value Decomposition (HOSVD), and Parallel Factor Analysis (CP/PARAFAC) computed using alternating least squares. It includes common linear algebra and tensor operations, such as matricization, the n-mode products, and the Khatri-Rao product.
 draft: true
@@ -180,11 +181,18 @@ n_prod(tensor = a_vec, mat = u_mat, n = 1)
 ```
 
 
+This function is supported as an infix operator with the notation `A %xn% (x~n)`, where `%xn%` is an infix operator and `n` is the mode computed across. 
+
+```{r}
+a %xn% (u_mat~1)
+```
+
+
 We can also do a more complex example with a tensor and a matrix. Here, $\tensor{A} \in \field{k}^{2 \times 3 \times 4}.$ Then if we compute $\tensor{A} \times_{2} \mat{U}$, we expect the final result to be $\in \field{k}^{2 \times 2 \times 4}.$
 ```{r}
-A_tensor <- array(1:24, dim = c(2, 3, 4))
+A_tensor <- tensor(1:24, dim = c(2, 3, 4))
 
-dim(n_prod(A_tensor, u_mat, n = 2))
+dim(A_tensor %xn% (u_mat ~ 2))
 ```
 
 
@@ -224,7 +232,7 @@ $$A_{(1)} = \begin{bmatrix} 1 & 5 & 9 & 13 & 17 & 21 \\
             \end{bmatrix}$$
             
 ```{r}
-A <- array(1:24, dim = c(4, 3, 2))
+A <- tensor(1:24, dim = c(4, 3, 2))
 
 matricization(A, k = 1)
 ```
@@ -416,7 +424,7 @@ These choices of $W$ give the four skewed families implemented in \pkg{tensormod
 
 There are several existing software packages for tensors in several programming languages, but most emphasize tensor algebra or decompositions over probability models. The unique aspect of \pkg{tensormodels} is the support for tensor-variate normal and skewed tensor-variate distributions. These include random number generation, density functions, likelihood estimation, and model diagnostics. 
 
-One of the most popular softwares is is the Tensor Toolbox for MATLAB [@matlabTensorToolbox; @bader2006algorithm862]. This toolbox introduces a `tensor` class to generate dense tensors from a multidimensional MATLAB array. This class object has unique attributes so that the user can use methods such as `size`, `ndims`, `norm`, `unfold`, and `ttm`. It also supports decompositions on the tensor object with methods like `mttkrp`, `cp_als`, `tucker_als`, and `hosvd`. Tensor Toolbox also defines separate intentional classes for other tensor formats: `sptensor` for sparse tensors, `ktensor` for Kruskal/CP factored tensors, and `ttensor` for Tucker factored tensors [@bader2007sparseFactored].
+One of the most popular softwares is the Tensor Toolbox for MATLAB [@matlabTensorToolbox; @bader2006algorithm862]. This toolbox introduces a `tensor` class to generate dense tensors from a multidimensional MATLAB array. This class object has unique attributes so that the user can use methods such as `size`, `ndims`, `norm`, `unfold`, and `ttm`. It also supports decompositions on the tensor object with methods like `mttkrp`, `cp_als`, `tucker_als`, and `hosvd`. Tensor Toolbox also defines separate intentional classes for other tensor formats: `sptensor` for sparse tensors, `ktensor` for Kruskal/CP factored tensors, and `ttensor` for Tucker factored tensors [@bader2007sparseFactored].
 
 TensorLy in Python is similar to the Tensor Toolbox for MATLAB. It contains basic tensor operations and common decompositions including CP, Tucker, and Tensor-Train. A major pr oof TensorLy is that it has backend support across other common frameworks in Pythin, including NumPy, PyTorch, and TensorFlow. This makes it easier for the user to run functions on their GPU or along multiple machines [@tensorly2019]. TensorFlow is another well-known package in Python, but it primarily uses the tensor object as inputs for machine learning methodologies rather than trying to expand on operations and decompositions. 
 
@@ -426,57 +434,6 @@ In Julia, \pkg{TensorOperations.jl} have support for tensor contractions and \pk
 
 In R, \pkg{rTensor} has an S4 `Tensor` class and includes common operations and decompositions. It contains the CP, Tucker, and HOSVD [@rTensorCRAN]. \pkg{ttTensor} adds the Tensor-Train decomposition to this framework [@ttTensorCRAN]. \pkg{tensorr} is now archived on CRAN, but it originally provided support for S4 sparse tensor and dense tensor classes.
 
-```{r software-object-models, echo=FALSE, results='asis'}
-software_object_models <- data.frame(
-  Language = c("MATLAB", "MATLAB", "Python", "Python", "Julia", "Julia", "Julia", "R", "R"),
-  Software = c(
-    "Tensor Toolbox",
-    "Tensorlab",
-    "TensorLy",
-    "pyttb",
-    "TensorOperations.jl",
-    "ITensors.jl",
-    "TensorToolbox.jl",
-    "rTensor",
-    "ttTensor"
-  ),
-  `Tensor representation` = c(
-    "Dedicated classes: `tensor`, `sptensor`, `ktensor`, and `ttensor`.",
-    "Mostly MATLAB arrays, cells, and structured model descriptions for optimization.",
-    "Backend tensor arrays with a functional API; the tensor object often comes from NumPy, PyTorch, TensorFlow, JAX, or CuPy.",
-    "Python classes modeled after MATLAB Tensor Toolbox: dense, sparse, Kruskal/CP, and Tucker objects.",
-    "Julia arrays combined with index-notation macros for tensor contractions.",
-    "Index-aware `ITensor` objects for tensor-network computations.",
-    "Julia implementation inspired by MATLAB Tensor Toolbox object and function conventions.",
-    "S4 `Tensor` object wrapping an R array.",
-    "Objects and functions specialized to Tensor-Train representations."
-  ),
-  `Closest connection to tensormodels` = c(
-    "`unfold` and `ttm` correspond closely to `matricization()` and `n_prod()`; CP, Tucker, and HOSVD functions match decomposition goals.",
-    "`cpd` and `lmlra` overlap with decomposition workflows, but not with tensor-variate density or MLE routines.",
-    "`unfold`, `mode_dot`, `parafac`, `tucker`, and `tensor_train` match common tensor operations and decompositions.",
-    "Class names and decomposition functions are similar to MATLAB Tensor Toolbox and useful for translating algorithms to Python.",
-    "Contractions and index-aware products are related to tensor algebra, but the focus is not tensor-variate statistical modeling.",
-    "Useful comparison for indexed tensor classes and tensor networks rather than statistical tensor distributions.",
-    "Useful point of comparison for Julia users who know the MATLAB Tensor Toolbox style.",
-    "Closest R neighbor for tensor algebra and decompositions; it uses a heavier S4 class design.",
-    "Closest R neighbor for the Tensor-Train portion of tensormodels."
-  ),
-  check.names = FALSE
-)
-
-knitr::kable(
-  software_object_models,
-  escape = TRUE,
-  booktabs = TRUE,
-  caption = "Representative tensor software and tensor object designs across MATLAB, Python, Julia, and R."
-) |>
-  kableExtra::kable_styling(font_size = 8) |>
-  kableExtra::column_spec(1, width = "0.55in") |>
-  kableExtra::column_spec(2, width = "1.25in") |>
-  kableExtra::column_spec(3, width = "2.1in") |>
-  kableExtra::column_spec(4, width = "2.05in")
-```
 
 ```{r software-function-crosswalk, echo=FALSE, results='asis'}
 software_function_crosswalk <- data.frame(
@@ -485,7 +442,6 @@ software_function_crosswalk <- data.frame(
     "Represent sparse or factored tensors",
     "Matricize / unfold",
     "n-mode product",
-    "Khatri-Rao and MTTKRP-style computations",
     "CP/PARAFAC",
     "Tucker / HOSVD",
     "Tensor-Train",
@@ -496,7 +452,6 @@ software_function_crosswalk <- data.frame(
     "No separate sparse/factored tensor class; decomposition results are ordinary lists",
     "`matricization()`",
     "`n_prod()`, `nm_prod()`",
-    "`khatri_rao()`; used internally by decomposition code",
     "`cp()`, `cp_reconstruct()`",
     "`tucker()`, `hosvd()`, `tucker_reconstruct()`, `hosvd_reconstruct()`",
     "`tt()`, `tt_reconstruct()`",
@@ -507,7 +462,6 @@ software_function_crosswalk <- data.frame(
     "MATLAB Tensor Toolbox `sptensor`, `ktensor`, `ttensor`; pyttb equivalents; ITensors.jl `ITensor`",
     "MATLAB Tensor Toolbox `unfold` / `tenmat`; TensorLy `unfold`; rTensor unfolding methods",
     "MATLAB Tensor Toolbox `ttm`; TensorLy `mode_dot`; rTensor `ttm`; TensorOperations.jl contractions",
-    "MATLAB Tensor Toolbox `khatrirao` / `mttkrp`; TensorLy Khatri-Rao and tenalg routines",
     "MATLAB Tensor Toolbox `cp_als`; Tensorlab `cpd`; TensorLy `parafac`; rTensor `cp`",
     "MATLAB Tensor Toolbox `tucker_als` and `hosvd`; Tensorlab `lmlra`; TensorLy `tucker`; rTensor `hosvd`",
     "TensorLy `tensor_train`; ttTensor `TTSVD`, `TTCross`, `TTWOPT`",
@@ -557,7 +511,7 @@ This package contains random number generations for several tensor variate distr
 
 
 ```{r rtnorm}
-mu_true <- array(1:24, dim = c(2, 3, 4))
+mu_true <- tensor(1:24, dim = c(2, 3, 4))
 
 S1 <- crossprod(matrix(rnorm(4), nrow = 2))
 S2 <- crossprod(matrix(rnorm(9), nrow = 3))
@@ -683,7 +637,11 @@ We assess tensor variate normality using the Mahalanobis distance. If $\mathcal{
 If a tensor normal covariance structure is present, then the multivariate and tensor variate distances should be close to one another. Following the matrix variate normality paper, this can be visualized with a distance-distance plot: when the tensor normal structure is appropriate, the distances lie close to the reference line; when the Kronecker product structure is absent, the distances diverge.
 
 
-The function `mahalanobis_dist()`{.R} computes both distances using fitted MLEs, and `mahalanobis_test()`{.R} performs a two-sample Kolmogorov-Smirnov test to compare their empirical distributions.
+The function `mahalanobis_dist()`{.R} computes the tensor Mahalanobis
+distances using fitted MLEs, while `mahalanobis_compare()`{.R} computes both
+the tensor and vectorized distances. The function
+`mahalanobis_test()`{.R} performs a two-sample Kolmogorov--Smirnov test to
+compare their empirical distributions.
 
 ```{r generate-data, echo = FALSE}
 S1 <- crossprod(matrix(data = c(1, 0.5, 0.5, 1), nrow = 2))
@@ -704,7 +662,7 @@ matrix_nocovar_draws <- lapply(1:1e3, function(i) {
 
 ```{r mahalanobis, echo = FALSE}
 plot_malanobis <- function(draws, title = "Dist") {
-  distances <- mahalanobis_dist(draws)
+  distances <- mahalanobis_compare(draws)
   test <- mahalanobis_test(distances)
   plot_dist(distances)
   title(main = title)
@@ -804,367 +762,211 @@ for(i in 1:3) {
 
 # Examples
 
-Now that we have set up our tensor distributions, we can use them on a real-world example. This data set is called "Condition monitoring of hydraulic systems" from the UC Irvine Machine Learning Repository. It has data from 6 sensors that measure pressure. Each pressure sensor is represented as a text file containing 2205 cycles and 6000 measurements, where the 6000 is 100 measurements per second taken over 60 seconds. 
-```{r hydraulic-tensor-matrix}
-hydraulic_dir <- if (dir.exists("hydraulic_systems")) {
-  "hydraulic_systems"
-} else {
-  "paper/hydraulic_systems"
-}
+## GRABMyo
 
-profile <- read.table(file.path(hydraulic_dir, "profile.txt"))
+The Gesture Recognition and Biometrics ElectroMyogram (GRABMyo) data set is a
+public collection of surface electromyography recordings from 43 participants
+[@grabmyo]. Each participant performed 16 active hand gestures in seven
+repeated trials. Participants are the independent draws in this analysis, and
+each processed draw is a $16 \times 28 \times 16$ gesture $\times$ channel
+$\times$ movement-phase tensor.
 
-names(profile) <- c("cooler",
-                    "valve",
-                    "pump_leakage",
-                    "accumulator",
-                    "stable")
+The complete download and preprocessing pipeline is provided in the
+supplementary script `scripts/grabmyo_preprocess.R`. It reads the public WFDB records, converts device counts to millivolts, removes the four
+unused channels, computes log-RMS amplitude over 16 equal phase bins, averages
+the seven trials within participant and gesture, and writes the compact
+processed data set loaded below.
 
-optimal_ids <- which( # find similar cycles
-  profile$cooler == 100 &
-  profile$valve >= 90 &
-  profile$pump_leakage == 0 &
-  profile$accumulator >= 115 &
-  profile$stable == 0)
-
-all_ps <- array(dim = c(6, 40, 60, 100))
-
-for(i in 1:6) { # read in data from 6 sensors
-  file_curr <- file.path(hydraulic_dir, paste0("PS", i, ".txt"))
-  ps_curr <- as.matrix(read.table(file_curr))
-  
-  for (j in 1:40) {
-    curr_id <- optimal_ids[j]
-    all_ps[i, j, , ] <- matrix(ps_curr[curr_id, ],
-                               nrow = 60, ncol = 100,
-                               byrow = TRUE)
-  }
-}
-
-perm_ps <- aperm(all_ps, c(2, 1, 3, 4))
-
-# take 50 measurements per second instead of 100, too many data points
-perm_ps <- perm_ps[, , , seq(1, 100, by = 2)] 
-
-pressure_list <- vector("list", dim(perm_ps)[1])
-
-for (k in 1:dim(perm_ps)[1]) { # store as list for tensor analysis
-  pressure_list[[k]] <- perm_ps[k, , ,]
-}
-
-perm_ps_mat <- array(perm_ps, dim = c(40, 6, 60 * 50))
-
-press_mat <- vector("list", dim(perm_ps_mat)[1])
-
-for (k in seq_along(press_mat)) { # store as list for matrix analysis
-  press_mat[[k]] <- perm_ps_mat[k, , , drop = TRUE]
-}
-```
-
-
-We are only interested in modeling when the system is working properly, so after filtering for that condition, we are left with 40 cycles. We assume that these 40 cycles are independent, identically distributed draws - that is, each of these cycles represents the same distribution of pressure values whenever the hydraulic test rig is working as intended. We also split the column containing 6000 measurements into a matrix of $60 \times 50$, to represent the covariance structure of the repeated measurements taken within a second. 
-
-Now we can fit a tensor variate normal and a matrix variate normal to the data. The log likelihood for the tensor variate model is much higher than the matrix variate, and its BIC is also much lower as it estimates less parameters than the matrix variate model. This shows a situation where restructuring the data into a tensor can lead to much better model fit results. 
-```{r normal-models, eval = FALSE}
-# tensor and matrix models
-res_norm_tensor <- tensor_mle(pressure_list, model = "normal", quiet = FALSE)
-res_norm_matrix <- tensor_mle(press_mat, model = "normal", quiet = FALSE)
-
-
-```
-
-
-```{r}
-n <- length(dist_normal)
-df <- prod(dim(actually_normal[[1]]))
-
-qq_df <- tibble::tibble(
-  theoretical = qchisq(ppoints(n), df = df),
-  observed = sort(dist_normal)
+```{r grabmyo-load-processed, echo = FALSE}
+grabmyo_tensor_file <- file.path(
+  "data", "GRABMyo",
+  "grabmyo_session1_tensors_16x28x16.rds"
 )
 
-qq_df |> 
-  ggplot() +
-  geom_point(aes(x = theoretical, y = observed)) +
-  geom_abline(color = "red", lty = 2) +
-  theme_minimal()
+grabmyo_tensors <- readRDS(grabmyo_tensor_file)
 ```
 
 
-```{r}
-n <- 40
+```{r grabmyo-example-plot, fig.alt="Heat map of log-RMS EMG amplitude by channel and movement-phase bin for the first gesture", echo = FALSE}
+grabmyo_tensors[[1]][1, , ] |>
+  plot_matrix() +
+  labs(x = "Phase bins",
+       y = "Channels")
+```
 
-qq_df <- tibble::tibble(
-  theoretical = qchisq(ppoints(n), df = 18000),
-  observed = sort(tensor_dist)
+We fit a tensor-variate normal model to the 43 participant tensors. For
+comparison, each tensor is matricized along each of its three modes, and an
+ordinary matrix-variate normal model is fitted to each dataset. 
+
+```{r grabmyo-fit-models, cache=TRUE}
+grabmyo_fit_timed <- function(label, draws, model = "normal") {
+  message(
+    "Fitting ", label, " with dimensions ",
+    paste(dim(draws[[1]]), collapse = " x ")
+  )
+  started <- Sys.time()
+  fit <- tensor_mle(
+    draws,
+    model = model,
+    max_iter = 1000,
+    tol = 1e-6,
+    quiet = FALSE
+  )
+  fit$elapsed_seconds <- as.numeric(difftime(
+    Sys.time(), started, units = "secs"
+  ))
+  fit
+}
+
+#fit the tensor
+grabmyo_fits <- list(
+  tensor = grabmyo_fit_timed("tensor", grabmyo_tensors)
 )
 
-qq_df |> 
-  ggplot() +
-  geom_point(aes(x = theoretical, y = observed)) +
-  geom_abline(color = "red", lty = 2) +
-  theme_minimal()
+
+for (mode in 1:3) { #fit the matricizations
+  matrix_draws <- lapply(
+    grabmyo_tensors,
+    matricization,
+    k = mode
+  )
+  label <- paste0("mat", mode)
+  grabmyo_fits[[label]] <- grabmyo_fit_timed(label, matrix_draws)
+  rm(matrix_draws)
+  gc(FALSE)
+}
 ```
 
 
-```{r}
-tibble(d2 = tensor_dist) |> 
-  ggplot() +
-  geom_histogram(aes(x = d2, y = after_stat(density)), bins = 10, 
-                 color = "black", fill = "pink") +
-  geom_function(fun = dchisq, args = list(df = prod(dim(pressure_list[[1]]))),
-                color = "red") +
-  theme_minimal()
-  
-  theme_minimal()
-       expected = p, 
-       p_value = pchisq(d2, df = p, lower.tail = FALSE)) |>
-  arrange(p_value)
+```{r grabmyo-normal-table, echo = FALSE}
+grabmyo_dimensions <- c(
+  tensor = "16 x 28 x 16",
+  mat1 = "16 x 448",
+  mat2 = "28 x 256",
+  mat3 = "16 x 448"
+)
 
-actually_normal <- rtnorm(n = 1e3, mu = array(1:24, dim = c(2, 3, 4)),
-                          sigmas = list(crossprod(matrix(rnorm(4), nrow = 2)),
-                                        crossprod(matrix(rnorm(9), nrow = 3)),
-                                        crossprod(matrix(rnorm(16), nrow = 4))))
-
-dist_normal <- mahalanobis_dist(actually_normal)
-
-tibble(d2 = dist_normal) |> 
-  ggplot() +
-  geom_histogram(aes(x = d2, y = after_stat(density)), bins = 10, 
-                 color = "black", fill = "pink") +
-  geom_function(fun = dchisq, args = list(df = 24),
-                color = "red") +
-  theme_minimal()
-
-ks.test(tensor_dist, "pchisq", df = 18000)
-ks.test(dist_normal, "pchisq", df = 24)
-
-
-pchisq(dist_normal, df = 24, lower.tail = FALSE)
-```
-
-
-```{r normal-models, eval = FALSE}
-res_models <- 
-  tibble(model = c("Tensor", "Matrix"),
-         loglik = c(res_norm_tensor$loglik, res_norm_matrix$loglik),
-         BIC = c(res_norm_tensor$BIC, res_norm_matrix$BIC),
-         model_obj = list(res_norm_tensor, res_norm_matrix))
-
-res_models$loglik[1]
-res_models$loglik[2]
-```
-
-
-```{r normal-models-cov, fig.cap="The MLE correlation matrices from the tensor variate normal model", eval = FALSE}
-plot_matrix(cov2cor(res_norm_tensor$sigmas[[1]])) +
-  labs(title = expression(R[1])) +
-plot_matrix(cov2cor(res_norm_tensor$sigmas[[2]])) +
-  labs(title = expression(R[2])) +
-plot_matrix(cov2cor(res_norm_tensor$sigmas[[3]])) +
-  labs(title = expression(R[3]))
-```
-
-
-```{r model-compare, cache = TRUE, eval = FALSE}
-model_compare <- function(draws) {
-  res_normal <- tensor_mle(draws, model = "normal", quiet = FALSE)
-  res_skewt <- tensor_mle(draws, model = "skewt", quiet = FALSE)
-  res_vargam <- tensor_mle(draws, model = "vargamma", quiet = FALSE)
-  res_invgauss <- tensor_mle(draws, model = "invgauss", quiet = FALSE)
-  res_genhyper <- tensor_mle(draws, model = "genhyper", quiet = FALSE)
-
-  all_mod <-
-    tibble(model = c("Normal", "Skewt", "Vargamma", "Invgauss", "Genhyper"),
-    loglik = c(res_normal$loglik, res_skewt$loglik,
-               res_vargam$loglik, res_invgauss$loglik, res_genhyper$loglik),
-    k = c(res_normal$k, res_skewt$k,
-          res_vargam$k, res_invgauss$k, res_genhyper$k),
-    AIC = c(res_normal$AIC, res_skewt$AIC,
-            res_vargam$AIC, res_invgauss$AIC, res_genhyper$AIC),
-    BIC = c(res_normal$BIC, res_skewt$BIC,
-            res_vargam$BIC, res_invgauss$BIC, res_genhyper$BIC),
-    mod_obj = list(res_normal, res_skewt, res_vargam, res_invgauss, res_genhyper)
+grabmyo_results <- purrr::imap_dfr(
+  grabmyo_fits,
+  \(fit, model) tibble::tibble(
+    model,
+    dimensions = grabmyo_dimensions[[model]],
+    loglik = fit$loglik,
+    k = fit$k,
+    AIC = fit$AIC,
+    BIC = fit$BIC,
+    secs = fit$elapsed_seconds
+  )
+) |>
+  arrange(BIC) |>
+  mutate(
+    delta_AIC = AIC - min(AIC),
+    delta_BIC = BIC - min(BIC)
   )
 
-  all_mod
-}
 
-res <- model_compare(pressure_list)
+knitr::kable(
+  grabmyo_results,
+  digits = 1,
+  booktabs = TRUE,
+  caption = "Tensor-normal and matrix-normal fits to the GRABMyo data."
+)
+```
 
-best_mod <- (res |> arrange(BIC) |> slice_head(n = 1))$mod_obj[[1]]
+All three matrix models attain larger maximized likelihoods because the tensor
+covariance family is nested within each matricized covariance family. BIC
+selects the tensor model, which estimates only 7,844 parameters, compared with
+40,469 for the next-smallest matricization.
+
+The estimated mode-specific correlation matrices provide separate summaries of dependence among gestures, channels, and movement-phase bins.
+
+```{r grabmyo-covariance-plots, fig.alt="Three heat maps showing estimated correlations among gestures, channels, and movement-phase bins", echo = FALSE}
+plot_matrix(cov2cor(grabmyo_fits$tensor$sigmas[[1]])) +
+  labs(x = "", y = "", title = "Gestures") +
+  plot_matrix(cov2cor(grabmyo_fits$tensor$sigmas[[2]])) +
+  labs(x = "", y = "", title = "Channels") +
+  plot_matrix(cov2cor(grabmyo_fits$tensor$sigmas[[3]])) +
+  labs(x = "", y = "", title = "Phase bins")
 ```
 
 
-In this case, the best model was the variance gamma. 
+```{r grabmyo-fit-distributions, cache=TRUE}
+grabmyo_non_normal_models <- c(
+  "skewt", "vargamma", "invgauss", "genhyper"
+)
 
-```{r, eval = FALSE}
-normal_mean <- res_norm_tensor$mu
-
-vargam_mean <- best_mod$mu + best_mod$skew
-
-plot_matrix(best_mod$mu[1, , ]) +
-  labs(title = "VG fitted mean, sensor 1")
-
-plot_matrix(normal_mean[1, , ]) +
-  labs(title = "Normal fitted mean, sensor 1") +
-plot_matrix(vargam_mean[1, , ]) +
-  labs(title = "VG fitted mean, sensor 1")
-
-plot_matrix(vargam_mean[1, , ] - normal_mean[1, , ]) +
-  labs(title = "VG mean - normal mean, sensor 1")
+grabmyo_distribution_fits <- c(
+  normal = list(grabmyo_fits$tensor),
+  purrr::map(
+    purrr::set_names(grabmyo_non_normal_models),
+    \(model) grabmyo_fit_timed(
+      label = model,
+      draws = grabmyo_tensors,
+      model = model
+    )
+  )
+)
 ```
 
 
-```{r, eval = FALSE}
-plot_matrix(cov2cor(best_mod$sigmas[[1]])) +
-  labs(title = expression(R[1])) +
-plot_matrix(cov2cor(best_mod$sigmas[[2]])) +
-  labs(title = expression(R[2])) +
-plot_matrix(cov2cor(best_mod$sigmas[[3]])) +
-labs(title = expression(R[3]))
+```{r grabmyo-results, echo = FALSE}
+grabmyo_distribution_labels <- c(
+  normal = "Normal",
+  skewt = "Skew-t",
+  vargamma = "Variance-gamma",
+  invgauss = "Normal-inverse-Gaussian",
+  genhyper = "Generalized hyperbolic"
+)
+
+grabmyo_distribution_results <- purrr::imap_dfr(
+  grabmyo_distribution_fits,
+  \(fit, model) tibble::tibble(
+    model = grabmyo_distribution_labels[[model]],
+    parameter = switch(
+      model,
+      normal = "none",
+      skewt = sprintf("nu = %.2f", fit$nu),
+      vargamma = sprintf("gamma = %.3f", fit$gamma),
+      invgauss = sprintf("kappa = %.2f", fit$kappa),
+      genhyper = sprintf(
+        "lambda = %.2f; omega = %.2f", fit$lambda, fit$omega
+      )
+    ),
+    loglik = fit$loglik,
+    k = fit$k,
+    AIC = fit$AIC,
+    BIC = fit$BIC,
+    secs = fit$elapsed_seconds
+  )
+) |>
+  arrange(BIC) |>
+  mutate(
+    delta_AIC = AIC - min(AIC),
+    delta_BIC = BIC - min(BIC)
+  )
+
+knitr::kable(
+  grabmyo_distribution_results,
+  digits = 1,
+  booktabs = TRUE,
+  caption = paste(
+    "Tensor distribution fits to the 43 processed GRABMyo",
+    "participant tensors."
+  )
+)
 ```
 
-<!-- ```{r model-compare-matrix, cache = TRUE} -->
-<!-- res_mat <- model_compare(press_mat) -->
-
-<!-- best_mod_mat <- (res_mat |> arrange(BIC) |> slice_head(n = 1))$mod_obj[[1]] -->
-
-<!-- best_mod_mat -->
-<!-- ``` -->
-
-
-
-<!-- $\mathcal{M}$ is closer to a traditional green maple tree. This seems to be a good starting point to model the variety of colors of the maples, from green to red. Once we add the skew parameter, the $E[X]$ appears similar to the empirical average. -->
-<!-- ```{r, cache = TRUE, echo = FALSE} -->
-<!-- plot_image(apply(simplify2array(maple_trees), 1:3, mean)) +  -->
-<!--   labs(title = "Avg")+ -->
-<!-- plot_image(best_mod$mu) + -->
-<!--   labs(title = "M") + -->
-<!-- plot_image(with(best_mod, mu + skew/kappa)) + -->
-<!--   labs(title = "E[X]") -->
-<!-- ``` -->
-
-
-<!-- We can also create summary plots of the skew $\mathcal{A}$ and the covariance matrices $\Sigma$ from the model. We converted the covariance matrices to correlation matrices to make it easier to interpret each matrix, since this places them on the same scale.  -->
-<!-- ```{r plot-skew, cache = TRUE, echo = FALSE, fig.width=8, fig.height=3} -->
-<!-- plot_matrix(best_mod$skew[, , 1]) + -->
-<!--   plot_matrix(best_mod$skew[, , 2]) + -->
-<!--   plot_matrix(best_mod$skew[, , 3]) +  -->
-<!--   plot_layout(guides = 'collect') & -->
-<!--   scale_fill_gradient2( -->
-<!--     midpoint = 0, -->
-<!--     limits = c(min(best_mod$skew), max(best_mod$skew))) -->
-<!-- ``` -->
-
-
-<!-- ```{r plot-corr, cache = TRUE, echo = FALSE, fig.width=8, fig.height=3} -->
-<!-- sig_corr <- lapply(best_mod$sigmas, cov2cor) -->
-
-<!-- plot_matrix(sig_corr[[1]]) + -->
-<!--   plot_matrix(sig_corr[[2]]) + -->
-<!--   plot_matrix(sig_corr[[3]]) + -->
-<!--   plot_layout(guides = "collect") & -->
-<!--   scale_fill_gradient2(low = "blue", mid = "white", high = "red", -->
-<!--                        midpoint = 0, limits = c(-1, 1)) -->
-<!-- ``` -->
-
-
-
-<!-- Now that we have the best model for the maple trees, we can obtain the likelihood of each image.  -->
-<!-- ```{r, cache = TRUE, echo = FALSE} -->
-<!-- all_lik <- vector(mode = "numeric", length = 500) -->
-
-<!-- for(i in 1:500) { -->
-<!--   all_lik[i] <- dtinvgauss(x = maple_trees[[i]], mu = best_mod$mu, -->
-<!--                            skew = best_mod$skew, sigmas = best_mod$sigmas,  -->
-<!--                            kappa = best_mod$kappa, log = TRUE) -->
-<!-- } -->
-
-<!-- all_lik |>  -->
-<!--   as_tibble() |>  -->
-<!--   ggplot() + -->
-<!--   geom_histogram(aes(x = value), color = "black", fill = "lightpink", -->
-<!--                  bins = 40) + -->
-<!--   theme_minimal() + -->
-<!--   labs(x = "Likelihood", y = "Count") -->
-<!-- ``` -->
-
-
-<!-- There are clearly some outliers, both at much smaller and much larger likelihoods. Out of curiosity, I plotted the lowest likelihoods. All of these maples are predominantly orange and red, which differ from the average tensor that the model had. It seems that the data contains many more green maples, so the model struggles to account for the possible variation in tree color.  -->
-<!-- ```{r, cache = TRUE, echo = FALSE} -->
-<!-- wrap_plots(lapply(maple_trees[which(all_lik <= 4500)], plot_image),  -->
-<!--            ncol = 5) -->
-<!-- ``` -->
-
-
-<!-- As expected, all of the maples that had a large likelihood follow the pattern of being a forest green and mainly in the center of the image.  -->
-<!-- ```{r, cache = TRUE, echo = FALSE} -->
-<!-- wrap_plots(lapply(maple_trees[which(all_lik >= 9000)], plot_image),  -->
-<!--            ncol = 5) -->
-<!-- ``` -->
-
-
-
-<!-- ```{r, cache = TRUE, echo = FALSE} -->
-<!-- library(ggplot2) -->
-<!-- library(dplyr) -->
-<!-- library(tibble) -->
-<!-- library(ggimage) -->
-
-<!-- # sort by likelihood and select 30 evenly spaced observations -->
-<!-- lik_order <- order(all_lik) -->
-<!-- selected_ranks <- unique(round(seq(from = 1, to = length(lik_order), length.out = 30))) -->
-
-<!-- selected_ids <- lik_order[selected_ranks] -->
-
-<!-- maple_plot_data <-  -->
-<!--   tibble(id = selected_ids, log_likelihood = all_lik[selected_ids]) |> -->
-<!--   arrange(log_likelihood) |> -->
-<!--   mutate(row = rep(1:3, length.out = n())) -->
-
-<!-- thumbnail_dir <- "paper/figures/maple-thumbnails" -->
-<!-- dir.create(thumbnail_dir, recursive = TRUE, showWarnings = FALSE) -->
-
-<!-- maple_plot_data$image <- file.path( -->
-<!--   thumbnail_dir, -->
-<!--   paste0("maple-", maple_plot_data$id, ".png") -->
-<!-- ) -->
-
-<!-- for (i in seq_len(nrow(maple_plot_data))) { -->
-<!--   tree_id <- maple_plot_data$id[i] -->
-
-<!--   ggsave(filename = maple_plot_data$image[i], -->
-<!--          plot = plot_image(maple_trees[[tree_id]]), -->
-<!--          width = 1, height = 1, -->
-<!--          units = "in", dpi = 150) -->
-<!-- } -->
-
-<!-- ggplot(maple_plot_data,  -->
-<!--        aes(x = log_likelihood, y = row, -->
-<!--        image = image)) + -->
-<!--   geom_image(size = 0.09, by = "width") + -->
-<!--   scale_y_continuous(limits = c(0.5, 3.5), breaks = NULL) + -->
-<!--   labs(x = "Log-likelihood", -->
-<!--        y = NULL) + -->
-<!--   theme_minimal()  -->
-<!-- ``` -->
-
-
-<!-- Use one or two examples that demonstrate what the package makes possible. -->
-<!-- Prefer datasets that can be included with the submission or downloaded from a -->
-<!-- stable public archive. -->
+Both information criteria select the skew-$t$ distribution, with the
+generalized hyperbolic distribution providing the next-best fit. The large
+improvement over the normal model remains after penalizing the non-normal
+models for estimating an additional $16 \times 28 \times 16$ skewness tensor.
 
 
 # Discussion
 
-Summarize the package's strengths, limitations, and intended scope. Mention
-important future work without turning this section into a feature wish list.
+The package `tensormodels` provides support for tensor variate distributions, allowing for random number generation, density calculation, and MLE estimation.
 
 # Reproducibility
-
-List any external data and scripts required to reproduce the article. Place
-supporting code in `scripts/`, data in `data/`, and figure assets in `figures/`.
 
 ```{r session-info, echo=FALSE}
 cat("R version:", as.character(getRversion()), "\n")
@@ -1177,869 +979,3 @@ cat("rjtools version:", as.character(packageVersion("rjtools")), "\n")
 Add funding, contributor, and institutional acknowledgments here.
 
 
-# Appendix
-
-## Derivation of EM 
-
-The idea of EM is that, if we had the complete data, maximizing the complete likelihood would be simpler to account for the missing data. For the skewed tensor variate distributions, the missing values are the positive mixing variables $W_1,\dots,W_N$. The model is
-
-$$
-\tensor{X}_{i} = \tensor{M} + W_{i} \tensor{A} + \sqrt{W_{i}}\tensor{V}_{i},
-\qquad
-\tensor{V}_{i} \sim \mathcal{N}_{n^*}
-\left(\mathbb{O}, \bigotimes_{d=1}^{D}\Sigma_{d}\right),
-$$
-
-where
-
-$$
-n^*=\prod_{d=1}^{D} n_d.
-$$
-
-If we knew the latent draws $W_{i} = w_{i}$, then the distribution of $X_{i}$ is tensor variate normal. 
-
-$$\tensor{X}_{i}$$
-
-Conditional on $W_i=w_i$, the vectorized tensor is multivariate normal:
-
-$$
-\ve{x}_i \mid w_i
-\sim
-N_{n^*}
-\left(
-\ve{m}+w_i\ve{a},
-w_i\mat{K}_{\Sigma}
-\right).
-$$
-
-The important point is that $w_i$ scales the full vectorized covariance matrix once. It is not the same as multiplying every mode covariance matrix by $w_i$, because
-
-$$
-\bigotimes_{d=1}^{D}(w_i\Sigma_d)
-=
-w_i^D
-\bigotimes_{d=1}^{D}\Sigma_d.
-$$
-
-The intended covariance is instead
-
-$$
-w_i
-\bigotimes_{d=1}^{D}\Sigma_d.
-$$
-
-Equivalently, the same full covariance could be represented by putting $w_i$ into one mode covariance,
-
-$$
-(w_i\Sigma_1)\otimes \Sigma_2 \otimes \cdots \otimes \Sigma_D
-=
-w_i
-\bigotimes_{d=1}^{D}\Sigma_d,
-$$
-
-or by distributing $w_i^{1/D}$ across all modes,
-
-$$
-\bigotimes_{d=1}^{D}(w_i^{1/D}\Sigma_d)
-=
-w_i
-\bigotimes_{d=1}^{D}\Sigma_d.
-$$
-
-The following matrix properties are used to derive the conditional density.
-
-1. If $\mat{B}$ is a $p \times p$ matrix and $c>0$ is a scalar, then
-
-$$
-|c\mat{B}|=c^p|\mat{B}|.
-$$
-
-This holds because multiplying a $p \times p$ matrix by $c$ multiplies each of its $p$ rows by $c$.
-
-2. If $\mat{B}$ is $p \times p$ and $\mat{C}$ is $q \times q$, then
-
-$$
-|\mat{B}\otimes\mat{C}|
-=
-|\mat{B}|^q|\mat{C}|^p.
-$$
-
-One way to see this is through eigenvalues. The eigenvalues of $\mat{B}\otimes\mat{C}$ are all products $\lambda_r(\mat{B})\lambda_s(\mat{C})$, so their product is $|\mat{B}|^q|\mat{C}|^p$.
-
-Applying this property repeatedly gives
-
-$$
-\left|
-\bigotimes_{d=1}^{D}\Sigma_d
-\right|
-=
-\prod_{d=1}^{D}
-|\Sigma_d|^{n^*/n_d}.
-$$
-
-3. The inverse of a scalar multiple and the inverse of a Kronecker product are
-
-$$
-(w_i\mat{K}_{\Sigma})^{-1}
-=
-\frac{1}{w_i}\mat{K}_{\Sigma}^{-1},
-\qquad
-\left(\bigotimes_{d=1}^{D}\Sigma_d\right)^{-1}
-=
-\bigotimes_{d=1}^{D}\Sigma_d^{-1}.
-$$
-
-The second identity follows from the mixed-product property
-
-$$
-(\mat{B}\otimes\mat{C})(\mat{D}\otimes\mat{E})
-=
-(\mat{B}\mat{D})\otimes(\mat{C}\mat{E}).
-$$
-
-Using the multivariate normal density with covariance $w_i\mat{K}_{\Sigma}$ gives
-
-$$
-\begin{aligned}
-f(\tensor{X}_i \mid w_i)
-=&
-(2\pi)^{-n^*/2}
-\left|w_i\mat{K}_{\Sigma}\right|^{-1/2} \\
-&\times
-\exp\left\{
--\frac{1}{2}
-\left(\ve{x}_i-\ve{m}-w_i\ve{a}\right)^T
-\left(w_i\mat{K}_{\Sigma}\right)^{-1}
-\left(\ve{x}_i-\ve{m}-w_i\ve{a}\right)
-\right\}.
-\end{aligned}
-$$
-
-Now apply the determinant properties:
-
-$$
-\begin{aligned}
-\left|w_i\mat{K}_{\Sigma}\right|^{-1/2}
-&=
-\left(w_i^{n^*}|\mat{K}_{\Sigma}|\right)^{-1/2} \\
-&=
-w_i^{-n^*/2}
-\left|\mat{K}_{\Sigma}\right|^{-1/2} \\
-&=
-w_i^{-n^*/2}
-\prod_{d=1}^{D}
-|\Sigma_d|^{-n^*/(2n_d)}.
-\end{aligned}
-$$
-
-Also,
-
-$$
-\left(w_i\mat{K}_{\Sigma}\right)^{-1}
-=
-\frac{1}{w_i}\mat{P}_{\Sigma}.
-$$
-
-Therefore the correct conditional density is
-
-$$
-\begin{aligned}
-f(\tensor{X}_i \mid w_i)
-=&
-(2\pi)^{-n^*/2}
-w_i^{-n^*/2}
-\left(
-\prod_{d=1}^{D}
-|\Sigma_d|^{-n^*/(2n_d)}
-\right) \\
-&\times
-\exp\left\{
--\frac{1}{2w_i}
-\operatorname{vec}(\tensor{X}_i-\tensor{M}-w_i\tensor{A})^T
-\left(\bigotimes_{d=1}^{D}\Sigma_d^{-1}\right)
-\operatorname{vec}(\tensor{X}_i-\tensor{M}-w_i\tensor{A})
-\right\}.
-\end{aligned}
-$$
-
-For the complete data, the joint density factors as
-
-$$
-f(\tensor{X}_i,w_i)
-=
-f(\tensor{X}_i\mid w_i)f_W(w_i).
-$$
-
-Let
-
-$$
-\ve{r}_i=\ve{x}_i-\ve{m},
-\qquad
-\delta_i=\ve{r}_i^T\mat{P}_{\Sigma}\ve{r}_i,
-\qquad
-\rho=\ve{a}^T\mat{P}_{\Sigma}\ve{a},
-\qquad
-\xi_i=\ve{r}_i^T\mat{P}_{\Sigma}\ve{a}.
-$$
-
-The quadratic term expands as
-
-$$
-\begin{aligned}
--\frac{1}{2w_i}
-(\ve{r}_i-w_i\ve{a})^T
-\mat{P}_{\Sigma}
-(\ve{r}_i-w_i\ve{a})
-&=
--\frac{1}{2w_i}
-\left(
-\delta_i
--2w_i\xi_i
-+w_i^2\rho
-\right) \\
-&=
--\frac{1}{2w_i}\delta_i
-+\xi_i
--\frac{w_i}{2}\rho.
-\end{aligned}
-$$
-
-This is where the middle cross term loses its visible $w_i$: the $w_i$ from the shifted mean cancels with the $1/w_i$ from the conditional precision.
-
-Summing over $N$ observations, the complete log-likelihood can be written as
-
-$$
-\begin{aligned}
-\ell_C(\theta;\tensor{X},\ve{w})
-=&
-C
--
-\sum_{d=1}^{D}
-\frac{Nn^*}{2n_d}\log|\Sigma_d|
-+ h(\ve{w}\mid \theta_W) \\
-&+
-\sum_{i=1}^{N}\xi_i
--
-\frac{1}{2}
-\sum_{i=1}^{N}
-\frac{1}{w_i}\delta_i
--
-\frac{1}{2}
-\sum_{i=1}^{N}
-w_i\rho,
-\end{aligned}
-$$
-
-where the terms involving only the latent mixing distribution and the normalizing factor in $w_i$ are collected into
-
-$$
-h(\ve{w}\mid \theta_W)
-=
-\sum_{i=1}^{N}\log f_W(w_i;\theta_W)
--
-\frac{n^*}{2}
-\sum_{i=1}^{N}\log w_i.
-$$
-
-This explains why the determinant contribution from $w_i$ is not shown beside the $\log|\Sigma_d|$ terms in the compact complete log-likelihood: it is part of $h(\ve{w}\mid\theta_W)$.
-
-### E-step
-
-At iteration $t$, the E-step takes conditional expectations with respect to
-
-$$
-W_i \mid \tensor{X}_i,\theta^{(t)}.
-$$
-
-The three expectations needed in the common M-step are
-
-$$
-\eta_i
-=
-E(W_i\mid\tensor{X}_i,\theta^{(t)}),
-\qquad
-\tau_i
-=
-E(W_i^{-1}\mid\tensor{X}_i,\theta^{(t)}),
-\qquad
-\zeta_i
-=
-E(\log W_i\mid\tensor{X}_i,\theta^{(t)}).
-$$
-
-Using the complete log-likelihood, the conditional density of $W_i$ is proportional to
-
-$$
-f(w_i\mid \tensor{X}_i,\theta^{(t)})
-\propto
-w_i^{-n^*/2}
-\exp\left\{
--\frac{\delta_i}{2w_i}
--\frac{\rho w_i}{2}
-\right\}
-f_W(w_i;\theta_W^{(t)}).
-$$
-
-The term $\exp(\xi_i)$ does not appear in this kernel because it does not depend on $w_i$.
-
-For the four skewed models implemented here, this posterior kernel is a generalized inverse Gaussian distribution. We use the parameterization
-
-$$
-W \sim \operatorname{GIG}(\lambda,\chi,\psi)
-$$
-
-with density proportional to
-
-$$
-w^{\lambda-1}
-\exp\left\{
--\frac{1}{2}
-\left(
-\frac{\chi}{w}
-+\psi w
-\right)
-\right\},
-\qquad
-w>0.
-$$
-
-Under this parameterization,
-
-$$
-E(W^q)
-=
-\left(\frac{\chi}{\psi}\right)^{q/2}
-\frac{
-K_{\lambda+q}(\sqrt{\chi\psi})
-}{
-K_{\lambda}(\sqrt{\chi\psi})
-},
-$$
-
-where $K_{\lambda}$ is the modified Bessel function of the third kind. This identity follows by multiplying the GIG density by $w^q$; the resulting integral has the same normalizing form with $\lambda$ replaced by $\lambda+q$.
-
-Setting $q=1$ gives
-
-$$
-\eta_i
-=
-E(W_i\mid\tensor{X}_i)
-=
-\sqrt{\frac{\chi_i}{\psi_i}}
-\frac{
-K_{\lambda_i+1}(\sqrt{\chi_i\psi_i})
-}{
-K_{\lambda_i}(\sqrt{\chi_i\psi_i})
-}.
-$$
-
-Setting $q=-1$ and using the Bessel recurrence relation gives
-
-$$
-\tau_i
-=
-E(W_i^{-1}\mid\tensor{X}_i)
-=
-\sqrt{\frac{\psi_i}{\chi_i}}
-\frac{
-K_{\lambda_i+1}(\sqrt{\chi_i\psi_i})
-}{
-K_{\lambda_i}(\sqrt{\chi_i\psi_i})
-}
--
-\frac{2\lambda_i}{\chi_i}.
-$$
-
-Differentiating $E(W^q)$ at $q=0$ gives
-
-$$
-\zeta_i
-=
-E(\log W_i\mid\tensor{X}_i)
-=
-\frac{1}{2}\log\left(\frac{\chi_i}{\psi_i}\right)
-+
-\frac{\partial}{\partial \lambda_i}
-\log K_{\lambda_i}(\sqrt{\chi_i\psi_i}).
-$$
-
-The posterior GIG parameters are obtained by combining the conditional normal kernel above with the prior density of $W_i$:
-
-$$
-\begin{array}{c|c|c|c}
-\text{Model} & \lambda_i & \chi_i & \psi_i \\
-\hline
-\text{Skewed-t} &
--(\nu+n^*)/2 &
-\delta_i+\nu &
-\rho \\
-\text{Variance gamma} &
-\gamma-n^*/2 &
-\delta_i &
-\rho+2\gamma \\
-\text{Normal inverse Gaussian} &
--(n^*+1)/2 &
-\delta_i+1 &
-\rho+\kappa^2 \\
-\text{Generalized hyperbolic} &
-\lambda-n^*/2 &
-\delta_i+\omega &
-\rho+\omega
-\end{array}
-$$
-
-### M-step
-
-In the M-step, replace $w_i$, $w_i^{-1}$, and $\log w_i$ in the complete log-likelihood by $\eta_i$, $\tau_i$, and $\zeta_i$. The common part of the expected complete log-likelihood is
-
-$$
-\begin{aligned}
-Q(\theta\mid\theta^{(t)})
-=&
-C
--
-\sum_{d=1}^{D}
-\frac{Nn^*}{2n_d}\log|\Sigma_d| \\
-&+
-\sum_{i=1}^{N}
-\ve{r}_i^T\mat{P}_{\Sigma}\ve{a}
--
-\frac{1}{2}
-\sum_{i=1}^{N}
-\tau_i
-\ve{r}_i^T\mat{P}_{\Sigma}\ve{r}_i
--
-\frac{1}{2}
-\sum_{i=1}^{N}
-\eta_i
-\ve{a}^T\mat{P}_{\Sigma}\ve{a}
-+
-Q_W,
-\end{aligned}
-$$
-
-where $Q_W$ contains the terms from $E\{\log f_W(W_i;\theta_W)\mid\tensor{X}_i\}$.
-
-First hold the covariance matrices fixed and differentiate with respect to $\ve{m}$ and $\ve{a}$. The two first-order equations are
-
-$$
-\sum_{i=1}^{N}
-\tau_i(\ve{x}_i-\ve{m})
--
-N\ve{a}
-=
-\ve{0},
-$$
-
-and
-
-$$
-\sum_{i=1}^{N}
-(\ve{x}_i-\ve{m})
--
-\left(\sum_{i=1}^{N}\eta_i\right)\ve{a}
-=
-\ve{0}.
-$$
-
-Let
-
-$$
-\bar{\eta}
-=
-\frac{1}{N}\sum_{i=1}^{N}\eta_i,
-\qquad
-\bar{\tau}
-=
-\frac{1}{N}\sum_{i=1}^{N}\tau_i.
-$$
-
-Solving the two linear equations gives the updates
-
-$$
-\hat{\tensor{M}}
-=
-\frac{
-\sum_{i=1}^{N}
-(\bar{\eta}\tau_i-1)\tensor{X}_i
-}{
-\sum_{i=1}^{N}
-(\bar{\eta}\tau_i-1)
-},
-$$
-
-and
-
-$$
-\hat{\tensor{A}}
-=
-\frac{
-\sum_{i=1}^{N}
-(\bar{\tau}-\tau_i)\tensor{X}_i
-}{
-\sum_{i=1}^{N}
-(\bar{\tau}\eta_i-1)
-}.
-$$
-
-The covariance updates are a weighted version of the tensor normal flip-flop update. Let
-
-$$
-\tensor{R}_i
-=
-\tensor{X}_i-\hat{\tensor{M}},
-$$
-
-and let $\Sigma_{-j}$ denote the Kronecker product of all covariance matrices except $\Sigma_j$, ordered to match the mode-$j$ matricization. Define
-
-$$
-\begin{aligned}
-\mat{S}_j
-=
-\sum_{i=1}^{N}
-\bigg[
-&\tau_i
-\tensor{R}_{i(j)}
-\Sigma_{-j}^{-1}
-\tensor{R}_{i(j)}^T \\
-&-
-\tensor{R}_{i(j)}
-\Sigma_{-j}^{-1}
-\hat{\tensor{A}}_{(j)}^T
--
-\hat{\tensor{A}}_{(j)}
-\Sigma_{-j}^{-1}
-\tensor{R}_{i(j)}^T \\
-&+
-\eta_i
-\hat{\tensor{A}}_{(j)}
-\Sigma_{-j}^{-1}
-\hat{\tensor{A}}_{(j)}^T
-\bigg].
-\end{aligned}
-$$
-
-The part of $Q$ involving $\Sigma_j$ can be written as
-
-$$
-Q(\Sigma_j)
-=
--
-\frac{Nn^*}{2n_j}\log|\Sigma_j|
--
-\frac{1}{2}
-\operatorname{tr}
-\left(
-\Sigma_j^{-1}\mat{S}_j
-\right).
-$$
-
-Using the differential identities
-
-$$
-d\log|\Sigma_j|
-=
-\operatorname{tr}(\Sigma_j^{-1}d\Sigma_j),
-$$
-
-and
-
-$$
-d\operatorname{tr}(\Sigma_j^{-1}\mat{S}_j)
-=
--
-\operatorname{tr}
-\left(
-\Sigma_j^{-1}
-d\Sigma_j
-\Sigma_j^{-1}
-\mat{S}_j
-\right),
-$$
-
-we get
-
-$$
-dQ(\Sigma_j)
-=
-\frac{1}{2}
-\operatorname{tr}
-\left[
-\left(
--
-\frac{Nn^*}{n_j}\Sigma_j^{-1}
-+
-\Sigma_j^{-1}\mat{S}_j\Sigma_j^{-1}
-\right)
-d\Sigma_j
-\right].
-$$
-
-Setting this equal to zero for every $d\Sigma_j$ gives
-
-$$
--
-\frac{Nn^*}{n_j}\Sigma_j^{-1}
-+
-\Sigma_j^{-1}\mat{S}_j\Sigma_j^{-1}
-=
-\mat{0}.
-$$
-
-Multiplying on the left and right by $\Sigma_j$ gives
-
-$$
-\hat{\Sigma}_j
-=
-\frac{n_j}{Nn^*}
-\mat{S}_j.
-$$
-
-Since the individual Kronecker factors are identifiable only up to compensating scale changes, the algorithm rescales the covariance matrices after each update. In \pkg{tensormodels}, the traces of the first $D-1$ covariance matrices are normalized to their mode dimensions, and the final covariance matrix absorbs the product of the removed scales so that the full Kronecker covariance is preserved.
-
-
-## Proof of Flip-Flop for TVN
-
-Let $\tensor{X}_{1}, \dots, \tensor{X}_{K}$ be IID from
-
-$$
-TVN_{n_{1}, n_{2}, n_{3}}
-(\tensor{M}, \mat{U}_{1}, \mat{U}_{2}, \mat{U}_{3}),
-$$
-
-or equivalently,
-
-$$
-\text{vec}(\tensor{X}_{k}) \sim
-N\left(
-\text{vec}(\tensor{M}),
-\mat{U}_{3} \otimes \mat{U}_{2} \otimes \mat{U}_{1}
-\right).
-$$
-
-Let $\tensor{Y}_{k} = \tensor{X}_{k} - \tensor{M}$, let $n_{-j} = \prod_{\ell \neq j} n_{\ell}$, and define
-
-$$
-\mat{U}_{-1} = \mat{U}_{3} \otimes \mat{U}_{2}, \qquad
-\mat{U}_{-2} = \mat{U}_{3} \otimes \mat{U}_{1}, \qquad
-\mat{U}_{-3} = \mat{U}_{2} \otimes \mat{U}_{1}.
-$$
-
-Up to a constant that does not depend on the parameters, the log-likelihood can be written using the mode-1 unfolding as
-
-$$
-\begin{aligned}
-\ell
-=& -\frac{K}{2}
-\left[
- n_{2}n_{3}\log|\mat{U}_{1}|
-+ n_{1}n_{3}\log|\mat{U}_{2}|
-+ n_{1}n_{2}\log|\mat{U}_{3}|
-\right] \\
-& -\frac{1}{2}
-\sum_{k=1}^{K}
-\text{tr}\left[
-\mat{U}_{1}^{-1}
-\tensor{Y}_{k(1)}
-(\mat{U}_{3} \otimes \mat{U}_{2})^{-1}
-\tensor{Y}_{k(1)}^{T}
-\right].
-\end{aligned}
-$$
-
-More generally, using mode-$j$ matricization, the quadratic term is
-
-$$
-\text{tr}\left[
-\mat{U}_{j}^{-1}
-\tensor{Y}_{k(j)}
-\mat{U}_{-j}^{-1}
-\tensor{Y}_{k(j)}^{T}
-\right],
-$$
-
-which is equivalent to the tensor inner-product notation
-
-$$
-\left\langle
-\tensor{Y}_{k},
-\tensor{Y}_{k}
-\nProd{1}\mat{U}_{1}^{-1}
-\nProd{2}\mat{U}_{2}^{-1}
-\nProd{3}\mat{U}_{3}^{-1}
-\right\rangle.
-$$
-
-In vectorized form, let
-
-$$
-\mat{\Omega} =
-\mat{U}_{3} \otimes \mat{U}_{2} \otimes \mat{U}_{1}.
-$$
-
-The part of the log-likelihood involving $\tensor{M}$ is
-
-$$
--\frac{1}{2}
-\sum_{k=1}^{K}
-\left[
-\text{vec}(\tensor{X}_{k}) - \text{vec}(\tensor{M})
-\right]^{T}
-\mat{\Omega}^{-1}
-\left[
-\text{vec}(\tensor{X}_{k}) - \text{vec}(\tensor{M})
-\right].
-$$
-
-Differentiating with respect to $\text{vec}(\tensor{M})$ gives
-
-$$
-\frac{\partial \ell}{\partial \text{vec}(\tensor{M})}
-=
-\mat{\Omega}^{-1}
-\sum_{k=1}^{K}
-\left[
-\text{vec}(\tensor{X}_{k}) - \text{vec}(\tensor{M})
-\right].
-$$
-
-Setting this equal to zero gives
-
-$$
-\hat{\tensor{M}} =
-\bar{\tensor{X}} =
-\frac{1}{K}
-\sum_{k=1}^{K}\tensor{X}_{k}.
-$$
-
-Now hold the other covariance matrices fixed and estimate $\mat{U}_{j}$. Define
-
-$$
-\mat{S}_{j}
-=
-\sum_{k=1}^{K}
-\tensor{Y}_{k(j)}
-\mat{U}_{-j}^{-1}
-\tensor{Y}_{k(j)}^{T}.
-$$
-
-The part of the log-likelihood involving $\mat{U}_{j}$ is
-
-$$
-\ell_{j}
-=
--\frac{K n_{-j}}{2}\log|\mat{U}_{j}|
--\frac{1}{2}
-\text{tr}\left(
-\mat{U}_{j}^{-1}\mat{S}_{j}
-\right).
-$$
-
-Using
-
-$$
-d\log|\mat{U}_{j}| =
-\text{tr}(\mat{U}_{j}^{-1}d\mat{U}_{j})
-$$
-
-and
-
-$$
-d\text{tr}(\mat{U}_{j}^{-1}\mat{S}_{j})
-=
--\text{tr}
-\left(
-\mat{U}_{j}^{-1}
-d\mat{U}_{j}
-\mat{U}_{j}^{-1}
-\mat{S}_{j}
-\right),
-$$
-
-the differential is
-
-$$
-\begin{aligned}
-d\ell_{j}
-=& -\frac{K n_{-j}}{2}
-\text{tr}(\mat{U}_{j}^{-1}d\mat{U}_{j}) \\
-&+ \frac{1}{2}
-\text{tr}
-\left(
-\mat{U}_{j}^{-1}
-d\mat{U}_{j}
-\mat{U}_{j}^{-1}
-\mat{S}_{j}
-\right).
-\end{aligned}
-$$
-
-Moving $d\mat{U}_{j}$ to the end of each trace gives
-
-$$
-d\ell_{j}
-=
-\frac{1}{2}
-\text{tr}
-\left[
-\left(
--K n_{-j}\mat{U}_{j}^{-1}
-+ \mat{U}_{j}^{-1}\mat{S}_{j}\mat{U}_{j}^{-1}
-\right)
-d\mat{U}_{j}
-\right].
-$$
-
-Since this must be zero for all $d\mat{U}_{j}$,
-
-$$
--K n_{-j}\mat{U}_{j}^{-1}
-+ \mat{U}_{j}^{-1}\mat{S}_{j}\mat{U}_{j}^{-1}
-=
-\mat{0}.
-$$
-
-Multiplying on the left and right by $\mat{U}_{j}$ gives
-
-$$
-\hat{\mat{U}}_{j}
-=
-\frac{1}{K n_{-j}}
-\mat{S}_{j}.
-$$
-
-Substituting back the definition of $\mat{S}_{j}$ gives the three TVN updates:
-
-$$
-\hat{\mat{U}}_{1}
-=
-\frac{1}{K n_{2}n_{3}}
-\sum_{k=1}^{K}
-(\tensor{X}_{k}-\bar{\tensor{X}})_{(1)}
-(\hat{\mat{U}}_{3}\otimes\hat{\mat{U}}_{2})^{-1}
-(\tensor{X}_{k}-\bar{\tensor{X}})_{(1)}^{T},
-$$
-
-$$
-\hat{\mat{U}}_{2}
-=
-\frac{1}{K n_{1}n_{3}}
-\sum_{k=1}^{K}
-(\tensor{X}_{k}-\bar{\tensor{X}})_{(2)}
-(\hat{\mat{U}}_{3}\otimes\hat{\mat{U}}_{1})^{-1}
-(\tensor{X}_{k}-\bar{\tensor{X}})_{(2)}^{T},
-$$
-
-and
-
-$$
-\hat{\mat{U}}_{3}
-=
-\frac{1}{K n_{1}n_{2}}
-\sum_{k=1}^{K}
-(\tensor{X}_{k}-\bar{\tensor{X}})_{(3)}
-(\hat{\mat{U}}_{2}\otimes\hat{\mat{U}}_{1})^{-1}
-(\tensor{X}_{k}-\bar{\tensor{X}})_{(3)}^{T}.
-$$
-
-Because each covariance update depends on the other two covariance estimates, the MLEs are found by iterating these equations. The individual $\mat{U}_{j}$ are determined only up to scale constraints; the Kronecker product is the identifiable covariance structure.

@@ -2,22 +2,30 @@
 % Please edit documentation in R/tensor.R
 \name{tensor}
 \alias{tensor}
-\title{tensor}
+\title{Construct a tensor}
 \usage{
-tensor(data, dim = dim(data))
+tensor(x, dim = NULL, dimnames = NULL)
 }
 \arguments{
-\item{data}{A vector containing data for the tensor.}
+\item{x}{An array, or the data used to construct one.}
 
-\item{dims}{A vector of dimensions for the resulting tensor.}
+\item{dim}{An optional integer vector giving the dimensions of the tensor.
+If \code{NULL}, \code{x} must already be an array.}
+
+\item{dimnames}{An optional list of dimension names used when \code{dim} is
+supplied.}
 }
 \value{
-A tensor with values from data and dimensions from dims.
+An object of class \code{tensor} backed by \code{x}.
 }
 \description{
-Creates a tensor object.
+\code{tensor()} wraps a base array as a tensor, or constructs an array from raw
+data when \code{dim} is supplied. Every array dimension represents a tensor mode.
 }
 \examples{
-(A <- tensor(1:24, dim = c(2, 3, 4)))
+A <- tensor(array(1:24, dim = c(2, 3, 4)))
+B <- tensor(1:24, dim = c(2, 3, 4))
+A + A
+2 * A
 
 }

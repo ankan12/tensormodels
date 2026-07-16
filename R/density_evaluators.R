@@ -12,12 +12,17 @@
 
   for (k in seq_along(sigmas)) {
     sigd <- sigmas[[k]]
-    det_sigd <- det(sigd)
+    if (zero_floor) {
+      det_sigd <- det(sigd)
 
-    if (zero_floor && det_sigd == 0) det_sigd <- 1e-8
+      if (det_sigd == 0) det_sigd <- 1e-8
 
-    all_det <- all_det +
-      (n_star / (2 * nrow(sigd))) * log(det_sigd)
+      logdet_sigd <- log(det_sigd)
+    } else {
+      logdet_sigd <- .logdet_safe(sigd)
+    }
+
+    all_det <- all_det + (n_star / (2 * nrow(sigd))) * logdet_sigd
   }
 
   all_det

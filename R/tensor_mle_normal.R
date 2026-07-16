@@ -21,8 +21,8 @@
 tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
                               quiet = TRUE, restrict = NULL) {
   #get dim of input
-  n <- length(data)
-  dims <- dim(data[[1]])
+  n <- n_draws(data)
+  dims <- draw_shape(data)
   o <- length(dims)
   n_star <- prod(dims)
 
@@ -62,6 +62,8 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
       BIC = k * log(n) - 2 * total_loglik
     ))
   }
+
+  mu <- apply(data, 2:(o+1), mean)
 
   mu <- apply(simplify2array(data), 1:o, mean)
 

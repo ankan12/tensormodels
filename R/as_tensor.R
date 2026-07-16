@@ -9,6 +9,5 @@ as_tensor <- function(x) {
     stop("as_tensor() requires an array.")
   }
 
-  class(x) <- c("tensor", class(x))
-  x
+  tensor(x)
 }

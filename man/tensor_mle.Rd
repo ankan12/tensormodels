@@ -14,8 +14,8 @@ tensor_mle(
 )
 }
 \arguments{
-\item{draws}{An array containing the draws, where the first mode represents
-each draw.}
+\item{draws}{A \code{tensor_samples} object, where the first mode represents
+each observation.}
 
 \item{max_iter}{A max number of iterations to try to get covariance matrices
 that converge.}
@@ -30,7 +30,7 @@ A list containing the estimated mean array and the list of covariance
 matrices.
 }
 \description{
-Estimates the mean array and covariance matrices from an array of tensor
-variate draws. If tensor variate normal, uses the flop-flop algorithm. Otherwise,
+Estimates the mean array and covariance matrices from tensor-valued
+observations. If tensor variate normal, uses the flop-flop algorithm. Otherwise,
 uses the expectation-maximization algorithm.
 }
