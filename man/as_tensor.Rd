@@ -4,10 +4,12 @@
 \alias{as_tensor}
 \title{Coerce an array to a tensor.}
 \usage{
-as_tensor(x)
+as_tensor(x, obs = NULL)
 }
 \arguments{
 \item{x}{An array.}
+
+\item{obs}{An optional observation dimension containing multiple draws.}
 }
 \value{
 An object of class \code{tensor}.

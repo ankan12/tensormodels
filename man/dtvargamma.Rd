@@ -7,7 +7,7 @@
 dtvargamma(x, mu, skew, sigmas, scale, log = FALSE)
 }
 \arguments{
-\item{x}{An array of quantiles or a list of arrays.}
+\item{x}{A numeric vector/array, a \code{tensor}, or a \code{tensor} object.}
 
 \item{mu}{An array of the mean.}
 
@@ -20,7 +20,8 @@ dtvargamma(x, mu, skew, sigmas, scale, log = FALSE)
 \item{log}{Defaults to FALSE. If TRUE, return the log of the density.}
 }
 \value{
-The log likelihood.
+A single density for one tensor, or a numeric vector of densities
+for a tensor object.
 }
 \description{
 Computes the density function for the tensor variate gamma.

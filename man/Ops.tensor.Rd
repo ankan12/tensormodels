@@ -10,11 +10,9 @@
 \item{e1, e2}{Tensor or numeric operands.}
 }
 \value{
-Arithmetic operations return a tensor. Comparison and logical
-operations return a base array.
+Arithmetic operations return a tensor; comparisons return an array.
 }
 \description{
-Tensor arithmetic is elementwise and preserves the tensor class. Operations
-between two tensors require identical shapes. Comparisons and logical
-operations return ordinary arrays.
+Operations are applied to every draw. A one-draw tensor is broadcast across
+a tensor with more draws.
 }

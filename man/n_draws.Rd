@@ -2,16 +2,16 @@
 % Please edit documentation in R/tensor_samples.R
 \name{n_draws}
 \alias{n_draws}
-\title{Number of tensor observations}
+\title{Number of tensor draws}
 \usage{
 n_draws(x)
 }
 \arguments{
-\item{x}{Tensor samples.}
+\item{x}{A tensor object.}
 }
 \value{
-A single integer giving the number of observations.
+Number of draws.
 }
 \description{
-Number of tensor observations
+Number of tensor draws
 }

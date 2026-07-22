@@ -7,12 +7,12 @@
 slice_draws(x, i)
 }
 \arguments{
-\item{x}{Tensor samples.}
+\item{x}{A tensor object.}
 
-\item{i}{Locations identifying draws to retain.}
+\item{i}{Draw locations.}
 }
 \value{
-A \code{tensor_samples} object containing the selected observations.
+A tensor containing selected draws.
 }
 \description{
 Select tensor draws

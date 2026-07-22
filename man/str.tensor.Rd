@@ -2,16 +2,18 @@
 % Please edit documentation in R/str_tensor.R
 \name{str.tensor}
 \alias{str.tensor}
-\title{Structure of a tensor.}
+\title{Structure of a tensor}
 \usage{
 \method{str}{tensor}(object, ...)
 }
 \arguments{
-\item{A}{A tensor object (S3 wrapper around an array).}
+\item{object}{A tensor object.}
+
+\item{...}{Unused.}
 }
 \value{
-The structure of a tensor.
+A compact description.
 }
 \description{
-Structure of a tensor.
+Structure of a tensor
 }

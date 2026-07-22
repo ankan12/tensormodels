@@ -61,10 +61,5 @@
     stop("`mode` must be a positive integer.", call. = FALSE)
   }
 
-  tensor_is_tensor <- inherits(tensor, "tensor")
-  tensor_input <- if (tensor_is_tensor) unclass(tensor) else tensor
-  mat_input <- if (inherits(mat, "tensor")) unclass(mat) else mat
-  result <- n_prod(tensor_input, mat_input, n = as.integer(mode))
-
-  if (tensor_is_tensor) tensor(result) else result
+  n_prod(tensor, mat, n = as.integer(mode))
 }

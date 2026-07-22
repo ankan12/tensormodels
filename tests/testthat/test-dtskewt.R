@@ -74,6 +74,39 @@ test_that("density functions accept vector-valued inputs", {
                          lambda = 2, omega = 2), "double")
 })
 
+test_that("skewed density functions accept tensors and tensor draws", {
+  dims <- c(2, 3)
+  mu <- tensor(array(0, dim = dims))
+  skew <- tensor(array(1, dim = dims))
+  sigmas <- list(diag(2), diag(3))
+  samples <- tensor(array(rnorm(4 * prod(dims)), dim = c(4, dims)), obs = 1)
+  densities <- list(
+    dtskewt = function(x) dtskewt(x, mu = mu, skew = skew,
+                                  sigmas = sigmas, nu = 4),
+    dtvargamma = function(x) dtvargamma(x, mu = mu, skew = skew,
+                                        sigmas = sigmas, scale = 2),
+    dtinvgauss = function(x) dtinvgauss(x, mu = mu, skew = skew,
+                                        sigmas = sigmas, kappa = 2),
+    dtgenhyper = function(x) dtgenhyper(x, mu = mu, skew = skew,
+                                        sigmas = sigmas, lambda = 2,
+                                        omega = 2)
+  )
+
+  for (density in densities) {
+    one <- density(pull_draw(samples, 1))
+    all <- density(samples)
+    expected <- vapply(seq_len(n_draws(samples)),
+                       function(i) density(pull_draw(samples, i)),
+                       numeric(1))
+
+    expect_length(one, 1L)
+    expect_length(all, n_draws(samples))
+    expect_equal(all, expected)
+    expect_error(density(list(pull_draw(samples, 1))),
+                 "lists are not supported")
+  }
+})
+
 test_that("skewed density functions warn and regularize singular covariance log determinants", {
   x <- c(1, 2)
   mu <- c(0, 0)
@@ -146,13 +179,44 @@ test_that("random generation functions accept matching tensor parameters", {
   skew <- array(1, dim = c(2, 3))
   sigmas <- list(diag(2), diag(3))
 
-  expect_equal(dim(rtnorm(1, mu = mu, sigmas = sigmas)[[1]]), c(2, 3))
-  expect_equal(dim(rtinvgauss(1, mu = mu, skew = skew, sigmas = sigmas,
-                              kappa = 2)[[1]]), c(2, 3))
-  expect_equal(dim(rtskewt(1, mu = mu, skew = skew, sigmas = sigmas,
-                           nu = 4)[[1]]), c(2, 3))
-  expect_equal(dim(rtvargamma(1, mu = mu, skew = skew, sigmas = sigmas,
-                              scale = 2)[[1]]), c(2, 3))
-  expect_equal(dim(rtgenhyper(1, mu = mu, skew = skew, sigmas = sigmas,
-                              lambda = 2, omega = 2)[[1]]), c(2, 3))
+  expect_equal(dim(pull_draw(rtnorm(1, mu = mu, sigmas = sigmas), 1)), c(2, 3))
+  generators <- list(
+    rtinvgauss(1, mu = mu, skew = skew, sigmas = sigmas, kappa = 2),
+    rtskewt(1, mu = mu, skew = skew, sigmas = sigmas, nu = 4),
+    rtvargamma(1, mu = mu, skew = skew, sigmas = sigmas, scale = 2),
+    rtgenhyper(1, mu = mu, skew = skew, sigmas = sigmas,
+               lambda = 2, omega = 2)
+  )
+
+  for (draws in generators) {
+    expect_s3_class(draws, "tensor")
+    expect_equal(n_draws(draws), 1L)
+    expect_equal(dim(pull_draw(draws, 1)), c(2, 3))
+  }
+})
+
+test_that("random generators transform complete tensor draws", {
+  set.seed(1)
+
+  mu <- array(0, dim = c(2, 3))
+  skew <- array(0, dim = c(2, 3))
+  sigmas <- list(diag(2), diag(3))
+
+  generators <- list(
+    rtinvgauss(3, mu = mu, skew = skew, sigmas = sigmas, kappa = 2),
+    rtskewt(3, mu = mu, skew = skew, sigmas = sigmas, nu = 4),
+    rtvargamma(3, mu = mu, skew = skew, sigmas = sigmas, scale = 2),
+    rtgenhyper(3, mu = mu, skew = skew, sigmas = sigmas,
+               lambda = 2, omega = 2)
+  )
+
+  for (draws in generators) {
+    within_draw_sd <- vapply(
+      seq_len(n_draws(draws)),
+      function(i) sd(as.numeric(pull_draw(draws, i))),
+      numeric(1)
+    )
+
+    expect_true(all(within_draw_sd > 0))
+  }
 })

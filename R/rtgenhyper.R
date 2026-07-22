@@ -9,7 +9,9 @@
 #' @param lambda Shape/scale parameter for generalized inverse Gaussian distribution.
 #' @param omega Shape parameter for generalized inverse Gaussian distribution.
 #'
-#' @return An array containing n draws of the tensor generalized hyperbolic distribution.
+#' @return A `tensor` object containing n draws of the tensor
+#'   generalized hyperbolic distribution, with observations stored on the
+#'   first axis.
 #'
 #' @examples
 #' univar_genhyper <- rtgenhyper(n = 1e3, mu = 0)
@@ -25,17 +27,18 @@ rtgenhyper <- function(n, mu = 0, skew = 1, sigmas = list(matrix(1)),
   .validate_same_dims(skew, dims, "skew", "mu")
   sigmas <- .prepare_sigmas(sigmas, dims)
 
-  # draw tensor variate normals
-  tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
+  # draw tensor variate normals; observations are stored on the first axis
+  tensor_norms <- unclass(rtnorm(n, mu = array(0, dim = dims), sigmas))
 
   # generate inv GIG
   inv_gig <- rgig(n, lambda = lambda, chi = omega, psi = omega)
 
-  genhyper_draws <- vector("list", n)
+  mu_array <- array(rep(as.numeric(mu), each = n), dim = c(n, dims))
+  skew_array <- array(rep(as.numeric(skew), each = n), dim = c(n, dims))
 
-  for(i in 1:n) { # scale normals and skew by inv GIG
-    genhyper_draws[[i]] <- mu + tensor_norms[[i]] * sqrt(inv_gig[i]) + skew * inv_gig[i]
-  }
+  draws <- sweep(tensor_norms, 1L, sqrt(inv_gig), "*") +
+    mu_array +
+    sweep(skew_array, 1L, inv_gig, "*")
 
-  genhyper_draws
+  tensor(draws, obs = 1L)
 }

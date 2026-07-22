@@ -6,9 +6,10 @@
 #' @param mu An array containing the mean values of and dims of each draw.
 #' @param sigmas A list of covariance matrices. Defaults to the identity.
 #' @param skew An array that determines how skewed the distribution is.
-#' @param v Degrees of freedom
+#' @param nu Degrees of freedom
 #'
-#' @return An array containing n draws of the tensor variate skewed t distribution.
+#' @return A `tensor` object containing n draws of the tensor variate
+#'   skewed t distribution, with observations stored on the first mode.
 #'
 #' @examples
 #' univar_skewt <- rtskewt(n = 1e3, mu = 0)
@@ -21,18 +22,18 @@ rtskewt <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, nu = 4) {
   .validate_same_dims(skew, dims, "skew", "mu")
   sigmas <- .prepare_sigmas(sigmas, dims)
 
-  # draw tensor variate normals
-  tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
+  # draw tensor variate normals; observations are stored on the first axis
+  tensor_norms <- unclass(rtnorm(n, mu = array(0, dim = dims), sigmas))
 
   # generate inv gamma
   inv_gammas <- rinvgamma(n = n, shape = nu/2, rate = nu/2)
 
-  skewt_draws <- vector("list", n)
+  mu_array <- array(rep(as.numeric(mu), each = n), dim = c(n, dims))
+  skew_array <- array(rep(as.numeric(skew), each = n), dim = c(n, dims))
 
-  for(i in 1:n) { # scale normals and skew by inv gamma
-    skewt_draws[[i]] <- mu + tensor_norms[[i]] * sqrt(inv_gammas[i]) +
-                        skew * inv_gammas[i]
-  }
+  draws <- sweep(tensor_norms, 1L, sqrt(inv_gammas), "*") +
+    mu_array +
+    sweep(skew_array, 1L, inv_gammas, "*")
 
-  skewt_draws
+  tensor(draws, obs = 1L)
 }

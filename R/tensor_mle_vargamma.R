@@ -9,8 +9,8 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
                                 quiet = TRUE, restrict = NULL) {
 
   # get dim of input
-  n <- length(data)
-  dims <- dim(data[[1]])
+  n <- n_draws(data)
+  dims <- draw_shape(data)
   o <- length(dims)
   n_star <- prod(dims)
 
@@ -32,17 +32,17 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
 
   inv_sigma_start <- lapply(sigmas, invert_safe)
 
-  precision_resids <- lapply(data, function(x) {
-    centered <- x - mu
+  precision_resids_mat <- matrix(0, nrow = n_star, ncol = n)
+  for (i in seq_len(n)) {
+    centered <- .tensor_single_draw_array(pull_draw(data, i)) - mu
 
     for (d in seq_along(inv_sigma_start)) {
       centered <- n_prod(centered, inv_sigma_start[[d]], d)
     }
 
-    centered
-  })
-
-  precision_resids <- simplify2array(precision_resids)
+    precision_resids_mat[, i] <- as.numeric(centered)
+  }
+  precision_resids <- array(precision_resids_mat, dim = c(dims, n))
 
   # Use the median shift of precision-weighted residuals to seed skewness.
   skew <- -apply(precision_resids, 1:o, median)
@@ -68,7 +68,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
     #centered <- draws - mu_array
 
     for (i in 1:n) {
-      center_draw <- data[[i]] - mu
+      center_draw <- .tensor_single_draw_array(pull_draw(data, i)) - mu
 
       centered_compute <- center_draw
 
@@ -107,8 +107,8 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
     num_skew <- 0
 
     for (i in 1:n) {
-      num_mean <- num_mean + weight_mean[i] * data[[i]]
-      num_skew <- num_skew + weight_skew[i] * data[[i]]
+      num_mean <- num_mean + weight_mean[i] * pull_draw(data, i)
+      num_skew <- num_skew + weight_skew[i] * pull_draw(data, i)
     }
 
     den_mean <- sum(mean(a) * b) - n
@@ -153,7 +153,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
       flat_skew <- matricization(new_skew, j)
 
       for (i in 1:n) {
-        xm <- data[[i]] - new_mu # take centered draw
+        xm <- .tensor_single_draw_array(pull_draw(data, i)) - new_mu # take centered draw
         flat_xm <- matricization(xm, j)
 
         x_sum <- x_sum + flat_xm

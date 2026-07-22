@@ -2,24 +2,21 @@
 % Please edit documentation in R/assign_tensor.R
 \name{[<-.tensor}
 \alias{[<-.tensor}
-\title{Assign a tensor.}
+\title{Assign into a tensor}
 \usage{
-\method{[}{tensor}(x, ..., value)
+\method{[}{tensor}(x, ...) <- value
 }
 \arguments{
-\item{...}{Indices.}
+\item{x}{A tensor object.}
 
-\item{value}{Tensor that will be assigned to A.}
+\item{...}{Array indices.}
 
-\item{A}{A tensor object (S3 wrapper around an array).}
+\item{value}{A replacement value, including a tensor or ordinary array.}
 }
 \value{
-A tensor that was assigned.
+The modified tensor.
 }
 \description{
-Assign a tensor.
-}
-\examples{
-A <- tensor(array(1:24, dim = c(2, 3, 4)))
-A[1, ] <- array(1:12, dim = c(3, 4))
+Assignment follows ordinary array rules. For a one-draw tensor, the draw
+axis is implicit and is inserted automatically.
 }

@@ -31,7 +31,7 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
   }
 
   if(o == 1 && dims == 1) { # univariate
-    vector_data <- simplify2array(data)
+    vector_data <- as.vector(unclass(data))
     mu <- mean(vector_data)
     sigma <- var(vector_data)
     total_loglik <- sum(dnorm(vector_data, mean = mu, sd = sqrt(sigma), log = TRUE))
@@ -47,7 +47,7 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
   }
 
   if(o == 1) { # multivariate
-    array_data <- aperm(simplify2array(data), c(2, 1))
+    array_data <- t(unclass(data))
     mu <- apply(array_data, 2, mean)
     sigma <- cov(array_data) * (n - 1)/n
     total_loglik <- sum(dtnorm(data, mu = mu, sigmas = list(sigma),
@@ -63,9 +63,7 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
     ))
   }
 
-  mu <- apply(data, 2:(o+1), mean)
-
-  mu <- apply(simplify2array(data), 1:o, mean)
+  mu <- apply(unclass(data), 2:(o+1), mean)
 
   sigmas <- lapply(dims, diag)
 
@@ -74,7 +72,7 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
   for(k in 1:o) {
     tot_sum <- 0
     for(i in 1:n) {
-      curr_unfold <- matricization(data[[i]] - mu, k)
+      curr_unfold <- matricization(.tensor_single_draw_array(pull_draw(data, i)) - mu, k)
 
       tot_sum <- tot_sum + tcrossprod(curr_unfold)
     }
@@ -99,7 +97,7 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
 
       # accumlate mode-j covar estimate
       for (draw in 1:n) {
-        xm <- data[[draw]] - mu
+        xm <- .tensor_single_draw_array(pull_draw(data, draw)) - mu
         xm_tmp <- xm
         flat_xm <- matricization(xm, j)
 

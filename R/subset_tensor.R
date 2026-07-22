@@ -1,44 +1,42 @@
-#' Subset a tensor.
+#' Subset a tensor
 #'
-#' @param A A tensor object (S3 wrapper around an array).
-#' @param ... Indices.
-#' @param drop Logical; passed to base `[` (defaults to FALSE).
+#' Tensor subsetting follows ordinary array rules. For a one-draw tensor, the
+#' observation axis is implicit, so `x[i, j, k]` indexes the tensor modes. For
+#' multiple draws, the first index is the draw axis, as in the underlying
+#' array. Use [pull_draw()] when an explicit one-draw tensor is desired.
 #'
-#' @return A tensor that was subset.
-#'
-#' @examples
-#' A <- tensor(array(1:24, dim = c(2, 3, 4)))
-#' A[1, ]
+#' @param x A tensor object.
+#' @param ... Array indices.
+#' @param drop Whether singleton dimensions should be dropped.
+#' @return The subsetted value, retaining class when the result is an array
+#'   with an explicit draw axis.
 #' @export
 #' @method [ tensor
 `[.tensor` <- function(x, ..., drop = TRUE) {
-  dims <- dim(x) #dimensions of input
+  args <- as.list(substitute(list(...)))[-1L]
+  if (length(args) == 0L) return(x)
 
-  args <- as.list(substitute(list(...)))[-1] #args provided
+  # A one-draw tensor presents its modes directly to the user.
+  storage_dims <- dim(unclass(x))
+  if (n_draws(x) == 1L && length(args) < length(storage_dims)) {
+    args <- c(list(1L), args)
+  }
 
-  # fill missing with TRUE
+  dims <- storage_dims
   if (length(args) < length(dims)) {
     args <- c(args, rep(list(TRUE), length(dims) - length(args)))
   }
 
-  # replace empty arguments (e.g., `A[1, ]`) with TRUE
-  for (i in seq_along(args)) {
-    if (length(args[[i]]) == 0) args[[i]] <- TRUE
-  }
-
-  # capture calling environment (so j in for-loop is found)
   caller <- parent.frame()
-
-  # Evaluate indices safely
-  eval_indices <- lapply(args, function(a) {
-    if (is.symbol(a) && as.character(a) == "") TRUE
-    else eval(a, caller)
+  eval_args <- lapply(args, function(arg) {
+    if (is.symbol(arg) && identical(as.character(arg), "")) TRUE
+    else eval(arg, caller)
   })
 
-  # subset the underlying array
-  result <- do.call(`[`, c(list(unclass(x)), eval_indices, list(drop = drop)))
+  result <- do.call(`[`, c(list(unclass(x)), eval_args, list(drop = drop)))
 
-  # return as tensor class
-  if (is.array(result)) class(result) <- "tensor"
+  if (!drop && is.array(result) && length(dim(result)) >= 2L) {
+    return(.new_tensor_array(result))
+  }
   result
 }

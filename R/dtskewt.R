@@ -2,7 +2,7 @@
 #'
 #' Computes the density function for the tensor variate skewed-t.
 #'
-#' @param x An array of quantiles or a list of arrays.
+#' @param x A numeric vector/array, a `tensor`, or a `tensor` object.
 #' @param mu An array of the mean.
 #' @param skew An array of the skew.
 #' @param sigmas A list of the sigma covariance matrices.
@@ -10,25 +10,36 @@
 #'           inverse gamma.
 #' @param log Defaults to FALSE. If TRUE, return the log of the density.
 #'
-#' @return The log likelihood.
+#' @return A single density for one tensor, or a numeric vector of densities
+#'   for a tensor object.
 #'
 #' @examples
 #' dtskewt(array(1), mu = 0, skew = array(1), sigmas = list(matrix(1)), nu = 2)
 #' @export
 dtskewt <- function(x, mu, skew, sigmas, nu, log = FALSE) {
-  x_is_list <- is.list(x)
+  x_is_tensor <- inherits(x, "tensor")
 
-  if (x_is_list) {
-    if (length(x) == 0) {
-      stop("x must be a non-empty list of tensor draws.")
+  if (is.list(x)) {
+    stop(
+      "`x` must be a tensor/array or a `tensor` object; lists are not supported.",
+      call. = FALSE
+    )
+  }
+
+  if (x_is_tensor) {
+    if (n_draws(x) == 0L) {
+      stop("x must contain at least one tensor observation.", call. = FALSE)
     }
 
-    dims <- dim(x[[1]])
-
-    if (is.null(dims)) {
-      stop("Each element of x must be an array.")
-    }
+    dims <- draw_shape(x)
   } else {
+    if (!is.numeric(x)) {
+      stop(
+        "`x` must be numeric, an array, a `tensor`, or a `tensor` object.",
+        call. = FALSE
+      )
+    }
+
     dims <- .tensor_dims(x)
   }
 
@@ -63,7 +74,11 @@ dtskewt <- function(x, mu, skew, sigmas, nu, log = FALSE) {
   eval_one <- function(x_curr) {
     .validate_same_dims(x_curr, dims, "x", reference = "mu")
 
-    x_curr <- array(x_curr, dim = dims)
+    if (inherits(x_curr, "tensor")) {
+      x_curr <- .tensor_single_draw_array(x_curr)
+    } else {
+      x_curr <- array(x_curr, dim = dims)
+    }
 
     xm <- x_curr - mu
     xm_tmp <- xm
@@ -90,14 +105,14 @@ dtskewt <- function(x, mu, skew, sigmas, nu, log = FALSE) {
     loglik
   }
 
-  if (!x_is_list) {
+  if (!x_is_tensor) {
     return(eval_one(x))
   }
 
-  vals <- numeric(length(x))
+  vals <- numeric(n_draws(x))
 
-  for (i in seq_along(x)) {
-    vals[i] <- eval_one(x[[i]])
+  for (i in seq_len(n_draws(x))) {
+    vals[i] <- eval_one(pull_draw(x, i))
   }
 
   vals

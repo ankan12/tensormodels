@@ -54,3 +54,7 @@ paper/data/*
 !paper/data/GRABMyo/
 paper/data/GRABMyo/*
 !paper/data/GRABMyo/grabmyo_session1_tensors_16x28x16.rds
+
+# Large external datasets kept out of the package commit view.
+paper/comboFM_data/
+raw/

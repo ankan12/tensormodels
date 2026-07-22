@@ -4,8 +4,7 @@
 #' observations. If tensor variate normal, uses the flop-flop algorithm. Otherwise,
 #' uses the expectation-maximization algorithm.
 #'
-#' @param draws A `tensor_samples` object, where the first mode represents each
-#'   observation.
+#' @param draws A `tensor` object containing IID observations.
 #' @param max_iter A max number of iterations to try to get covariance matrices
 #'   that converge.
 #' @param tol A tolerance level to define the convergence of matrices.
@@ -17,9 +16,9 @@
 #' @export
 tensor_mle <- function(draws, max_iter = 1000, tol = 1e-4, quiet = TRUE,
                        model, restrict = NULL) {
-  if (!inherits(draws, "tensor_samples")) {
+  if (!inherits(draws, "tensor")) {
     stop(
-      "`draws` must be a `tensor_samples` object. Use `tensor_samples()` first.",
+      "`draws` must be a `tensor` object. Use `tensor()` first.",
       call. = FALSE
     )
   }

@@ -8,8 +8,8 @@
 tensor_mle_skewt <- function(data, max_iter = 1e3, tol = 1e-6,
                              quiet = TRUE, restrict) {
   # get dim of input
-  n <- length(data)
-  dims <- dim(data[[1]])
+  n <- n_draws(data)
+  dims <- draw_shape(data)
   o <- length(dims)
   n_star <- prod(dims)
 
@@ -18,7 +18,7 @@ tensor_mle_skewt <- function(data, max_iter = 1e3, tol = 1e-6,
   # different params based on model
   nu <- 20
 
-  flat_draws <- simplify2array(data)
+  flat_draws <- aperm(unclass(data), c(seq.int(2L, o + 1L), 1L))
 
   mean_draws <- apply(flat_draws, 1:o, mean)
   median_draws <- apply(flat_draws, 1:o, median)
@@ -54,7 +54,7 @@ tensor_mle_skewt <- function(data, max_iter = 1e3, tol = 1e-6,
     tot_sum <- 0
 
     for(i in 1:n) {
-        curr_unfold <- matricization(data[[i]] - mean_draws, k)
+        curr_unfold <- matricization(.tensor_single_draw_array(pull_draw(data, i)) - mean_draws, k)
 
         tot_sum <- tot_sum + (curr_unfold %*% t(curr_unfold))
     }
@@ -80,7 +80,7 @@ tensor_mle_skewt <- function(data, max_iter = 1e3, tol = 1e-6,
     delta_vals <- rep(0, n)
 
     for (i in 1:n) {
-      center_draw <- data[[i]] - mu
+      center_draw <- .tensor_single_draw_array(pull_draw(data, i)) - mu
 
       centered_compute <- center_draw
 
@@ -119,8 +119,9 @@ tensor_mle_skewt <- function(data, max_iter = 1e3, tol = 1e-6,
     num_skew <- 0
 
     for (i in 1:n) {
-      num_mean <- num_mean + weight_mean[i] * data[[i]]
-      num_skew <- num_skew + weight_skew[i] * data[[i]]
+      current_draw <- .tensor_single_draw_array(pull_draw(data, i))
+      num_mean <- num_mean + weight_mean[i] * current_draw
+      num_skew <- num_skew + weight_skew[i] * current_draw
     }
 
     den_mean <- sum(mean(a) * b) - n
@@ -164,7 +165,7 @@ tensor_mle_skewt <- function(data, max_iter = 1e3, tol = 1e-6,
       flat_skew <- matricization(new_skew, j)
 
       for (i in 1:n) {
-        xm <- data[[i]] - new_mu # take centered draw
+        xm <- .tensor_single_draw_array(pull_draw(data, i)) - new_mu # take centered draw
         flat_xm <- matricization(xm, j)
 
         x_sum <- x_sum + flat_xm

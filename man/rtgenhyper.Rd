@@ -27,7 +27,9 @@ rtgenhyper(
 \item{omega}{Shape parameter for generalized inverse Gaussian distribution.}
 }
 \value{
-An array containing n draws of the tensor generalized hyperbolic distribution.
+A \code{tensor} object containing n draws of the tensor
+generalized hyperbolic distribution, with observations stored on the
+first axis.
 }
 \description{
 Simulate random draws from the tensor variate generalized hyperbolic distribution.

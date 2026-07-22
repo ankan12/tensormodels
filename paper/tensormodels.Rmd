@@ -143,7 +143,7 @@ A third-order tensor requires three indices. The following tensor has dimensions
 
 
 ```{r tensor}
-A <- array(data = 1:24, dim = c(4, 3, 2))
+A <- tensor(data = 1:24, dim = c(4, 3, 2))
 
 A[3, 1, 1]
 ```
@@ -190,7 +190,7 @@ a %xn% (u_mat~1)
 
 We can also do a more complex example with a tensor and a matrix. Here, $\tensor{A} \in \field{k}^{2 \times 3 \times 4}.$ Then if we compute $\tensor{A} \times_{2} \mat{U}$, we expect the final result to be $\in \field{k}^{2 \times 2 \times 4}.$
 ```{r}
-A_tensor <- tensor(1:24, dim = c(2, 3, 4))
+A_tensor <- tensor(array(1:24, dim = c(2, 3, 4)))
 
 dim(A_tensor %xn% (u_mat ~ 2))
 ```
@@ -232,7 +232,7 @@ $$A_{(1)} = \begin{bmatrix} 1 & 5 & 9 & 13 & 17 & 21 \\
             \end{bmatrix}$$
             
 ```{r}
-A <- tensor(1:24, dim = c(4, 3, 2))
+A <- tensor(array(1:24, dim = c(4, 3, 2)))
 
 matricization(A, k = 1)
 ```
@@ -511,7 +511,7 @@ This package contains random number generations for several tensor variate distr
 
 
 ```{r rtnorm}
-mu_true <- tensor(1:24, dim = c(2, 3, 4))
+mu_true <- tensor(array(1:24, dim = c(2, 3, 4)))
 
 S1 <- crossprod(matrix(rnorm(4), nrow = 2))
 S2 <- crossprod(matrix(rnorm(9), nrow = 3))
@@ -536,7 +536,7 @@ str(tvn_mles)
 There are also density functions for each distribution. For the tensor variate normal, the required arguments are mu and sigmas. There is an optional log argument to compute the log density rather than the density itself. 
 
 ```{r dtnorm}
-dtnorm(tvn_draws[[1]], mu = mu_true, sigmas = sigmas_true)
+dtnorm(pull_draw(tvn_draws, 1), mu = mu_true, sigmas = sigmas_true)
 ```
 
 ## Tensor decompositions
@@ -961,6 +961,219 @@ generalized hyperbolic distribution providing the next-best fit. The large
 improvement over the normal model remains after penalizing the non-normal
 models for estimating an additional $16 \times 28 \times 16$ skewness tensor.
 
+## Goodness of Fit Using Characteristic Function
+
+```{r}
+skew_true <- array(
+  data = seq(1, 10, length.out = prod(dim(mu_true))),
+  dim = dim(mu_true)
+)
+
+skewt_draws <- rtskewt(
+  n = 1e3,
+  mu = mu_true,
+  sigmas = sigmas_true,
+  skew = skew_true,
+  nu = 20
+)
+
+invgauss_draws <- rtinvgauss(n = 1e3, 
+                             mu = mu_true,
+                             sigmas = sigmas_true,
+                             skew = skew_true)
+
+ecf_empirical <- function(draws, frequency) {
+  draws_mat <- matricization(draws, 1)
+  frequency_vec <- as.numeric(frequency)
+
+  mean(exp(1i * drop(draws_mat %*% frequency_vec)))
+}
+
+cf_gig <- function(u, A, B, lambda) {
+  z <- A - 2i * u
+
+  (A / z)^(lambda / 2) *
+    Bessel::BesselK(z = sqrt(B * z), nu = lambda) /
+    Bessel::BesselK(z = sqrt(A * B), nu = lambda)
+}
+
+cf_skewt_centered <- function(r, q, nu) {
+  if (q <= .Machine$double.eps) {
+    return(1 + 0i)
+  }
+
+  lambda <- -nu / 2
+
+  normalizer <-
+    2 * (nu / 2)^(nu / 2) / gamma(nu / 2) *
+    (q / nu)^(nu / 4) *
+    Bessel::BesselK(z = sqrt(nu * q), nu = lambda)
+
+  normalizer * cf_gig(r, q, nu, lambda)
+}
+
+cf_tensor_skewt <- function(frequency, mu, skew, sigmas, nu) {
+  if (!identical(dim(frequency), dim(mu)) ||
+      !identical(dim(skew), dim(mu))) {
+    stop("frequency, mu, and skew must have identical dimensions.")
+  }
+
+  sigma_frequency <- frequency
+  for (k in seq_along(sigmas)) {
+    sigma_frequency <- n_prod(sigma_frequency, sigmas[[k]], k)
+  }
+
+  location <- sum(frequency * mu)
+  r <- sum(frequency * skew)
+  q <- sum(frequency * sigma_frequency)
+
+  exp(1i * location) * cf_skewt_centered(r, q, nu)
+}
+
+T_array <- array(rnorm(prod(dim(mu_true))), dim = dim(mu_true))
+
+# Normalize the direction so that t' Sigma t = 1. This keeps the comparison
+# informative when the tensor dimension is moderate or large.
+sigma_T <- T_array
+for (k in seq_along(sigmas_true)) {
+  sigma_T <- n_prod(sigma_T, sigmas_true[[k]], k)
+}
+T_array <- T_array / sqrt(sum(T_array * sigma_T))
+
+cf_comparison <- tibble(
+  empirical = ecf_empirical(skewt_draws, T_array),
+  theoretical = cf_tensor_skewt(
+    T_array,
+    mu = mu_true,
+    skew = skew_true,
+    sigmas = sigmas_true,
+    nu = 20
+  )
+) |>
+  mutate(abs_difference = abs(empirical - theoretical))
+
+cf_comparison
+```
+
+The comparison can also be visualized along a ray of frequency tensors. For
+each scalar $s$, we evaluate both characteristic functions at $sT$.
+
+```{r}
+frequency_scales <- seq(0, 3, length.out = 100)
+
+cf_ray_values <- purrr::map_dfr(frequency_scales, function(s) {
+  frequency <- s * T_array
+
+  tibble(
+    scale = s,
+    empirical = ecf_empirical(skewt_draws, frequency),
+    theoretical = cf_tensor_skewt(
+      frequency,
+      mu = mu_true,
+      skew = skew_true,
+      sigmas = sigmas_true,
+      nu = 20
+    )
+  )
+}) |>
+  mutate(
+    empirical_real = Re(empirical),
+    theoretical_real = Re(theoretical),
+    empirical_imag = Im(empirical),
+    theoretical_imag = Im(theoretical)
+  ) |>
+  mutate(
+    complex_difference = empirical - theoretical,
+    abs_difference = abs(complex_difference),
+    squared_difference = abs_difference^2
+  )
+
+cf_ray_summary <- tibble(
+  max_abs_difference = max(cf_ray_values$abs_difference),
+  mean_abs_difference = mean(cf_ray_values$abs_difference),
+  mean_squared_difference = mean(cf_ray_values$squared_difference),
+  integrated_ray_score = sum(
+    diff(cf_ray_values$scale) *
+      (head(cf_ray_values$squared_difference, -1) +
+         tail(cf_ray_values$squared_difference, -1)) / 2
+  )
+)
+
+cf_ray_summary
+
+cf_ray <- cf_ray_values |>
+  select(scale, starts_with("empirical_"), starts_with("theoretical_")) |>
+  pivot_longer(
+    -scale,
+    names_to = c("source", "component"),
+    names_sep = "_"
+  )
+
+ggplot(cf_ray, aes(x = scale, y = value, color = source)) +
+  geom_line(lty = 2) +
+  facet_wrap(~component, ncol = 1) +
+  labs(
+    x = "Frequency scale",
+    y = "Characteristic function",
+    title = "Skew t draws, Theoretical Skew t",
+    color = ""
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+cf_ray <- purrr::map_dfr(frequency_scales, function(s) {
+  frequency <- s * T_array
+
+  tibble(
+    scale = s,
+    empirical = ecf_empirical(invgauss_draws, frequency),
+    theoretical = cf_tensor_skewt(
+      frequency,
+      mu = mu_true,
+      skew = skew_true,
+      sigmas = sigmas_true,
+      nu = 20
+    )
+  )
+}) |>
+  mutate(
+    empirical_real = Re(empirical),
+    theoretical_real = Re(theoretical),
+    empirical_imag = Im(empirical),
+    theoretical_imag = Im(theoretical)
+  ) |>
+  select(scale, starts_with("empirical_"), starts_with("theoretical_")) |>
+  pivot_longer(
+    -scale,
+    names_to = c("source", "component"),
+    names_sep = "_"
+  )
+
+ggplot(cf_ray, aes(x = scale, y = value, color = source)) +
+  geom_line(lty = 2) +
+  facet_wrap(~component, ncol = 1) +
+  labs(
+    x = "Frequency scale",
+    y = "Characteristic function",
+    title = "Inv Gauss draws, Theoretical Skew t",
+    color = ""
+  ) +
+  theme_minimal()
+```
+
+
+```{r}
+cf_ray |> 
+  group_by(value) |> 
+  
+```
+
+For a goodness-of-fit diagnostic, replace the true parameters above with the
+fitted values from `tensor_mle(skewt_draws, model = "skewt")`, then calibrate
+the discrepancy using a parametric bootstrap.
+
 
 # Discussion
 
@@ -977,5 +1190,3 @@ cat("rjtools version:", as.character(packageVersion("rjtools")), "\n")
 # Acknowledgments
 
 Add funding, contributor, and institutional acknowledgments here.
-
-

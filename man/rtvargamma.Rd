@@ -18,7 +18,8 @@ rtvargamma(n, mu = 0, sigmas = list(matrix(1)), skew = 1, scale = 2)
 \item{scale}{Scale parameter for gamma.}
 }
 \value{
-An array containing n draws of the tensor variate variance gamma distribution.
+A \code{tensor} object containing n draws of the tensor variate
+variance gamma distribution, with observations stored on the first axis.
 }
 \description{
 Simulate random draws from the tensor variate variance gamma distribution.

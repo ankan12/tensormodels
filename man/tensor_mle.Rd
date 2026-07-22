@@ -14,8 +14,7 @@ tensor_mle(
 )
 }
 \arguments{
-\item{draws}{A \code{tensor_samples} object, where the first mode represents
-each observation.}
+\item{draws}{A \code{tensor} object containing IID observations.}
 
 \item{max_iter}{A max number of iterations to try to get covariance matrices
 that converge.}

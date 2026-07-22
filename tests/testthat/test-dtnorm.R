@@ -46,3 +46,31 @@ test_that("tensor and matricized normal likelihoods agree", {
     expect_equal(matrix_loglik, tensor_loglik, tolerance = 1e-8)
   }
 })
+
+test_that("dtnorm handles one tensor or all tensor draws", {
+  dims <- c(2, 3)
+  mu <- tensor(array(0, dim = dims))
+  sigmas <- list(diag(2), diag(3))
+  samples <- tensor(array(rnorm(5 * prod(dims)), dim = c(5, dims)), obs = 1)
+
+  one <- dtnorm(pull_draw(samples, 1), mu = mu, sigmas = sigmas)
+  all <- dtnorm(samples, mu = mu, sigmas = sigmas)
+  expected <- vapply(
+    seq_len(n_draws(samples)),
+    function(i) dtnorm(pull_draw(samples, i), mu = mu, sigmas = sigmas),
+    numeric(1)
+  )
+
+  expect_length(one, 1L)
+  expect_length(all, n_draws(samples))
+  expect_equal(all, expected)
+})
+
+test_that("dtnorm rejects list inputs", {
+  x <- list(array(0, dim = c(2, 2)))
+
+  expect_error(
+    dtnorm(x, mu = array(0, dim = c(2, 2)), sigmas = list(diag(2), diag(2))),
+    "lists are not supported"
+  )
+})

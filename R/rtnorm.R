@@ -41,7 +41,7 @@ rtnorm <- function(n, mu = 0, sigmas = list(matrix(1))) {
   d <- length(dims)
 
   # get all Z draws
-  X <- tensor(rnorm(prod(c(n, dims))), c(n, dims))
+  X <- array(rnorm(prod(c(n, dims))), dim = c(n, dims))
 
   # compute Cholesky
   chol_sigmas <- lapply(sigmas, chol)
@@ -51,5 +51,5 @@ rtnorm <- function(n, mu = 0, sigmas = list(matrix(1))) {
   }
   norm_array <- X + array(rep(mu, each = n), dim = c(n, dims)) # add mean
 
-  tensor_samples(norm_array, obs = 1) #return as vctr of tensors
+  tensor(norm_array, obs = 1L)
 }

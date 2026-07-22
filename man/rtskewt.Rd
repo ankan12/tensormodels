@@ -15,10 +15,11 @@ rtskewt(n, mu = 0, sigmas = list(matrix(1)), skew = 1, nu = 4)
 
 \item{skew}{An array that determines how skewed the distribution is.}
 
-\item{v}{Degrees of freedom}
+\item{nu}{Degrees of freedom}
 }
 \value{
-An array containing n draws of the tensor variate skewed t distribution.
+A \code{tensor} object containing n draws of the tensor variate
+skewed t distribution, with observations stored on the first mode.
 }
 \description{
 Simulate random draws from the tensor variate skewed t distribution.

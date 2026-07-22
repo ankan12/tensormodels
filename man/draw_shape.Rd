@@ -2,16 +2,16 @@
 % Please edit documentation in R/tensor_samples.R
 \name{draw_shape}
 \alias{draw_shape}
-\title{Shape of each tensor observation}
+\title{Shape of each tensor draw}
 \usage{
 draw_shape(x)
 }
 \arguments{
-\item{x}{Tensor samples.}
+\item{x}{A tensor object.}
 }
 \value{
-An integer vector containing the dimensions of one observation.
+Dimensions of one draw.
 }
 \description{
-Shape of each tensor observation
+Shape of each tensor draw
 }

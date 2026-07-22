@@ -2,30 +2,25 @@
 % Please edit documentation in R/tensor.R
 \name{tensor}
 \alias{tensor}
-\title{Construct a tensor}
+\title{Construct tensor-valued observations}
 \usage{
-tensor(x, dim = NULL, dimnames = NULL)
+tensor(data, dim = NULL, obs = NULL, n = 1L, dimnames = NULL)
 }
 \arguments{
-\item{x}{An array, or the data used to construct one.}
+\item{data}{An array, or the data used to construct one or more draws when
+\code{dim} is supplied.}
 
-\item{dim}{An optional integer vector giving the dimensions of the tensor.
-If \code{NULL}, \code{x} must already be an array.}
+\item{dim}{Optional dimensions of each draw, following \code{\link[=array]{array()}}.}
 
-\item{dimnames}{An optional list of dimension names used when \code{dim} is
-supplied.}
+\item{obs}{\code{NULL} for one draw, or a numeric/character observation axis.}
+
+\item{n}{Number of draws to construct when \code{dim} is supplied. Defaults to 1.}
 }
 \value{
-An object of class \code{tensor} backed by \code{x}.
+A \code{tensor} object with observations on its first dimension.
 }
 \description{
-\code{tensor()} wraps a base array as a tensor, or constructs an array from raw
-data when \code{dim} is supplied. Every array dimension represents a tensor mode.
-}
-\examples{
-A <- tensor(array(1:24, dim = c(2, 3, 4)))
-B <- tensor(1:24, dim = c(2, 3, 4))
-A + A
-2 * A
-
+\code{tensor()} stores one or more identically shaped tensor observations. By
+default an input array is interpreted as one draw; \code{obs} identifies an
+existing observation dimension when an array contains multiple draws.
 }

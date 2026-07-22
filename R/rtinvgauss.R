@@ -8,7 +8,8 @@
 #' @param skew An array that determines how skewed the distribution is.
 #' @param kappa Shape for inverse Gaussian distribution.
 #'
-#' @return An array containing n draws of the tensor variate inverse Gaussian distribution.
+#' @return A `tensor` object containing n draws of the tensor variate
+#'   inverse Gaussian distribution, with observations stored on the first axis.
 #'
 #' @examples
 #' univar_invgauss <- rtinvgauss(n = 1e3, mu = 0)
@@ -23,18 +24,18 @@ rtinvgauss <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, kappa = 2)
   .validate_same_dims(skew, dims, "skew", "mu")
   sigmas <- .prepare_sigmas(sigmas, dims)
 
-  # draw tensor variate normals
-  tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
+  # draw tensor variate normals; observations are stored on the first axis
+  tensor_norms <- unclass(rtnorm(n, mu = array(0, dim = dims), sigmas))
 
   # generate inv Gauss
   inv_gauss <- rinvgauss(n = n, mean = 1/kappa, shape = 1)
 
-  invgauss_draws <- vector("list", n)
+  mu_array <- array(rep(as.numeric(mu), each = n), dim = c(n, dims))
+  skew_array <- array(rep(as.numeric(skew), each = n), dim = c(n, dims))
 
-  for(i in 1:n) { # scale normals and skew by inv Gauss
-    invgauss_draws[[i]] <- mu + tensor_norms[[i]] * sqrt(inv_gauss[i]) +
-                           skew * inv_gauss[i]
-  }
+  draws <- sweep(tensor_norms, 1L, sqrt(inv_gauss), "*") +
+    mu_array +
+    sweep(skew_array, 1L, inv_gauss, "*")
 
-  invgauss_draws
+  tensor(draws, obs = 1L)
 }

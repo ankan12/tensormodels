@@ -1,13 +1,10 @@
-#' Structure of a tensor.
-#'
-#' @param A A tensor object (S3 wrapper around an array).
-#'
-#' @return The structure of a tensor.
+#' Structure of a tensor
+#' @param object A tensor object.
+#' @param ... Unused.
+#' @return A compact description.
 #' @export
 str.tensor <- function(object, ...) {
-  d <- dim(object)
-
-  paste0(sprintf("%d order tensor ", length(d)),
-         paste(d, collapse = " x "),
-         sprintf(" <%s>", typeof(unclass(object))))
+  sprintf("%d tensor %s of shape %s <%s>", n_draws(object),
+          if (n_draws(object) == 1L) "draw" else "draws",
+          paste(draw_shape(object), collapse = " x "), typeof(unclass(object)))
 }

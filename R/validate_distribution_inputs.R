@@ -1,6 +1,10 @@
 .tensor_dims <- function(x) {
-  x_is_list <- is.list(x)
-
+  if (inherits(x, "tensor")) {
+    if (n_draws(x) != 1L) {
+      stop("Tensor-valued model parameters must contain exactly one draw.", call. = FALSE)
+    }
+    return(draw_shape(x))
+  }
 
   dims <- dim(x)
   if(is.null(dims)) {

@@ -8,7 +8,8 @@
 #' @param skew An array that determines how skewed the distribution is.
 #' @param scale Scale parameter for gamma.
 #'
-#' @return An array containing n draws of the tensor variate variance gamma distribution.
+#' @return A `tensor` object containing n draws of the tensor variate
+#'   variance gamma distribution, with observations stored on the first axis.
 #'
 #' @examples
 #' univar_vargam <- rtvargamma(n = 1e3, mu = 0)
@@ -21,17 +22,18 @@ rtvargamma <- function(n, mu = 0, sigmas = list(matrix(1)), skew = 1, scale = 2)
   .validate_same_dims(skew, dims, "skew", "mu")
   sigmas <- .prepare_sigmas(sigmas, dims)
 
-  # draw tensor variate normals
-  tensor_norms <- rtnorm(n, mu = array(0, dim = dims), sigmas)
+  # draw tensor variate normals; observations are stored on the first axis
+  tensor_norms <- unclass(rtnorm(n, mu = array(0, dim = dims), sigmas))
 
   # generate gamma draws
   gammas <- rgamma(n = n, shape = scale, rate = scale)
 
-  vargamma_draws <- vector("list", n)
+  mu_array <- array(rep(as.numeric(mu), each = n), dim = c(n, dims))
+  skew_array <- array(rep(as.numeric(skew), each = n), dim = c(n, dims))
 
-  for(i in 1:n) { # scale normals and skew by gamma
-    vargamma_draws[[i]] <- mu + tensor_norms[[i]] * sqrt(gammas[i]) + skew * gammas[i]
-  }
+  draws <- sweep(tensor_norms, 1L, sqrt(gammas), "*") +
+    mu_array +
+    sweep(skew_array, 1L, gammas, "*")
 
-  vargamma_draws
+  tensor(draws, obs = 1L)
 }

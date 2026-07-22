@@ -18,7 +18,8 @@ rtinvgauss(n, mu = 0, sigmas = list(matrix(1)), skew = 1, kappa = 2)
 \item{kappa}{Shape for inverse Gaussian distribution.}
 }
 \value{
-An array containing n draws of the tensor variate inverse Gaussian distribution.
+A \code{tensor} object containing n draws of the tensor variate
+inverse Gaussian distribution, with observations stored on the first axis.
 }
 \description{
 Simulate random draws from the tensor variate inverse Gaussian distribution.

@@ -2,24 +2,24 @@
 % Please edit documentation in R/subset_tensor.R
 \name{[.tensor}
 \alias{[.tensor}
-\title{Subset a tensor.}
+\title{Subset a tensor}
 \usage{
 \method{[}{tensor}(x, ..., drop = TRUE)
 }
 \arguments{
-\item{...}{Indices.}
+\item{x}{A tensor object.}
 
-\item{drop}{Logical; passed to base \code{[} (defaults to FALSE).}
+\item{...}{Array indices.}
 
-\item{A}{A tensor object (S3 wrapper around an array).}
+\item{drop}{Whether singleton dimensions should be dropped.}
 }
 \value{
-A tensor that was subset.
+The subsetted value, retaining class when the result is an array
+with an explicit draw axis.
 }
 \description{
-Subset a tensor.
-}
-\examples{
-A <- tensor(array(1:24, dim = c(2, 3, 4)))
-A[1, ]
+Tensor subsetting follows ordinary array rules. For a one-draw tensor, the
+observation axis is implicit, so \code{x[i, j, k]} indexes the tensor modes. For
+multiple draws, the first index is the draw axis, as in the underlying
+array. Use \code{\link[=pull_draw]{pull_draw()}} when an explicit one-draw tensor is desired.
 }

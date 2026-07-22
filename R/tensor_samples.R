@@ -1,258 +1,99 @@
-#' Construct a sample of tensor-valued observations
-#'
-#' `tensor_samples()` stores identically shaped tensor observations in one
-#' array. The selected observation axis is moved to the first mode; the
-#' remaining modes describe the shape of each observation.
-#'
-#' @param x An array containing identically shaped tensor observations.
-#' @param obs A single numeric or character location identifying the
-#'   observation mode Defaults to the first mode
-#'
-#' @return A `tensor_samples` object backed by an array with
-#'   observations stored along its first mode
-#' @export
-#'
-#' @examples
-#' input <- array(1:24, dim = c(3, 4, 2))
-#' x <- tensor_samples(input, obs = 3)
-#' n_draws(x)
-#' draw_shape(x)
-#' pull_draw(x, 1)
-tensor_samples <- function(x, obs = 1L) {
-  if (!is.array(x) || length(dim(x)) < 2L) {
-    stop("`x` must be an array with at least two dimensions.", call. = FALSE)
-  }
-
-  obs <- vctrs::vec_as_location2(
-    obs,
-    n = length(dim(x)),
-    names = names(dim(x)),
-    arg = "obs"
-  )
-
-  x <- unclass(x)
-
-  if (obs != 1L) {
-    permutation <- c(obs, setdiff(seq_along(dim(x)), obs))
-    x <- aperm(x, permutation)
-  }
-
-  structure(
-    x,
-    class = c("tensor_samples", "array")
-  )
-}
-
-
-#' Print tensor samples
-#'
-#' @param x Tensor samples.
-#' @param ... Additional arguments, currently unused.
-#' @param n Number of observations to include in the preview.
-#' @param entries Number of indexed entries to show per observation.
-#' @param digits Number of significant digits used to print numeric values.
-#'
+#' Print tensor-valued observations
+#' @param x A tensor object.
+#' @param ... Unused.
+#' @param n Number of draws to preview.
+#' @param entries Number of entries per draw to preview.
+#' @param digits Significant digits for the preview.
 #' @return `x`, invisibly.
 #' @export
-print.tensor_samples <- function(
-    x,
-    ...,
-    n = getOption("tensormodels.print_draws", 3L),
-    entries = getOption("tensormodels.print_entries", 6L),
-    digits = getOption("digits", 7L)
-) {
-  size <- vctrs::vec_size(x)
-  shape <- draw_shape(x)
-  n_label <- format(size, big.mark = ",", scientific = FALSE)
-
-  cat(
-    sprintf(
-      "<tensor_samples[%s]>\n%s observations of shape %s\n",
-      n_label,
-      n_label,
-      paste(shape, collapse = " \u00d7 ")
-    )
-  )
-
-  if (size == 0L) {
-    return(invisible(x))
-  }
-
-  preview_n <- .tensor_samples_print_count(
-    n = n,
-    maximum = vctrs::vec_size(x),
-    arg = "n"
-  )
-  preview_entries <- .tensor_samples_print_count(
-    n = entries,
-    maximum = prod(shape),
-    arg = "entries"
-  )
-
-  preview <- .tensor_samples_preview(
-    x,
-    n = preview_n,
-    entries = preview_entries
-  )
-
-  cat(
-    sprintf(
-      "\n# Preview: %d %s \u00d7 %d indexed %s\n",
-      preview_n,
-      if (preview_n == 1L) "observation" else "observations",
-      preview_entries,
-      if (preview_entries == 1L) "entry" else "entries"
-    )
-  )
+print.tensor <- function(x, ..., n = getOption("tensormodels.print_draws", 3L),
+                         entries = getOption("tensormodels.print_entries", 6L),
+                         digits = getOption("digits", 7L)) {
+  size <- n_draws(x); shape <- draw_shape(x)
+  label <- format(size, big.mark = ",", scientific = FALSE)
+  cat(sprintf("<tensor[%s]>\n%s %s of shape %s\n", label, label,
+              if (size == 1L) "draw" else "draws", paste(shape, collapse = " × ")))
+  if (size == 0L) return(invisible(x))
+  n <- .tensor_print_count(n, size, "n")
+  entries <- .tensor_print_count(entries, prod(shape), "entries")
+  vals <- lapply(seq_len(n), function(i) {
+    as.vector(.tensor_single_draw_array(pull_draw(x, i)))[seq_len(entries)]
+  })
+  preview <- do.call(rbind, vals)
+  dn <- dimnames(x)[[1L]]; if (is.null(dn)) dn <- paste("draw", seq_len(n)) else dn <- dn[seq_len(n)]
+  rownames(preview) <- dn
+  colnames(preview) <- .tensor_index_labels(shape, entries)
+  cat(sprintf("\n# Preview: %d %s × %d indexed %s\n", n,
+              if (n == 1L) "draw" else "draws", entries,
+              if (entries == 1L) "entry" else "entries"))
   print(preview, quote = FALSE, digits = digits)
-
-  remaining_observations <- size - preview_n
-  remaining_entries <- prod(shape) - preview_entries
-
-  if (remaining_observations > 0L || remaining_entries > 0L) {
+  if (size > n || prod(shape) > entries) {
     omitted <- character()
-
-    if (remaining_observations > 0L) {
-      omitted <- c(
-        omitted,
-        sprintf(
-          "%s more %s",
-          format(remaining_observations, big.mark = ",", scientific = FALSE),
-          if (remaining_observations == 1L) "observation" else "observations"
-        )
-      )
-    }
-
-    if (remaining_entries > 0L) {
-      omitted <- c(
-        omitted,
-        sprintf(
-          "%s more %s per observation",
-          format(remaining_entries, big.mark = ",", scientific = FALSE),
-          if (remaining_entries == 1L) "entry" else "entries"
-        )
-      )
-    }
-
+    if (size > n) omitted <- c(omitted, sprintf("%d more draws", size - n))
+    if (prod(shape) > entries) omitted <- c(omitted, sprintf("%d more entries per draw", prod(shape) - entries))
     cat(sprintf("\n# ... %s\n", paste(omitted, collapse = " and ")))
   }
-
-  cat("# Use `pull_draw(x, i)` to inspect one observation.\n")
-
+  cat("# Use `pull_draw(x, i)` to inspect one draw.\n")
   invisible(x)
 }
 
-.tensor_samples_print_count <- function(n, maximum, arg) {
+.tensor_print_count <- function(n, maximum, arg) {
   n <- vctrs::vec_cast(n, integer())
-
-  if (length(n) != 1L || is.na(n) || n < 1L) {
-    stop(sprintf("`%s` must be one positive integer.", arg), call. = FALSE)
-  }
-
+  if (length(n) != 1L || is.na(n) || n < 1L) stop(sprintf("`%s` must be one positive integer.", arg), call. = FALSE)
   min(n, maximum)
 }
-
-.tensor_samples_preview <- function(x, n, entries) {
-  values <- lapply(seq_len(n), function(i) {
-    as.vector(pull_draw(x, i))[seq_len(entries)]
-  })
-  preview <- do.call(rbind, values)
-
-  observation_names <- dimnames(x)[[1L]]
-  if (is.null(observation_names)) {
-    observation_names <- paste("obs", seq_len(n))
-  } else {
-    observation_names <- observation_names[seq_len(n)]
-  }
-
-  rownames(preview) <- observation_names
-  colnames(preview) <- .tensor_samples_index_labels(draw_shape(x), entries)
-  preview
+.tensor_index_labels <- function(shape, entries) {
+  apply(arrayInd(seq_len(entries), .dim = shape), 1L,
+        function(i) paste0("[", paste(i, collapse = ","), "]"))
 }
 
-.tensor_samples_index_labels <- function(shape, entries) {
-  indices <- arrayInd(seq_len(entries), .dim = shape)
-
-  apply(indices, 1L, function(index) {
-    paste0("[", paste(index, collapse = ","), "]")
-  })
-}
-
-#' Number of tensor observations
-#'
-#' @param x Tensor samples.
-#'
-#' @return A single integer giving the number of observations.
+#' Number of tensor draws
+#' @param x A tensor object.
+#' @return Number of draws.
 #' @export
 n_draws <- function(x) {
-  if (!inherits(x, "tensor_samples")) {
-    stop("`x` must be a `tensor_samples` object.", call. = FALSE)
-  }
-
-  vctrs::vec_size(x)
+  if (!inherits(x, "tensor")) stop("`x` must be a `tensor` object.", call. = FALSE)
+  dim(unclass(x))[1L]
 }
 
-#' Shape of each tensor observation
+#' Tensor draw dimensions
 #'
-#' @param x Tensor samples.
+#' `dim()` reports the shape of one draw. Use [n_draws()] for the number of
+#' IID observations; the leading observation dimension remains in the internal
+#' array returned by `unclass()`.
 #'
-#' @return An integer vector containing the dimensions of one observation.
+#' @param x A tensor object.
+#' @return Dimensions of one tensor draw.
+#' @export
+dim.tensor <- function(x) draw_shape(x)
+
+#' Shape of each tensor draw
+#' @param x A tensor object.
+#' @return Dimensions of one draw.
 #' @export
 draw_shape <- function(x) {
-  if (!inherits(x, "tensor_samples")) {
-    stop("`x` must be a `tensor_samples` object.", call. = FALSE)
-  }
-
-  dim(x)[-1L]
+  if (!inherits(x, "tensor")) stop("`x` must be a `tensor` object.", call. = FALSE)
+  dim(unclass(x))[-1L]
 }
 
 #' Extract one tensor draw
-#'
-#' @param x Tensor samples.
-#' @param i A single numeric or character location identifying a draw.
-#'
-#' @return A `tensor` containing one tensor observation.
+#' @param x A tensor object.
+#' @param i Draw location.
+#' @return A one-draw tensor.
 #' @export
 pull_draw <- function(x, i) {
-  if (!inherits(x, "tensor_samples")) {
-    stop("`x` must be a `tensor_samples` object.", call. = FALSE)
-  }
-
-  i <- vctrs::vec_as_location2(
-    i,
-    n = vctrs::vec_size(x),
-    names = dimnames(x)[[1L]],
-    arg = "i"
-  )
-
-  out <- unclass(vctrs::vec_slice(x, i))
-  out_dimnames <- dimnames(out)
-
-  if (!is.null(out_dimnames)) {
-    out_dimnames <- out_dimnames[-1L]
-    dimnames(out) <- NULL
-  }
-
-  dim(out) <- dim(out)[-1L]
-
-  if (!is.null(out_dimnames)) {
-    dimnames(out) <- out_dimnames
-  }
-
-  tensor(out)
+  if (!inherits(x, "tensor")) stop("`x` must be a `tensor` object.", call. = FALSE)
+  i <- vctrs::vec_as_location2(i, n = n_draws(x), names = dimnames(x)[[1L]], arg = "i")
+  .new_tensor_array(.tensor_slice_array(x, i))
 }
 
 #' Select tensor draws
-#'
-#' @param x Tensor samples.
-#' @param i Locations identifying draws to retain.
-#'
-#' @return A `tensor_samples` object containing the selected observations.
+#' @param x A tensor object.
+#' @param i Draw locations.
+#' @return A tensor containing selected draws.
 #' @export
 slice_draws <- function(x, i) {
-  if (!inherits(x, "tensor_samples")) {
-    stop("`x` must be a `tensor_samples` object.", call. = FALSE)
-  }
-
-  vctrs::vec_slice(x, i)
+  if (!inherits(x, "tensor")) stop("`x` must be a `tensor` object.", call. = FALSE)
+  i <- vctrs::vec_as_location(i, n = n_draws(x), names = dimnames(x)[[1L]], arg = "i")
+  .new_tensor_array(.tensor_slice_array(x, i))
 }

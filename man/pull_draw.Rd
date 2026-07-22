@@ -7,12 +7,12 @@
 pull_draw(x, i)
 }
 \arguments{
-\item{x}{Tensor samples.}
+\item{x}{A tensor object.}
 
-\item{i}{A single numeric or character location identifying a draw.}
+\item{i}{Draw location.}
 }
 \value{
-A \code{tensor} containing one tensor observation.
+A one-draw tensor.
 }
 \description{
 Extract one tensor draw
