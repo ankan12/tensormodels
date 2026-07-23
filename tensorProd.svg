@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 1052.29 430.65">
+  <!-- Generator: Adobe Illustrator 29.6.1, SVG Export Plug-In . SVG Version: 2.1.1 Build 9)  -->
+  <defs>
+    <style>
+      .st0 {
+        font-family: ArialMT, Arial;
+      }
+
+      .st0, .st1, .st2, .st3, .st4 {
+        isolation: isolate;
+      }
+
+      .st0, .st2, .st3, .st4 {
+        fill: #231f20;
+      }
+
+      .st0, .st2, .st4 {
+        font-size: 80px;
+      }
+
+      .st5 {
+        fill: #2a3b90;
+      }
+
+      .st5, .st6, .st7, .st8 {
+        stroke: #231f20;
+        stroke-miterlimit: 10;
+        stroke-width: 2px;
+      }
+
+      .st9 {
+        fill: #7c60a8;
+      }
+
+      .st10 {
+        fill: #7f3f98;
+      }
+
+      .st6 {
+        fill: #bf2026;
+      }
+
+      .st2 {
+        font-family: CMUSerif-Bold, 'CMU Serif';
+      }
+
+      .st2, .st4 {
+        font-weight: 700;
+      }
+
+      .st7 {
+        stroke-linecap: round;
+      }
+
+      .st7, .st8 {
+        fill: none;
+      }
+
+      .st11 {
+        fill: #7577b8;
+      }
+
+      .st3 {
+        font-family: CMUSerif-Roman, 'CMU Serif';
+        font-size: 60px;
+      }
+
+      .st4 {
+        font-family: CMUSerif-BoldItalic, 'CMU Serif';
+        font-style: italic;
+      }
+    </style>
+  </defs>
+  <g class="st1">
+    <g class="st1">
+      <text class="st3" transform="translate(920.61 244.52)"><tspan x="0" y="0">2</tspan></text>
+    </g>
+  </g>
+  <g class="st1">
+    <g class="st1">
+      <text class="st3" transform="translate(678.88 394.03)"><tspan x="0" y="0">3</tspan></text>
+    </g>
+  </g>
+  <g class="st1">
+    <g class="st1">
+      <text class="st3" transform="translate(488.34 249.99)"><tspan x="0" y="0">4</tspan></text>
+    </g>
+  </g>
+  <g class="st1">
+    <g class="st1">
+      <text class="st0" transform="translate(435.23 257.79)"><tspan x="0" y="0">=</tspan></text>
+    </g>
+  </g>
+  <g class="st1">
+    <g class="st1">
+      <text class="st2" transform="translate(655.3 98.4)"><tspan x="0" y="0">A</tspan></text>
+    </g>
+  </g>
+  <g class="st1">
+    <g class="st1">
+      <text class="st2" transform="translate(964.91 130.01)"><tspan x="0" y="0">B</tspan></text>
+    </g>
+  </g>
+  <g class="st1">
+    <g class="st1">
+      <text class="st3" transform="translate(985.29 349.33)"><tspan x="0" y="0">1</tspan></text>
+    </g>
+  </g>
+  <rect class="st5" x="964.91" y="148.73" width="72" height="144"/>
+  <rect class="st6" x="536.99" y="122.49" width="288" height="216"/>
+  <g>
+    <rect class="st8" x="537" y="122.49" width="288" height="216"/>
+    <line class="st8" x1="633" y1="338.49" x2="633" y2="122.49"/>
+    <line class="st8" x1="729" y1="338.49" x2="729" y2="122.49"/>
+    <line class="st8" x1="825" y1="176.49" x2="537" y2="176.49"/>
+    <line class="st8" x1="825" y1="230.49" x2="537" y2="230.49"/>
+    <line class="st8" x1="825" y1="284.49" x2="537" y2="284.49"/>
+  </g>
+  <g>
+    <rect class="st8" x="964.91" y="148.73" width="72" height="144"/>
+    <line class="st8" x1="964.91" y1="220.73" x2="1036.91" y2="220.73"/>
+  </g>
+  <polygon class="st9" points="422.83 105.82 310.65 167.93 47.27 145.98 159.45 83.87 422.83 105.82"/>
+  <polygon class="st10" points="426.05 314.71 313.49 376.04 310.56 167.5 422.73 105.59 426.05 314.71"/>
+  <polygon class="st11" points="47.69 144.83 310.67 167.89 313.58 376.24 50.25 354.15 47.69 144.83"/>
+  <g class="st1">
+    <g class="st1">
+      <text class="st3" transform="translate(369.6 397.04)"><tspan x="0" y="0">2</tspan></text>
+    </g>
+  </g>
+  <g class="st1">
+    <g class="st1">
+      <text class="st3" transform="translate(162.38 421.09)"><tspan x="0" y="0">3</tspan></text>
+    </g>
+  </g>
+  <g class="st1">
+    <g class="st1">
+      <text class="st3" transform="translate(8.28 271.43)"><tspan x="0" y="0">4</tspan></text>
+    </g>
+  </g>
+  <g>
+    <polygon class="st8" points="314.54 374.98 310.77 167.69 47.83 144.98 50.28 354.07 314.54 374.98"/>
+    <line class="st8" x1="138.91" y1="361.08" x2="136.01" y2="152.6"/>
+    <line class="st8" x1="226.99" y1="368.05" x2="223.66" y2="160.16"/>
+    <line class="st8" x1="311.71" y1="219.32" x2="48.44" y2="197.06"/>
+    <line class="st8" x1="312.66" y1="271.08" x2="49.06" y2="249.25"/>
+    <line class="st8" x1="313.59" y1="322.96" x2="49.67" y2="301.59"/>
+  </g>
+  <g>
+    <polygon class="st8" points="311.24 167.44 421.83 107.14 426.5 313.72 316.31 374.38 311.24 167.44"/>
+    <line class="st8" x1="315.05" y1="322.78" x2="425.33" y2="262.2"/>
+    <line class="st8" x1="313.79" y1="271.09" x2="424.17" y2="210.61"/>
+    <line class="st8" x1="312.52" y1="219.3" x2="423" y2="158.92"/>
+    <line class="st8" x1="366.62" y1="137.25" x2="371.48" y2="344.01"/>
+  </g>
+  <g class="st1">
+    <g class="st1">
+      <text class="st4" transform="translate(225.83 78.9) rotate(3.94)"><tspan x="0" y="0">C</tspan></text>
+    </g>
+  </g>
+  <g>
+    <circle class="st7" cx="871.04" cy="230.4" r="27.39"/>
+    <line class="st7" x1="854.12" y1="209.34" x2="888.99" y2="251.45"/>
+    <line class="st7" x1="854.12" y1="252.52" x2="886.41" y2="208.27"/>
+  </g>
+  <g>
+    <polygon class="st8" points="159.51 83.77 419.61 105.96 309.49 167.74 49.6 144.32 159.51 83.77"/>
+    <line class="st8" x1="104.73" y1="113.94" x2="364.73" y2="136.75"/>
+    <line class="st8" x1="331.9" y1="98.48" x2="221.84" y2="159.84"/>
+    <line class="st8" x1="245.2" y1="91.08" x2="135.22" y2="152.03"/>
+  </g>
+</svg>

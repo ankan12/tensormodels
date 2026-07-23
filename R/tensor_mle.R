@@ -40,3 +40,16 @@ tensor_mle <- function(draws, max_iter = 1000, tol = 1e-4, quiet = TRUE,
   else if(model == "invgauss") tensor_mle_invgauss(draws, max_iter, tol, quiet, restrict)
   else if(model == "genhyper") tensor_mle_genhyper(draws, max_iter, tol, quiet, restrict)
 }
+
+.tensor_weighted_draw_sum <- function(data, weights) {
+  n <- n_draws(data)
+  dims <- draw_shape(data)
+
+  if (!is.numeric(weights) || length(weights) != n || anyNA(weights)) {
+    stop("`weights` must contain one non-missing numeric value per draw.",
+         call. = FALSE)
+  }
+
+  data_mat <- matrix(unclass(data), nrow = n, ncol = prod(dims))
+  array(drop(crossprod(weights, data_mat)), dim = dims)
+}

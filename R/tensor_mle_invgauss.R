@@ -91,11 +91,8 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
     weight_mean <- mean(a) * b - 1
     weight_skew <- mean(b) - b
 
-    data_mat <- matrix(unclass(data), nrow = n, ncol = n_star)
-    data_mat <- t(data_mat)
-
-    num_mean <- array(data_mat %*% weight_mean, dim = dims)
-    num_skew <- array(data_mat %*% weight_skew, dim = dims)
+    num_mean <- .tensor_weighted_draw_sum(data, weight_mean)
+    num_skew <- .tensor_weighted_draw_sum(data, weight_skew)
 
     den_mean <- sum(mean(a) * b) - n
     den_skew <- sum(a * mean(b)) - n
@@ -153,17 +150,19 @@ tensor_mle_invgauss <- function(data, max_iter, tol,
 
     scale_prod <- 1
 
-    for (j in 1:(o-1)) { # force trace to be n_d for all sigmas except last
-      curr_sigma <- new_sigmas[[j]]
-      n_d <- dims[j]
+    if (o > 1L) {
+      for (j in seq_len(o - 1L)) { # normalize all but the last covariance
+        curr_sigma <- new_sigmas[[j]]
+        n_d <- dims[j]
 
-      tr_j <- sum(diag(curr_sigma))
+        tr_j <- sum(diag(curr_sigma))
 
-      scale_curr <- tr_j / n_d
-      scale_prod <- scale_prod * scale_curr
+        scale_curr <- tr_j / n_d
+        scale_prod <- scale_prod * scale_curr
 
-      curr_sigma <- curr_sigma / scale_curr
-      new_sigmas[[j]] <- curr_sigma
+        curr_sigma <- curr_sigma / scale_curr
+        new_sigmas[[j]] <- curr_sigma
+      }
     }
 
     new_sigmas[[o]] <- new_sigmas[[o]] * scale_prod

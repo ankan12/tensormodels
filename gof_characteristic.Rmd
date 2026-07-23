@@ -15,6 +15,506 @@ knitr::opts_chunk$set(
 library(tensormodels)
 ```
 
+# Recommended test: multiscale CF with a parametric bootstrap
+
+This is the primary goodness-of-fit procedure used in this notebook. It tests
+the tensor normal and all four skewed variance-mixture models implemented by
+`tensor_mle()`: skew-$t$, variance-gamma, inverse-Gaussian, and generalized
+hyperbolic. The test uses both dense tensor directions and rank-one tensor
+directions at several frequency radii. The same frequencies are retained for
+the observed data and every bootstrap sample. Each bootstrap sample is refit,
+so the p-value accounts for estimating the null model from the data.
+
+The statistic is
+
+\[
+T_n = n\frac{1}{L}\sum_{\ell=1}^L
+  \left|\widehat\varphi_n(t_\ell)
+  -\varphi(t_\ell;\widehat\theta)\right|^2.
+\]
+
+The model CFs below are evaluated analytically. Consequently, the test does
+not add Monte Carlo error when evaluating the skewed-model CFs.
+
+```{r recommended-multiscale-cf-functions}
+.multiscale_cf_whitening <- function(sigmas) {
+  lapply(sigmas, function(sigma) {
+    sigma <- as.matrix(sigma)
+    sigma <- (sigma + t(sigma)) / 2
+    solve(t(chol(sigma)))
+  })
+}
+
+.multiscale_cf_standardize <- function(draws, fit) {
+  n <- n_draws(draws)
+  dims <- draw_shape(draws)
+  whitening <- .multiscale_cf_whitening(fit$sigmas)
+  result <- matrix(0, nrow = n, ncol = prod(dims))
+
+  for (i in seq_len(n)) {
+    current <- pull_draw(draws, i) - fit$mu
+    for (mode in seq_along(whitening)) {
+      current <- n_prod(current, whitening[[mode]], mode)
+    }
+    result[i, ] <- as.numeric(unclass(current))
+  }
+
+  result
+}
+
+.multiscale_cf_rank_one_direction <- function(dims) {
+  mode_vectors <- lapply(dims, function(mode_size) {
+    direction <- rnorm(mode_size)
+    direction / sqrt(sum(direction^2))
+  })
+
+  as.numeric(Reduce(
+    function(left, right) as.vector(outer(left, right)),
+    mode_vectors
+  ))
+}
+
+# Generate an equal number of dense and rank-one directions at each radius.
+# Every row has the radius recorded in its `radius` attribute.
+make_multiscale_cf_frequencies <- function(dims,
+                                           radii = c(0.5, 1, 2, 3),
+                                           n_per_type = 8L,
+                                           seed = NULL) {
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  if (any(!is.finite(radii)) || any(radii <= 0)) {
+    stop("`radii` must contain positive finite values.", call. = FALSE)
+  }
+  if (length(n_per_type) != 1L || !is.finite(n_per_type) ||
+      n_per_type < 1L || n_per_type != floor(n_per_type)) {
+    stop("`n_per_type` must be one positive integer.", call. = FALSE)
+  }
+
+  p <- prod(dims)
+  n_per_type <- as.integer(n_per_type)
+  n_frequencies <- length(radii) * 2L * n_per_type
+  frequencies <- matrix(0, nrow = n_frequencies, ncol = p)
+  direction_type <- character(n_frequencies)
+  frequency_radius <- numeric(n_frequencies)
+  row <- 0L
+
+  for (radius in radii) {
+    for (j in seq_len(n_per_type)) {
+      row <- row + 1L
+      dense <- rnorm(p)
+      frequencies[row, ] <- radius * dense / sqrt(sum(dense^2))
+      direction_type[row] <- "dense"
+      frequency_radius[row] <- radius
+
+      row <- row + 1L
+      frequencies[row, ] <- radius *
+        .multiscale_cf_rank_one_direction(dims)
+      direction_type[row] <- "rank-one"
+      frequency_radius[row] <- radius
+    }
+  }
+
+  attr(frequencies, "direction_type") <- direction_type
+  attr(frequencies, "radius") <- frequency_radius
+  frequencies
+}
+
+.multiscale_cf_whiten_skew <- function(skew, sigmas) {
+  whitening <- .multiscale_cf_whitening(sigmas)
+  result <- skew
+
+  for (mode in seq_along(whitening)) {
+    result <- n_prod(result, whitening[[mode]], mode)
+  }
+
+  as.numeric(result)
+}
+
+# Laplace transform E[exp(-s W)] for the mixing variable W. In the CF,
+# s = ||t||^2 / 2 - i <t, whitened_skew>, whose real part is nonnegative.
+.multiscale_cf_mixing_laplace <- function(s, model, fit) {
+  if (model == "skewt") {
+    shape <- fit$nu / 2
+    rate <- fit$nu / 2
+    answer <- complex(length(s))
+    at_zero <- Mod(s) < sqrt(.Machine$double.eps)
+    answer[at_zero] <- 1 + 0i
+
+    if (any(!at_zero)) {
+      current_s <- s[!at_zero]
+      argument <- 2 * sqrt(rate * current_s)
+
+      # BesselK(..., expon.scaled = TRUE) equals exp(argument) K(argument).
+      log_bessel_k <- log(Bessel::BesselK(
+        argument,
+        nu = shape,
+        expon.scaled = TRUE
+      )) - argument
+
+      answer[!at_zero] <- exp(
+        log(2) +
+          (shape / 2) * (log(rate) + log(current_s)) -
+          lgamma(shape) +
+          log_bessel_k
+      )
+    }
+    return(answer)
+  }
+
+  if (model == "vargamma") {
+    return((fit$gamma / (fit$gamma + s))^fit$gamma)
+  }
+
+  if (model == "invgauss") {
+    return(exp(
+      fit$kappa * (1 - sqrt(1 + 2 * s / fit$kappa^2))
+    ))
+  }
+
+  if (model == "genhyper") {
+    shifted_psi <- fit$omega + 2 * s
+    argument <- sqrt(fit$omega * shifted_psi)
+
+    log_numerator_bessel <- log(Bessel::BesselK(
+      argument,
+      nu = fit$lambda,
+      expon.scaled = TRUE
+    )) - argument
+    log_denominator_bessel <- log(Bessel::BesselK(
+      fit$omega,
+      nu = fit$lambda,
+      expon.scaled = TRUE
+    )) - fit$omega
+
+    return(exp(
+      (fit$lambda / 2) * (log(fit$omega) - log(shifted_psi)) +
+        log_numerator_bessel - log_denominator_bessel
+    ))
+  }
+
+  stop("No mixing distribution is required for the normal model.",
+       call. = FALSE)
+}
+
+.multiscale_cf_model <- function(frequencies, model, fit) {
+  q <- rowSums(frequencies^2)
+
+  if (model == "normal") {
+    return(exp(-q / 2))
+  }
+
+  whitened_skew <- .multiscale_cf_whiten_skew(
+    fit$skew,
+    fit$sigmas
+  )
+  skew_projection <- drop(frequencies %*% whitened_skew)
+  s <- q / 2 - 1i * skew_projection
+
+  .multiscale_cf_mixing_laplace(s, model, fit)
+}
+
+.multiscale_cf_statistic <- function(draws, model, fit, frequencies) {
+  standardized <- .multiscale_cf_standardize(draws, fit)
+  phases <- standardized %*% t(frequencies)
+  empirical_cf <- colMeans(exp(1i * phases))
+  theoretical_cf <- .multiscale_cf_model(frequencies, model, fit)
+
+  if (any(!is.finite(theoretical_cf))) {
+    stop("The fitted model produced a non-finite characteristic function.",
+         call. = FALSE)
+  }
+
+  squared_difference <- Mod(empirical_cf - theoretical_cf)^2
+
+  list(
+    statistic = n_draws(draws) * mean(squared_difference),
+    empirical_cf = empirical_cf,
+    theoretical_cf = theoretical_cf,
+    squared_difference = squared_difference
+  )
+}
+
+.multiscale_cf_simulate <- function(n, model, fit) {
+  switch(
+    model,
+    normal = rtnorm(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas
+    ),
+    skewt = rtskewt(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas,
+      skew = fit$skew,
+      nu = fit$nu
+    ),
+    vargamma = rtvargamma(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas,
+      skew = fit$skew,
+      scale = fit$gamma
+    ),
+    invgauss = rtinvgauss(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas,
+      skew = fit$skew,
+      kappa = fit$kappa
+    ),
+    genhyper = rtgenhyper(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas,
+      skew = fit$skew,
+      lambda = fit$lambda,
+      omega = fit$omega
+    )
+  )
+}
+
+tensor_cf_multiscale_bootstrap <- function(
+    draws,
+    model = c("normal", "skewt", "vargamma", "invgauss", "genhyper"),
+    B = 999L,
+    frequencies = NULL,
+    radii = c(0.5, 1, 2, 3),
+    n_per_type = 8L,
+    max_iter = 1000L,
+    tol = 1e-4,
+    quiet = TRUE,
+    restrict = NULL,
+    seed = NULL,
+    show_progress = FALSE) {
+  model <- match.arg(model)
+  data_name <- deparse(substitute(draws))
+
+  if (!inherits(draws, "tensor")) {
+    stop("`draws` must be a tensor object.", call. = FALSE)
+  }
+  if (n_draws(draws) < 2L) {
+    stop("At least two tensor draws are required.", call. = FALSE)
+  }
+  if (length(B) != 1L || !is.finite(B) ||
+      B < 1L || B != floor(B)) {
+    stop("`B` must be one positive integer.", call. = FALSE)
+  }
+
+  B <- as.integer(B)
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  p <- prod(draw_shape(draws))
+  if (is.null(frequencies)) {
+    frequencies <- make_multiscale_cf_frequencies(
+      dims = draw_shape(draws),
+      radii = radii,
+      n_per_type = n_per_type
+    )
+  } else {
+    frequency_attributes <- attributes(frequencies)[
+      c("direction_type", "radius")
+    ]
+    frequencies <- as.matrix(frequencies)
+    if (ncol(frequencies) != p) {
+      stop("`frequencies` must have ", p, " columns.", call. = FALSE)
+    }
+    attributes(frequencies)[names(frequency_attributes)] <-
+      frequency_attributes
+  }
+
+  observed_fit <- tensor_mle(
+    draws,
+    model = model,
+    max_iter = max_iter,
+    tol = tol,
+    quiet = quiet,
+    restrict = restrict
+  )
+  observed <- .multiscale_cf_statistic(
+    draws,
+    model,
+    observed_fit,
+    frequencies
+  )
+
+  bootstrap_statistics <- rep(NA_real_, B)
+  failure_messages <- character(B)
+
+  for (b in seq_len(B)) {
+    if (show_progress) {
+      message("Bootstrap replicate ", b, " of ", B, " for ", model)
+    }
+
+    bootstrap_result <- tryCatch({
+      bootstrap_draws <- .multiscale_cf_simulate(
+        n_draws(draws),
+        model,
+        observed_fit
+      )
+      bootstrap_fit <- tensor_mle(
+        bootstrap_draws,
+        model = model,
+        max_iter = max_iter,
+        tol = tol,
+        quiet = quiet,
+        restrict = restrict
+      )
+      .multiscale_cf_statistic(
+        bootstrap_draws,
+        model,
+        bootstrap_fit,
+        frequencies
+      )
+    }, error = function(error) error)
+
+    if (inherits(bootstrap_result, "error")) {
+      failure_messages[b] <- conditionMessage(bootstrap_result)
+    } else if (is.finite(bootstrap_result$statistic)) {
+      bootstrap_statistics[b] <- bootstrap_result$statistic
+    } else {
+      failure_messages[b] <- "The bootstrap statistic was non-finite."
+    }
+  }
+
+  successful <- is.finite(bootstrap_statistics)
+  if (!any(successful)) {
+    stop("All bootstrap replicates failed.", call. = FALSE)
+  }
+
+  p_value <- (
+    1 + sum(bootstrap_statistics[successful] >= observed$statistic)
+  ) / (1 + sum(successful))
+
+  model_label <- c(
+    normal = "tensor normal",
+    skewt = "tensor skew-t",
+    vargamma = "tensor variance-gamma",
+    invgauss = "tensor inverse-Gaussian",
+    genhyper = "tensor generalized hyperbolic"
+  )[[model]]
+
+  structure(
+    list(
+      statistic = c(T = observed$statistic),
+      parameter = c(B = sum(successful)),
+      p.value = p_value,
+      method = paste0(
+        "Parametric-bootstrap multiscale CF test for the ",
+        model_label
+      ),
+      data.name = data_name,
+      model = model,
+      fit = observed_fit,
+      frequencies = frequencies,
+      empirical_cf = observed$empirical_cf,
+      theoretical_cf = observed$theoretical_cf,
+      squared_difference = observed$squared_difference,
+      bootstrap_statistics = bootstrap_statistics,
+      B_requested = B,
+      B_successful = sum(successful),
+      B_failed = sum(!successful),
+      failure_messages = failure_messages[!successful]
+    ),
+    class = c("tensor_cf_bootstrap_test", "htest")
+  )
+}
+```
+
+The following chunk applies the test to the same data under all five fitted
+models. It is not evaluated automatically because `B = 999` requires 4,995
+model refits. Using one shared frequency matrix makes the five diagnostics
+directly comparable. Their p-values assess each model separately; they are not
+scores for ranking the models.
+
+```{r recommended-all-model-bootstrap, eval=FALSE}
+grabmyo_tensors <- readRDS("grabmyo_session1_tensors_16x28x16.rds")
+grabmyo_draws <- as_tensor(simplify2array(grabmyo_tensors), obs = 4)
+
+models <- c("normal", "skewt", "vargamma", "invgauss", "genhyper")
+model_names <- c(
+  normal = "Tensor normal",
+  skewt = "Tensor skew-t",
+  vargamma = "Tensor variance-gamma",
+  invgauss = "Tensor inverse-Gaussian",
+  genhyper = "Tensor generalized hyperbolic"
+)
+
+shared_frequencies <- make_multiscale_cf_frequencies(
+  dims = draw_shape(grabmyo_draws),
+  radii = c(0.5, 1, 2, 3),
+  n_per_type = 8,
+  seed = 20260722
+)
+
+all_model_cf_tests <- setNames(
+  lapply(models, function(current_model) {
+    tensor_cf_multiscale_bootstrap(
+      grabmyo_draws,
+      model = current_model,
+      B = 999,
+      frequencies = shared_frequencies,
+      max_iter = 1000,
+      tol = 1e-4,
+      seed = 20260722,
+      show_progress = TRUE
+    )
+  }),
+  models
+)
+
+all_model_cf_results <- data.frame(
+  Model = unname(model_names[models]),
+  Statistic = vapply(
+    all_model_cf_tests,
+    function(test) unname(test$statistic),
+    numeric(1)
+  ),
+  p.value = vapply(
+    all_model_cf_tests,
+    function(test) test$p.value,
+    numeric(1)
+  ),
+  Successful = vapply(
+    all_model_cf_tests,
+    function(test) test$B_successful,
+    integer(1)
+  ),
+  Failed = vapply(
+    all_model_cf_tests,
+    function(test) test$B_failed,
+    integer(1)
+  )
+)
+
+knitr::kable(all_model_cf_results, digits = 4)
+```
+
+
+```{r}
+univar_draws <- rnorm(n = 1e3, mean = 6, sd = 2)
+
+emp_cf <- function(draws, t) {
+  res <- mean(exp(1i * t * draws))
+  tibble(real = Re(res), img = Im(res))
+}
+
+theory_cf <- function(mu, sigma, t) {
+  res <- exp(1i * t * mu - 1/2 * sigma^2 * t^2)
+  tibble(real = Re(res), img = Im(res))
+}
+
+tibble(t = seq(-2, 2, by = 0.05),
+       emp = emp_cf(draws = univar_draws, t))
+
+ggplot() +
+  geom_function(fun = Re(emp_cf), args = list(draws = univar_draws))
+```
+
 
 ```{r}
 cftnorm <- function(freq, mu, sigmas) {
@@ -1668,16 +2168,34 @@ estimates of the unobserved \(W_i\)'s that generated the data.
 }
 
 .make_standard_skewt_cf <- function(whitened_skew, nu,
-                                    n_mixing = 20000L) {
+                                    n_mixing = 20000L,
+                                    mixing_uniforms = NULL) {
   if (!is.numeric(nu) || length(nu) != 1L || !is.finite(nu) || nu <= 0) {
     stop("`nu` must be one positive finite number.", call. = FALSE)
   }
 
-  w_quadrature <- invgamma::rinvgamma(
-    n = n_mixing,
-    shape = nu / 2,
-    rate = nu / 2
-  )
+  if (is.null(mixing_uniforms)) {
+    w_quadrature <- invgamma::rinvgamma(
+      n = n_mixing,
+      shape = nu / 2,
+      rate = nu / 2
+    )
+  } else {
+    if (!is.numeric(mixing_uniforms) || !length(mixing_uniforms) ||
+        any(!is.finite(mixing_uniforms)) ||
+        any(mixing_uniforms <= 0 | mixing_uniforms >= 1)) {
+      stop("`mixing_uniforms` must contain values strictly between 0 and 1.",
+           call. = FALSE)
+    }
+
+    # Reusing the uniforms gives every fitted nu the appropriate inverse-gamma
+    # law while coupling the numerical CF integration across bootstrap samples.
+    w_quadrature <- invgamma::qinvgamma(
+      mixing_uniforms,
+      shape = nu / 2,
+      rate = nu / 2
+    )
+  }
 
   whitened_skew <- as.numeric(whitened_skew)
 
@@ -1712,14 +2230,15 @@ tensor_cf_wald_test <- function(draws,
                                 n_frequencies = 10L,
                                 frequency_sd = NULL,
                                 n_mixing = 20000L,
+                                mixing_uniforms = NULL,
                                 max_iter = 1000L,
                                 tol = 1e-6,
                                 quiet = TRUE,
                                 restrict = NULL) {
   model <- match.arg(model)
 
-  if (!inherits(draws, "tensor_samples")) {
-    stop("`draws` must be a `tensor_samples` object.", call. = FALSE)
+  if (!inherits(draws, "tensor")) {
+    stop("`draws` must be a `tensor` object.", call. = FALSE)
   }
 
   n <- n_draws(draws)
@@ -1790,7 +2309,8 @@ tensor_cf_wald_test <- function(draws,
     cf <- .make_standard_skewt_cf(
       whitened_skew = whitened_skew,
       nu = fit$nu,
-      n_mixing = n_mixing
+      n_mixing = n_mixing,
+      mixing_uniforms = mixing_uniforms
     )
   }
 
@@ -1979,12 +2499,11 @@ find a detectable discrepancy.
 The chi-squared reference distribution directly applies when `fit` contains
 parameters fixed independently of `draws`. When `fit = NULL`, the same data are
 used both to estimate the model and to test it. Fitting makes the empirical and
-theoretical CFs artificially closer. The returned p-value is therefore a
-**plug-in asymptotic diagnostic**, not yet a fully calibrated composite-null
-test. A final package implementation should add the likelihood-score correction
-for parameter estimation and should validate its finite-sample size in a
-simulation study. The `parameters_estimated` element of the result records
-which case was used.
+theoretical CFs artificially closer, so the chi-squared p-value is only a
+**plug-in asymptotic diagnostic**. The parametric-bootstrap function below
+calibrates the fitted-model statistic by repeating the estimation step in every
+bootstrap sample. The `parameters_estimated` element records whether the Wald
+test used fixed or fitted parameters.
 
 Using the same fixed frequency matrix is important when comparing models or
 repeating a simulation study. For example:
@@ -2008,5 +2527,396 @@ skewt_result <- tensor_cf_wald_test(
   observed_tensor_draws,
   model = "skewt",
   frequencies = shared_frequencies
+)
+```
+
+# GRABMyo tensor-model goodness-of-fit checks
+
+The processed GRABMyo data contain 43 participant-level tensors, each with
+dimensions $16\times28\times16$. Here we apply the characteristic-function
+test only to the two tensor-variate models used in the main analysis: the
+tensor normal and tensor skew-$t$.
+
+```{r grabmyo-cf-gof, message=FALSE, warning=FALSE}
+grabmyo_tensors <- readRDS("grabmyo_session1_tensors_16x28x16.rds")
+grabmyo_array <- simplify2array(grabmyo_tensors)
+grabmyo_draws <- as_tensor(grabmyo_array, obs = 4)
+
+set.seed(20260722)
+grabmyo_normal_cf <- gof_test_eigenvalues(
+  grabmyo_draws,
+  model = "normal",
+  n_frequencies = 20,
+  n_mixture = 100000,
+  max_iter = 1000,
+  tol = 1e-4,
+  quiet = TRUE
+)
+
+set.seed(20260722)
+grabmyo_skewt_cf <- gof_test_eigenvalues(
+  grabmyo_draws,
+  model = "skewt",
+  n_frequencies = 20,
+  n_mixture = 100000,
+  max_iter = 1000,
+  tol = 1e-4,
+  quiet = TRUE
+)
+
+grabmyo_cf_results <- data.frame(
+  Model = c("Tensor normal", "Tensor skew-t"),
+  Statistic = c(
+    unname(grabmyo_normal_cf$statistic),
+    unname(grabmyo_skewt_cf$statistic)
+  ),
+  `p-value` = c(
+    grabmyo_normal_cf$p.value,
+    grabmyo_skewt_cf$p.value
+  ),
+  `Fitted nu` = c(NA, grabmyo_skewt_cf$fit$nu)
+)
+
+knitr::kable(grabmyo_cf_results, digits = 4)
+```
+
+Both p-values are large, so this characteristic-function diagnostic does not
+reject either fitted tensor model at conventional significance levels. The
+skew-$t$ model is therefore compatible with the GRABMyo data according to
+this diagnostic, although the test does not establish that the model is true.
+The skew-$t$ model also has the lower AIC and BIC from the likelihood-based
+comparison.
+
+This table uses the eigenvalue approximation, which treats the fitted
+parameters as known and is therefore a fast plug-in diagnostic. The fully
+parametric bootstrap below instead refits every simulated sample. Because a
+skew-$t$ refit can encounter a numerical failure, the bootstrap result reports
+both successful and failed replicates.
+
+## Fully parametric bootstrap with refit failures recorded
+
+The following version performs the full parametric bootstrap: it simulates
+from the fitted model, refits that model to every bootstrap sample, and
+recomputes the CF statistic. A failed refit is recorded rather than silently
+discarded, so the stability of the numerical procedure is visible.
+
+```{r cf-parametric-bootstrap-function}
+tensor_cf_parametric_bootstrap <- function(draws,
+                                           model = c("normal", "skewt"),
+                                           fit = NULL,
+                                           frequencies = NULL,
+                                           B = 199L,
+                                           n_frequencies = 10L,
+                                           frequency_sd = NULL,
+                                           n_mixing = 20000L,
+                                           max_iter = 1000L,
+                                           tol = 1e-6,
+                                           quiet = TRUE,
+                                           restrict = NULL,
+                                           seed = NULL,
+                                           show_progress = FALSE) {
+  model <- match.arg(model)
+
+  if (!inherits(draws, "tensor")) {
+    stop("`draws` must be a `tensor` object.", call. = FALSE)
+  }
+  if (n_draws(draws) < 2L) {
+    stop("At least two tensor draws are required.", call. = FALSE)
+  }
+  if (length(B) != 1L || !is.finite(B) || B < 1L || B != floor(B)) {
+    stop("`B` must be one positive integer.", call. = FALSE)
+  }
+
+  B <- as.integer(B)
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  n <- n_draws(draws)
+  p <- prod(draw_shape(draws))
+
+  if (is.null(frequencies)) {
+    if (is.null(frequency_sd)) {
+      frequency_sd <- 1 / sqrt(p)
+    }
+    frequencies <- matrix(
+      rnorm(n_frequencies * p, sd = frequency_sd),
+      nrow = n_frequencies,
+      ncol = p
+    )
+  } else {
+    frequencies <- as.matrix(frequencies)
+    if (ncol(frequencies) != p) {
+      stop("`frequencies` must have ", p, " columns.", call. = FALSE)
+    }
+  }
+
+  # Common uniforms reduce numerical-integration noise in comparisons between
+  # the observed and bootstrap skew-t statistics. Each fitted nu transforms
+  # them to its own inverse-gamma mixing distribution.
+  mixing_uniforms <- if (model == "skewt") {
+    runif(n_mixing)
+  } else {
+    NULL
+  }
+
+  if (is.null(fit)) {
+    fit <- tensor_mle(
+      draws,
+      model = model,
+      max_iter = max_iter,
+      tol = tol,
+      quiet = quiet,
+      restrict = restrict
+    )
+  }
+
+  observed <- tensor_cf_wald_test(
+    draws,
+    model = model,
+    fit = fit,
+    frequencies = frequencies,
+    n_mixing = n_mixing,
+    mixing_uniforms = mixing_uniforms,
+    max_iter = max_iter,
+    tol = tol,
+    quiet = quiet,
+    restrict = restrict
+  )
+
+  bootstrap_statistics <- rep(NA_real_, B)
+  failures <- character(B)
+
+  for (b in seq_len(B)) {
+    if (show_progress) {
+      message("Bootstrap replicate ", b, " of ", B)
+    }
+
+    bootstrap_result <- tryCatch({
+      bootstrap_draws <- if (model == "normal") {
+        rtnorm(
+          n = n,
+          mu = fit$mu,
+          sigmas = fit$sigmas
+        )
+      } else {
+        rtskewt(
+          n = n,
+          mu = fit$mu,
+          sigmas = fit$sigmas,
+          skew = fit$skew,
+          nu = fit$nu
+        )
+      }
+
+      bootstrap_fit <- tensor_mle(
+        bootstrap_draws,
+        model = model,
+        max_iter = max_iter,
+        tol = tol,
+        quiet = quiet,
+        restrict = restrict
+      )
+
+      tensor_cf_wald_test(
+        bootstrap_draws,
+        model = model,
+        fit = bootstrap_fit,
+        frequencies = frequencies,
+        n_mixing = n_mixing,
+        mixing_uniforms = mixing_uniforms,
+        max_iter = max_iter,
+        tol = tol,
+        quiet = quiet,
+        restrict = restrict
+      )
+    }, error = function(error) error)
+
+    if (inherits(bootstrap_result, "error")) {
+      failures[b] <- conditionMessage(bootstrap_result)
+      next
+    }
+
+    bootstrap_statistics[b] <- unname(bootstrap_result$statistic)
+  }
+
+  successful <- is.finite(bootstrap_statistics)
+  if (!any(successful)) {
+    stop("All bootstrap replicates failed.", call. = FALSE)
+  }
+
+  p_value <- (
+    1 + sum(bootstrap_statistics[successful] >= unname(observed$statistic))
+  ) / (1 + sum(successful))
+
+  method <- paste0(
+    "Parametric-bootstrap finite-frequency CF test for the tensor-variate ",
+    if (model == "normal") "normal" else "skewed t"
+  )
+
+  structure(
+    list(
+      statistic = c(Q = unname(observed$statistic)),
+      parameter = c(B = sum(successful)),
+      p.value = p_value,
+      method = method,
+      data.name = deparse(substitute(draws)),
+      fit = fit,
+      frequencies = frequencies,
+      observed_test = observed,
+      bootstrap_statistics = bootstrap_statistics,
+      B_requested = B,
+      B_successful = sum(successful),
+      B_failed = sum(!successful),
+      failure_messages = failures[!successful]
+    ),
+    class = c("tensor_cf_bootstrap_test", "htest")
+  )
+}
+```
+
+# The examples use modest B while developing. Use B >= 999 for reported tests.
+```{r simulated-parametric-bootstrap, eval=FALSE}
+normal_boot <- tensor_cf_parametric_bootstrap(
+  normal_draws,
+  model = "normal",
+  B = 999,
+  n_frequencies = 10,
+  seed = 20260722
+)
+
+skewt_boot <- tensor_cf_parametric_bootstrap(
+  skewt_draws,
+  model = "skewt",
+  B = 999,
+  n_frequencies = 10,
+  n_mixing = 20000,
+  seed = 20260722
+)
+
+data.frame(
+  Model = c("Tensor normal", "Tensor skew-t"),
+  Statistic = c(normal_boot$statistic, skewt_boot$statistic),
+  `p-value` = c(normal_boot$p.value, skewt_boot$p.value),
+  Successful = c(normal_boot$B_successful, skewt_boot$B_successful),
+  Failed = c(normal_boot$B_failed, skewt_boot$B_failed)
+) |>
+  knitr::kable(digits = 4)
+```
+
+## Power sanity check with a deliberately wrong model
+
+As a negative control, generate two compact and well-separated tensor-normal
+populations, combine them into one bimodal sample, and fit a *single*
+tensor-normal model. A single elliptical distribution cannot represent the two
+clusters, so a useful CF test should reject it. This is a demonstration of
+power against one conspicuous alternative, not a general power study.
+
+```{r cf-bootstrap-power-check, message=FALSE, warning=FALSE}
+set.seed(20260725)
+
+power_dims <- c(2, 2)
+power_n_per_group <- 100L
+power_sigmas <- list(diag(0.35, 2), diag(0.35, 2))
+
+power_group_low <- rtnorm(
+  n = power_n_per_group,
+  mu = array(-2.5, dim = power_dims),
+  sigmas = power_sigmas
+)
+power_group_high <- rtnorm(
+  n = power_n_per_group,
+  mu = array(2.5, dim = power_dims),
+  sigmas = power_sigmas
+)
+
+# Combine the two tensor samples along their observation axis.
+power_matrix <- rbind(
+  matrix(unclass(power_group_low), nrow = power_n_per_group),
+  matrix(unclass(power_group_high), nrow = power_n_per_group)
+)
+power_mixture_draws <- tensor(
+  array(
+    power_matrix,
+    dim = c(2L * power_n_per_group, power_dims)
+  ),
+  obs = 1L
+)
+
+# B = 39 keeps this notebook check quick; its smallest possible add-one
+# p-value is 1 / (39 + 1) = 0.025. Use a larger B for a reported analysis.
+power_normal_boot <- tensor_cf_parametric_bootstrap(
+  power_mixture_draws,
+  model = "normal",
+  B = 39,
+  n_frequencies = 10,
+  seed = 20260725
+)
+
+data.frame(
+  Data = "Two-component bimodal tensor mixture",
+  Fitted_model = "Single tensor normal",
+  Statistic = unname(power_normal_boot$statistic),
+  p_value = power_normal_boot$p.value,
+  Successful = power_normal_boot$B_successful,
+  Failed = power_normal_boot$B_failed,
+  Decision_at_0.05 = ifelse(
+    power_normal_boot$p.value < 0.05,
+    "Reject",
+    "Do not reject"
+  )
+) |>
+  knitr::kable(digits = 4)
+
+hist(
+  power_normal_boot$bootstrap_statistics,
+  breaks = 12,
+  main = "Power check: fitted tensor-normal null distribution",
+  xlab = "Bootstrap CF-Wald statistic",
+  col = "grey85",
+  border = "white"
+)
+abline(
+  v = unname(power_normal_boot$statistic),
+  col = "firebrick",
+  lwd = 2,
+  lty = 2
+)
+legend(
+  "topright",
+  legend = "Observed bimodal sample",
+  col = "firebrick",
+  lwd = 2,
+  lty = 2,
+  bty = "n"
+)
+```
+
+With the fixed seed above, the observed statistic is about 335, whereas the
+bootstrap statistics from a correctly specified single tensor-normal model
+are below 23. The add-one bootstrap p-value is 0.025, so the negative-control
+model is rejected at the 5% level. The p-value reaches the resolution limit
+because this short demonstration uses only 39 bootstrap replicates.
+
+For the GRABMyo tensors, the corresponding calls are:
+
+```{r grabmyo-parametric-bootstrap, eval=FALSE}
+grabmyo_normal_boot <- tensor_cf_parametric_bootstrap(
+  grabmyo_draws,
+  model = "normal",
+  B = 999,
+  n_frequencies = 20,
+  seed = 20260722,
+  show_progress = TRUE
+)
+
+grabmyo_skewt_boot <- tensor_cf_parametric_bootstrap(
+  grabmyo_draws,
+  model = "skewt",
+  B = 999,
+  n_frequencies = 20,
+  n_mixing = 20000,
+  seed = 20260722,
+  show_progress = TRUE
 )
 ```

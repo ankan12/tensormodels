@@ -125,13 +125,8 @@ tensor_mle_genhyper <- function(data, max_iter = 1000, tol = 1e-6,
     weight_mean <- mean(a) * b - 1
     weight_skew <- mean(b) - b
 
-    num_mean <- 0
-    num_skew <- 0
-
-    for (i in 1:n) {
-      num_mean <- num_mean + weight_mean[i] * pull_draw(data, i)
-      num_skew <- num_skew + weight_skew[i] * pull_draw(data, i)
-    }
+    num_mean <- .tensor_weighted_draw_sum(data, weight_mean)
+    num_skew <- .tensor_weighted_draw_sum(data, weight_skew)
 
     den_mean <- sum(mean(a) * b) - n
 

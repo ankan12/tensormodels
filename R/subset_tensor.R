@@ -35,7 +35,15 @@
 
   result <- do.call(`[`, c(list(unclass(x)), eval_args, list(drop = drop)))
 
-  if (!drop && is.array(result) && length(dim(result)) >= 2L) {
+  if (is.array(result) && length(dim(result)) >= 2L) {
+    # `drop = TRUE` removes the observation axis when a single draw is
+    # selected. Re-wrap that result as one tensor draw; otherwise preserve
+    # the existing observation axis.
+    selected_one_draw <- length(eval_args) >= 1L &&
+      !isTRUE(eval_args[[1L]]) && length(eval_args[[1L]]) == 1L
+    if (drop && selected_one_draw && length(dim(result)) < length(storage_dims)) {
+      return(tensor(result))
+    }
     return(.new_tensor_array(result))
   }
   result

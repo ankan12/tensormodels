@@ -32,9 +32,13 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
 
   if(o == 1 && dims == 1) { # univariate
     vector_data <- as.vector(unclass(data))
-    mu <- mean(vector_data)
-    sigma <- var(vector_data)
-    total_loglik <- sum(dnorm(vector_data, mean = mu, sd = sqrt(sigma), log = TRUE))
+    mu_value <- mean(vector_data)
+    mu <- array(mu_value, dim = dims)
+    sigma <- matrix(mean((vector_data - mu_value)^2), nrow = 1L, ncol = 1L)
+    total_loglik <- sum(dnorm(
+      vector_data, mean = mu_value, sd = sqrt(sigma[1L, 1L]),
+      log = TRUE
+    ))
     k <- 2
     return(list(
       mu = mu,
@@ -47,8 +51,8 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
   }
 
   if(o == 1) { # multivariate
-    array_data <- t(unclass(data))
-    mu <- apply(array_data, 2, mean)
+    array_data <- matrix(unclass(data), nrow = n, ncol = dims)
+    mu <- array(colMeans(array_data), dim = dims)
     sigma <- cov(array_data) * (n - 1)/n
     total_loglik <- sum(dtnorm(data, mu = mu, sigmas = list(sigma),
                                log = TRUE))

@@ -14,6 +14,20 @@
 #' matricization(X, 3)
 #' @export
 matricization <- function(X, k) {
+  if (inherits(X, "tensor")) {
+    shape <- draw_shape(X)
+    if (k < 1 || k > length(shape)) stop("Invalid mode index k.")
+
+    mats <- lapply(seq_len(n_draws(X)), function(i) {
+      matricization(.tensor_single_draw_array(pull_draw(X, i)), k)
+    })
+
+    out_dim <- dim(mats[[1L]])
+    out <- array(unlist(mats, use.names = FALSE),
+                 dim = c(out_dim, length(mats)))
+    return(tensor(out, obs = 3L))
+  }
+
   # Check tensor structure
   if (is.null(dim(X))) return(X)
 
