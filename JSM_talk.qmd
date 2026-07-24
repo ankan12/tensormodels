@@ -18,8 +18,12 @@ format:
   + RGB video - 6th dimension (x, y, r, b, g, time)
   + Medical imaging - 4th dimension (x, y, z, time)
   + Sensors over space and time   
+  
+::: {.fragment}
 - Established software implementations operations and approaches for vector variate and matrix variate data
 - Often analysts will matricize data to fit these methodologies
+
+:::
 
 ::: {.hidden}
 $$
@@ -403,7 +407,7 @@ knitr::kable(
 ```
 
 
-## Skewed Tensor Distributions in `tensortools`
+## Skewed Tensor Distributions in tensortools
 
 - `tensortools()` supports r, d, and MLE functions for all of these distributions
 
@@ -437,6 +441,130 @@ grabmyo_distribution_fits <- c(
     )
   )
 )
+```
+
+
+# Cross Validation
+```{r, cache = TRUE}
+tensor_log_density <- function(x, fit, model) {
+  if (model == "normal") {
+    return(
+      dtnorm(
+        x,
+        mu = fit$mu,
+        sigmas = fit$sigmas,
+        log = TRUE
+      )
+    )
+  }
+
+  if (model == "skewt") {
+    return(
+      dtskewt(
+        x,
+        mu = fit$mu,
+        skew = fit$skew,
+        sigmas = fit$sigmas,
+        nu = fit$nu,
+        log = TRUE
+      )
+    )
+  }
+
+  if (model == "vargamma") {
+    return(
+      dtvargamma(
+        x,
+        mu = fit$mu,
+        skew = fit$skew,
+        sigmas = fit$sigmas,
+        scale = fit$gamma,
+        log = TRUE
+      )
+    )
+  }
+
+  if (model == "invgauss") {
+    return(
+      dtinvgauss(
+        x,
+        mu = fit$mu,
+        skew = fit$skew,
+        sigmas = fit$sigmas,
+        kappa = fit$kappa,
+        log = TRUE
+      )
+    )
+  }
+
+  if (model == "genhyper") {
+    return(
+      dtgenhyper(
+        x,
+        mu = fit$mu,
+        skew = fit$skew,
+        sigmas = fit$sigmas,
+        lambda = fit$lambda,
+        omega = fit$omega,
+        log = TRUE
+      )
+    )
+  }
+
+  stop("Unknown model.")
+}
+
+loo_tensor_cv <- function(draws, model) {
+  n <- n_draws(draws)
+  heldout_loglik <- numeric(n)
+
+  for (i in seq_len(n)) {
+    print(i)
+    train_indices <- setdiff(seq_len(n), i)
+
+    train_draws <- slice_draws(draws, train_indices)
+    test_draw <- pull_draw(draws, i)
+
+    fit <- tensor_mle(
+      train_draws,
+      model = model,
+      quiet = TRUE
+    )
+
+    heldout_loglik[i] <- tensor_log_density(
+      test_draw,
+      fit = fit,
+      model = model
+    )
+  }
+
+  list(
+    model = model,
+    heldout_loglik = heldout_loglik,
+    total_loglik = sum(heldout_loglik),
+    mean_loglik = mean(heldout_loglik)
+  )
+}
+
+models <- c(
+  "normal",
+  "skewt",
+  "vargamma",
+  "invgauss",
+  "genhyper"
+)
+
+cv_results <- lapply(
+  models,
+  function(model) loo_tensor_cv(grabmyo_tensor, model)
+)
+
+tibble(
+  model = models,
+  total_loglik = sapply(cv_results, `[[`, "total_loglik"),
+  mean_loglik = sapply(cv_results, `[[`, "mean_loglik")
+) |> 
+  arrange(desc(mean_loglik))
 ```
 
 
