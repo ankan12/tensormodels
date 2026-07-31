@@ -133,10 +133,10 @@ list_mats <- hosvd(A, ranks = ranks)$mats
   for(k in 1:order) {
     dims_multiply <- setdiff(1:order, k)
     
-    Y <- n_prod(A, t(list_mats[[dims_multiply[1]]]), dims_multiply[1])
+    Y <- n_prod(A, dims_multiply[1], t(list_mats[[dims_multiply[1]]]))
     
     for(k_inner in dims_multiply[2:length(dims_multiply)]) {
-      Y <- n_prod(Y, t(list_mats[[k_inner]]), k_inner)
+      Y <- n_prod(Y, k_inner, t(list_mats[[k_inner]]))
     }
     
     Y_svd <- matricization(Y, k) |> svd(nu = ranks[k])
@@ -144,10 +144,10 @@ list_mats <- hosvd(A, ranks = ranks)$mats
     list_mats[[k]] <- svd(matricization(Y, k), nu = ranks[k])$u
   }
   
-  G_core <- n_prod(A, t(list_cores[[1]]), 1)
+  G_core <- n_prod(A, 1, t(list_cores[[1]]))
 
   for(k_mult in 2:order) {
-    G_core <- n_prod(G_core, t(list_cores[[k_mult]]), k_mult)
+    G_core <- n_prod(G_core, k_mult, t(list_cores[[k_mult]]))
   }
 
   list(G = G_core, mats = list_cores)
@@ -248,8 +248,8 @@ lambda[r] *
   outer(list_mats[[1]][, r], list_mats[[2]][, r]) |> 
   outer(list_mats[[3]][, r])
 
-n_prod(list_mats[[1]], list_mats[[2]], 2) |> 
-  n_prod(list_mats[[3]], 2)
+n_prod(list_mats[[1]], 2, list_mats[[2]]) |> 
+  n_prod(2, list_mats[[3]])
 
 list_mats
 
@@ -304,9 +304,9 @@ hosvd <- function(A, ranks = NULL) {
   }
   
   G_core <- 
-    n_prod(A, t(list_cores[[1]]), 1) |>
-    n_prod(t(list_cores[[2]]), 2) |> 
-    n_prod(t(list_cores[[3]]), 3)
+    n_prod(A, 1, t(list_cores[[1]])) |>
+    n_prod(2, t(list_cores[[2]])) |> 
+    n_prod(3, t(list_cores[[3]]))
 
   list(G = G_core, mats = list_cores)
 }
@@ -330,12 +330,12 @@ res <- hosvd(A, ranks = c(2, 2, 2))
 
 hosvd_reconstruct(res)
 
-n_prod(list_cores[[1]], list_cores[[2]], 1) |> 
-  n_prod(list_cores[[1]], list_cores[[2]], 1)
+n_prod(list_cores[[1]], 1, list_cores[[2]]) |> 
+  n_prod(1, list_cores[[2]])
 
-n_prod(G_core, list_cores[[1]], 1) |>
-  n_prod(list_cores[[2]], 2) |> 
-  n_prod(list_cores[[3]], 3)
+n_prod(G_core, 1, list_cores[[1]]) |>
+  n_prod(2, list_cores[[2]]) |> 
+  n_prod(3, list_cores[[3]])
 
 TT_SVD_reconstruct <- function(list_cores) {
   dims <- length(list_cores)

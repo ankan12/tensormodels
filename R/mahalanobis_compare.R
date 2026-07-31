@@ -37,7 +37,7 @@ mahalanobis_compare <- function(data) {
 
     # standardize with sigma estimates
     for(j in 1:o) {
-      centered_multiply <- n_prod(centered_multiply, sigma_inv[[j]], j)
+      centered_multiply <- n_prod(centered_multiply, j, sigma_inv[[j]])
     }
 
     tensor_dist[i] <- c(centered_curr) %*% c(centered_multiply)

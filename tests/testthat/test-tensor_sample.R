@@ -8,6 +8,7 @@ test_that("tensor prints a compact draw preview", {
   expect_output(print(x), "<tensor\\[2\\]>")
   expect_output(print(x), "2 draws of shape 3 × 4", fixed = TRUE)
   expect_output(print(x), "Preview: 2 draws × 6 indexed entries", fixed = TRUE)
+  expect_output(print(x), "pull_draw", fixed = TRUE, negate = TRUE)
 })
 
 test_that("tensor subsetting and pull_draw preserve tensor structure", {

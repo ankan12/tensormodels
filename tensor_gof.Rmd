@@ -1,0 +1,1504 @@
+---
+title: "Recommended Tensor Goodness-of-Fit Test"
+subtitle: "Multiscale characteristic functions with a parametric bootstrap"
+output: html_document
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4
+)
+
+library(tensormodels)
+```
+
+
+```{r}
+tensor_gof <- function(draws, model) {
+  mles <- tensor_mle(draws, model = model, tol = 1e-5)
+
+  ros_unif <- tensor_rosenblatt(draws, model = model, parameters = mles)
+  
+  basis <- make_basis(ros_unif, marginal_degree = 2, include_interactions = TRUE)
+  
+  basis_means <- colMeans(basis)
+  
+  statistic <- n_draws(norm_draws) * sum(basis_means^2)
+  
+  pval <- pchisq(statistic, df = ncol(basis), lower.tail = FALSE)
+  
+  tibble(model = model, stat = statistic, p = pval)
+}
+
+S1 <- crossprod(matrix(rnorm(4), nrow = 2))
+S2 <- crossprod(matrix(rnorm(9), nrow = 3))
+S3 <- crossprod(matrix(rnorm(16), nrow = 4))
+
+norm_draws <- rtnorm(n = 1e3, mu = array(1:24, dim = c(2, 3, 4)),
+                     sigmas = list(S1, S2, S3))
+
+
+tensor_gof(skewt_draws, "normal")
+tensor_gof(skewt_draws, "invgauss")
+tensor_gof(skewt_draws, "genhyper")
+
+```
+
+
+```{r}
+matricization(ros_norm, 1)
+
+
+ks_result <- ks.test(
+  c(ros_norm),
+  "punif",
+  min = 0,
+  max = 1
+)
+
+ros_test <- ad_uniform_test(ros_norm, B = 1e3)
+
+ros_test$p.value
+```
+
+
+
+```{r}
+skew_true <- array(seq(by = 0.1, length = 24), dim = c(2, 3, 4))
+
+skewt_draws <- rtskewt(n = 1e3, mu = array(1:24, dim = c(2, 3, 4)),
+                       sigmas = list(S1, S2, S3), skew = skew_true, nu = 20)
+
+mles_skewt <- tensor_mle(skewt_draws, model = "normal", 
+                         tol = 1e-5, quiet = FALSE, max_iter = 1e4)
+
+res <- tensor_rosenblatt(skewt_draws, model = "normal",
+                         parameters = mles_skewt)
+
+ros_test <- ad_uniform_test(res, B = 1e3)
+
+ros_test$statistic
+ros_test$p.value
+
+res_true <- tensor_rosenblatt(
+  skewt_draws,
+  model = "skewt",
+  parameters = list(
+    mu = array(1:24, dim = c(2, 3, 4)),
+    sigmas = list(S1, S2, S3),
+    skew = skew_true,
+    nu = 20
+  )
+)
+
+res_2 <- ad_uniform_test(res_true, B = 1000, seed = 1)
+
+res_2$p.value
+```
+
+# Finite-basis score-adjusted Rosenblatt test
+
+`tensor_score_gof()` fits the requested model, performs one Rosenblatt
+transformation, and adjusts a joint smooth-uniformity statistic for the
+estimated parameter scores. First-degree and higher-degree marginal terms
+test uniformity, while products between coordinates test residual dependence.
+
+The chi-squared p-value is asymptotic. Check `information_rank` and
+`score_stationarity` before interpreting it. The skewed models can take some
+time because they require quadrature and finite-difference likelihood scores,
+but they do not require a parametric bootstrap. Treat the implementation as
+experimental until its size has been verified by simulation for the selected
+model, tensor dimensions, and sample size; finite-sample calibration can be
+poor for weakly identified skewed-model parameters.
+
+```{r finite-basis-score-gof, eval=FALSE}
+skewt_score_gof <- 
+  tensor_score_gof(draws = norm_draws,
+  model = "skewt",
+  marginal_degree = 2,
+  include_interactions = TRUE,
+  max_basis = 100,
+  tol = 1e-6,
+  max_iter = 10000
+)
+
+skewt_score_gof
+skewt_score_gof$p.value
+skewt_score_gof$information_rank
+skewt_score_gof$score_dimension
+skewt_score_gof$score_stationarity
+```
+
+`make_basis()` exposes the basis matrix directly. Rows correspond to tensor
+draws and columns correspond to marginal or interaction terms.
+
+```{r make-uniform-basis, eval=FALSE}
+uniform_basis <- make_basis(
+  skewt_score_gof$uniforms,
+  marginal_degree = 2,
+  include_interactions = TRUE,
+  max_basis = 100
+)
+
+dim(uniform_basis)
+colnames(uniform_basis)
+colMeans(uniform_basis)
+
+# Unadjusted known-parameter smooth statistic. Its chi-squared p-value is not
+# formally calibrated when the Rosenblatt parameters were fitted to these data.
+unadjusted_statistic <-
+  nrow(uniform_basis) * sum(colMeans(uniform_basis)^2)
+unadjusted_p_value <- stats::pchisq(
+  unadjusted_statistic,
+  df = ncol(uniform_basis),
+  lower.tail = FALSE
+)
+```
+
+# Simulation study for the score-adjusted test
+
+The function below estimates both size and power. The row for the correctly
+fitted model estimates the Type I error rate: at `alpha = 0.05`, its rejection
+rate should be close to 0.05. Rows for incorrectly fitted models estimate
+power, so larger rejection rates are desirable there.
+
+Every fitted model is tested on the same newly generated sample within a
+replication. In addition to the rejection rate, the study records numerical
+rank problems, score-stationarity problems, errors, and computation time.
+
+```{r finite-basis-score-simulation-function}
+score_gof_simulation <- function(
+    n_sim = 100L,
+    n = 1000L,
+    generating_model = "skewt",
+    generating_parameters,
+    fitted_models = c(
+      "normal", "skewt", "vargamma", "invgauss", "genhyper"
+    ),
+    alpha = 0.05,
+    marginal_degree = 2L,
+    include_interactions = TRUE,
+    max_basis = 100L,
+    fd_step = 1e-5,
+    eigen_tol = 1e-8,
+    mle_tol = 1e-6,
+    mle_max_iter = 10000L,
+    rel.tol = 1e-7,
+    abs.tol = 1e-9,
+    subdivisions = 100L,
+    seed = NULL,
+    show_progress = TRUE) {
+
+  available_models <- c(
+    "normal", "skewt", "vargamma", "invgauss", "genhyper"
+  )
+  generating_model <- match.arg(generating_model, available_models)
+  fitted_models <- match.arg(
+    fitted_models,
+    available_models,
+    several.ok = TRUE
+  )
+
+  n_sim <- as.integer(n_sim)
+  n <- as.integer(n)
+
+  if (length(n_sim) != 1L || is.na(n_sim) || n_sim < 1L) {
+    stop("`n_sim` must be one positive integer.")
+  }
+  if (length(n) != 1L || is.na(n) || n < 3L) {
+    stop("`n` must be one integer greater than two.")
+  }
+  if (!is.list(generating_parameters)) {
+    stop("`generating_parameters` must be a parameter list.")
+  }
+  if (length(alpha) != 1L || !is.finite(alpha) ||
+      alpha <= 0 || alpha >= 1) {
+    stop("`alpha` must be strictly between zero and one.")
+  }
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  required_parameter <- function(name, alternative = NULL) {
+    value <- generating_parameters[[name]]
+
+    if (is.null(value) && !is.null(alternative)) {
+      value <- generating_parameters[[alternative]]
+    }
+    if (is.null(value)) {
+      alternatives <- if (is.null(alternative)) {
+        ""
+      } else {
+        paste0(" (or `", alternative, "`)")
+      }
+      stop(
+        "The generating parameter `", name, "`", alternatives,
+        " is missing."
+      )
+    }
+
+    value
+  }
+
+  simulate_sample <- function() {
+    mu <- required_parameter("mu")
+    sigmas <- required_parameter("sigmas")
+
+    switch(
+      generating_model,
+      normal = rtnorm(
+        n = n,
+        mu = mu,
+        sigmas = sigmas
+      ),
+      skewt = rtskewt(
+        n = n,
+        mu = mu,
+        sigmas = sigmas,
+        skew = required_parameter("skew"),
+        nu = required_parameter("nu")
+      ),
+      vargamma = rtvargamma(
+        n = n,
+        mu = mu,
+        sigmas = sigmas,
+        skew = required_parameter("skew"),
+        scale = required_parameter("gamma", "scale")
+      ),
+      invgauss = rtinvgauss(
+        n = n,
+        mu = mu,
+        sigmas = sigmas,
+        skew = required_parameter("skew"),
+        kappa = required_parameter("kappa")
+      ),
+      genhyper = rtgenhyper(
+        n = n,
+        mu = mu,
+        sigmas = sigmas,
+        skew = required_parameter("skew"),
+        lambda = required_parameter("lambda"),
+        omega = required_parameter("omega")
+      )
+    )
+  }
+
+  result_rows <- vector("list", n_sim * length(fitted_models))
+  result_index <- 0L
+
+  for (simulation in seq_len(n_sim)) {
+    draws <- simulate_sample()
+
+    for (fitted_model in fitted_models) {
+      result_index <- result_index + 1L
+      start_time <- proc.time()[["elapsed"]]
+      warning_messages <- character()
+
+      result_rows[[result_index]] <- tryCatch(
+        {
+          test <- withCallingHandlers(
+            tensor_score_gof(
+              draws = draws,
+              model = fitted_model,
+              marginal_degree = marginal_degree,
+              include_interactions = include_interactions,
+              max_basis = max_basis,
+              fd_step = fd_step,
+              eigen_tol = eigen_tol,
+              max_iter = mle_max_iter,
+              tol = mle_tol,
+              quiet = TRUE,
+              rel.tol = rel.tol,
+              abs.tol = abs.tol,
+              subdivisions = subdivisions
+            ),
+            warning = function(warning) {
+              warning_messages <<- c(
+                warning_messages,
+                conditionMessage(warning)
+              )
+              invokeRestart("muffleWarning")
+            }
+          )
+
+          data.frame(
+            simulation = simulation,
+            generating_model = generating_model,
+            fitted_model = fitted_model,
+            statistic = unname(test$statistic),
+            degrees_freedom = unname(test$parameter),
+            p_value = test$p.value,
+            reject = test$p.value <= alpha,
+            score_dimension = test$score_dimension,
+            information_rank = test$information_rank,
+            rank_deficient =
+              test$information_rank < test$score_dimension,
+            adjusted_covariance_rank =
+              test$adjusted_covariance_rank,
+            score_stationarity = test$score_stationarity,
+            elapsed_seconds =
+              proc.time()[["elapsed"]] - start_time,
+            warning = if (length(warning_messages)) {
+              paste(unique(warning_messages), collapse = " | ")
+            } else {
+              NA_character_
+            },
+            error = NA_character_,
+            stringsAsFactors = FALSE
+          )
+        },
+        error = function(error) {
+          data.frame(
+            simulation = simulation,
+            generating_model = generating_model,
+            fitted_model = fitted_model,
+            statistic = NA_real_,
+            degrees_freedom = NA_integer_,
+            p_value = NA_real_,
+            reject = NA,
+            score_dimension = NA_integer_,
+            information_rank = NA_integer_,
+            rank_deficient = NA,
+            adjusted_covariance_rank = NA_integer_,
+            score_stationarity = NA_real_,
+            elapsed_seconds =
+              proc.time()[["elapsed"]] - start_time,
+            warning = if (length(warning_messages)) {
+              paste(unique(warning_messages), collapse = " | ")
+            } else {
+              NA_character_
+            },
+            error = conditionMessage(error),
+            stringsAsFactors = FALSE
+          )
+        }
+      )
+    }
+
+    if (show_progress) {
+      message("Completed simulation ", simulation, " of ", n_sim)
+    }
+  }
+
+  results <- do.call(rbind, result_rows)
+  rownames(results) <- NULL
+
+  summary_rows <- lapply(fitted_models, function(fitted_model) {
+    current <- results[
+      results$fitted_model == fitted_model,
+      ,
+      drop = FALSE
+    ]
+    completed <- is.na(current$error)
+    number_completed <- sum(completed)
+
+    if (number_completed > 0L) {
+      rejection_rate <- mean(current$reject[completed])
+      rejection_mcse <- sqrt(
+        rejection_rate * (1 - rejection_rate) / number_completed
+      )
+    } else {
+      rejection_rate <- NA_real_
+      rejection_mcse <- NA_real_
+    }
+
+    data.frame(
+      generating_model = generating_model,
+      fitted_model = fitted_model,
+      completed = number_completed,
+      failures = sum(!completed),
+      rejection_rate = rejection_rate,
+      rejection_mcse = rejection_mcse,
+      rank_deficiency_rate = if (number_completed > 0L) {
+        mean(current$rank_deficient[completed])
+      } else {
+        NA_real_
+      },
+      stationarity_warning_rate = if (number_completed > 0L) {
+        mean(current$score_stationarity[completed] > 1)
+      } else {
+        NA_real_
+      },
+      median_p_value = if (number_completed > 0L) {
+        stats::median(current$p_value[completed])
+      } else {
+        NA_real_
+      },
+      mean_elapsed_seconds = if (number_completed > 0L) {
+        mean(current$elapsed_seconds[completed])
+      } else {
+        NA_real_
+      },
+      stringsAsFactors = FALSE
+    )
+  })
+
+  list(
+    summary = do.call(rbind, summary_rows),
+    results = results,
+    settings = list(
+      n_sim = n_sim,
+      n = n,
+      alpha = alpha,
+      generating_model = generating_model,
+      generating_parameters = generating_parameters,
+      fitted_models = fitted_models,
+      marginal_degree = marginal_degree,
+      include_interactions = include_interactions,
+      max_basis = max_basis,
+      seed = seed
+    )
+  )
+}
+```
+
+This runs the study requested above: generate from the tensor skew-\(t\), then
+fit and test all five candidate distributions.
+
+```{r run-finite-basis-score-simulation, eval=FALSE}
+skewt_score_study <- score_gof_simulation(
+  n_sim = 10,
+  n = 1000,
+  generating_model = "skewt",
+  generating_parameters = list(
+    mu = array(1:24, dim = c(2, 3, 4)),
+    sigmas = list(S1, S2, S3),
+    skew = skew_true,
+    nu = 20
+  ),
+  fitted_models = c(
+    "normal", "skewt"), #, "vargamma", "invgauss", "genhyper"
+  
+  alpha = 0.05,
+  marginal_degree = 2,
+  include_interactions = TRUE,
+  max_basis = 100,
+  seed = 20260730
+)
+
+skewt_score_study$summary
+head(skewt_score_study$results)
+subset(
+  skewt_score_study$results,
+  !is.na(error) | rank_deficient | score_stationarity > 1
+)
+
+# Under the null, these p-values should be approximately uniform.
+skewt_null_results <- subset(
+  skewt_score_study$results,
+  fitted_model == "skewt" & is.na(error)
+)
+
+hist(
+  skewt_null_results$p_value,
+  breaks = seq(0, 1, by = 0.05),
+  main = "Skew-t null p-values",
+  xlab = "p-value"
+)
+
+stats::binom.test(
+  x = sum(skewt_null_results$reject),
+  n = nrow(skewt_null_results),
+  p = 0.05
+)
+```
+
+For the correctly specified `"skewt"` row, compare `rejection_rate` with 0.05
+and use `rejection_mcse` to judge Monte Carlo uncertainty. With 100
+replications, a true 5% rejection rate has Monte Carlo standard error about
+0.022, so use at least 500 replications for a serious calibration study. The
+other four rejection rates measure power against those fitted distributions,
+not Type I error. Begin with a small value such as `n_sim = 10` to estimate
+runtime before launching the full study.
+
+
+#Inverse Transform Norm Draws
+```{r}
+standard_draws <- norm_draws - mles_norm$mu
+
+for (i in seq_along(mles_norm$sigmas)) {
+  curr_sig <- mles_norm$sigmas[[i]]
+  lower_chol <- t(chol(curr_sig))
+  whitening_matrix <- solve(lower_chol)
+
+  standard_draws <- n_prod(standard_draws, i, whitening_matrix)
+}
+
+uniform_draws <- pnorm(standard_draws)
+
+uniform_draws |> 
+  c() |> 
+  as_tibble() |> 
+  ggplot() +
+  geom_histogram(aes(x = value), color = "black", fill = "pink", 
+                   binwidth = 0.01, boundary = 0) +
+  theme_minimal()
+
+var(uniform_draws)
+mean(uniform_draws)
+```
+
+
+#Inverse Transform Skew-t Draws
+```{r}
+
+
+res |> 
+  c() |> 
+  as_tibble() |> 
+  ggplot() +
+  geom_histogram(aes(x = value), bins = 100) +
+  theme_minimal()
+```
+
+
+```{r}
+ad_uniform_statistic <- function(values) {
+  values <- sort(as.numeric(values))
+  N <- length(values)
+
+  if (any(!is.finite(values)) ||
+      any(values < 0 | values > 1)) {
+    stop("Values must be finite and between zero and one.")
+  }
+
+  if (any(values == 0 | values == 1)) {
+    return(Inf)
+  }
+
+  i <- seq_len(N)
+
+  -N - sum(
+    (2 * i - 1) *
+      (
+        log(values) +
+        log1p(-rev(values))
+      )
+  ) / N
+}
+
+ad_uniform_test <- function(values, B = 4999, seed = NULL) {
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  values <- as.numeric(values)
+  observed <- ad_uniform_statistic(values)
+  N <- length(values)
+
+  null_statistics <- replicate(
+    B,
+    ad_uniform_statistic(runif(N))
+  )
+
+  p_value <- (
+    1 + sum(null_statistics >= observed)
+  ) / (B + 1)
+
+  list(
+    statistic = observed,
+    p.value = p_value,
+    B = B,
+    null_statistics = null_statistics
+  )
+}
+
+
+r <- ad_uniform_test(runif(1e3), B = 1000)
+
+ad_uniform_statistic(unif_true)
+
+result <- ad_uniform_test(
+  unif_true,
+  B = 1000,
+  seed = 1
+)
+
+result$statistic
+result$p.value
+```
+
+# Simulation study: data generated from the tensor skew-t
+
+This function repeats the following steps:
+
+1. Generate a new tensor skew-\(t\) sample.
+2. Fit each candidate tensor distribution to the same sample.
+3. Apply that fitted model's Rosenblatt transform.
+4. calculate the Anderson-Darling statistic and its simple uniform-reference
+   p-value.
+5. Record whether the model is rejected at the chosen significance level.
+
+The simulated Anderson-Darling null distribution is constructed only once and
+reused for every fitted model because every transformed sample has the same
+number of entries. Exact zeros and ones are recorded separately because they
+make the Anderson-Darling statistic infinite.
+
+```{r}
+skewt_rosenblatt_simulation <- function(
+    n_sim = 100L,
+    n = 1000L,
+    mu,
+    sigmas,
+    skew,
+    nu = 20,
+    models = c("normal", "skewt", "vargamma", "invgauss", "genhyper"),
+    alpha = 0.05,
+    B = 1000L,
+    mle_tol = 1e-5,
+    mle_max_iter = 10000L,
+    rel.tol = 1e-7,
+    abs.tol = 1e-9,
+    subdivisions = 100L,
+    seed = NULL,
+    show_progress = TRUE) {
+
+  available_models <- c(
+    "normal", "skewt", "vargamma", "invgauss", "genhyper"
+  )
+  models <- match.arg(models, available_models, several.ok = TRUE)
+
+  n_sim <- as.integer(n_sim)
+  n <- as.integer(n)
+  B <- as.integer(B)
+
+  if (n_sim < 1L || n < 1L || B < 1L) {
+    stop("`n_sim`, `n`, and `B` must be positive integers.")
+  }
+  if (alpha <= 0 || alpha >= 1) {
+    stop("`alpha` must be strictly between zero and one.")
+  }
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  # Every transformed dataset contains n * prod(dim(mu)) uniform values.
+  n_uniforms <- n * prod(dim(mu))
+
+  # Reuse this reference distribution for every replication and fitted model.
+  ad_null_statistics <- replicate(
+    B,
+    ad_uniform_statistic(runif(n_uniforms))
+  )
+
+  result_rows <- vector("list", n_sim * length(models))
+  result_index <- 0L
+
+  for (simulation in seq_len(n_sim)) {
+    draws <- rtskewt(
+      n = n,
+      mu = mu,
+      sigmas = sigmas,
+      skew = skew,
+      nu = nu
+    )
+
+    for (fitted_model in models) {
+      result_index <- result_index + 1L
+      start_time <- proc.time()[["elapsed"]]
+
+      result_rows[[result_index]] <- tryCatch(
+        {
+          fit <- tensor_mle(
+            draws,
+            model = fitted_model,
+            tol = mle_tol,
+            max_iter = mle_max_iter,
+            quiet = TRUE
+          )
+
+          uniforms <- tensor_rosenblatt(
+            draws,
+            model = fitted_model,
+            parameters = fit,
+            rel.tol = rel.tol,
+            abs.tol = abs.tol,
+            subdivisions = subdivisions
+          )
+
+          uniform_values <- as.numeric(uniforms)
+          statistic <- ad_uniform_statistic(uniform_values)
+          p_value <- (
+            1 + sum(ad_null_statistics >= statistic)
+          ) / (B + 1)
+
+          data.frame(
+            simulation = simulation,
+            generating_model = "skewt",
+            fitted_model = fitted_model,
+            statistic = statistic,
+            p_value = p_value,
+            reject = p_value <= alpha,
+            loglik = fit$loglik,
+            exact_zero = sum(uniform_values == 0),
+            exact_one = sum(uniform_values == 1),
+            elapsed_seconds = proc.time()[["elapsed"]] - start_time,
+            error = NA_character_,
+            stringsAsFactors = FALSE
+          )
+        },
+        error = function(error) {
+          data.frame(
+            simulation = simulation,
+            generating_model = "skewt",
+            fitted_model = fitted_model,
+            statistic = NA_real_,
+            p_value = NA_real_,
+            reject = NA,
+            loglik = NA_real_,
+            exact_zero = NA_integer_,
+            exact_one = NA_integer_,
+            elapsed_seconds = proc.time()[["elapsed"]] - start_time,
+            error = conditionMessage(error),
+            stringsAsFactors = FALSE
+          )
+        }
+      )
+
+      if (show_progress) {
+        message(
+          "Simulation ", simulation, " of ", n_sim,
+          "; fitted model: ", fitted_model
+        )
+      }
+    }
+  }
+
+  results <- do.call(rbind, result_rows)
+
+  summary_rows <- lapply(models, function(fitted_model) {
+    current <- results[results$fitted_model == fitted_model, , drop = FALSE]
+    completed <- is.na(current$error)
+
+    data.frame(
+      generating_model = "skewt",
+      fitted_model = fitted_model,
+      completed = sum(completed),
+      failures = sum(!completed),
+      rejection_rate = if (any(completed)) {
+        mean(current$reject[completed])
+      } else {
+        NA_real_
+      },
+      endpoint_rate = if (any(completed)) {
+        mean(
+          current$exact_zero[completed] > 0 |
+            current$exact_one[completed] > 0
+        )
+      } else {
+        NA_real_
+      },
+      median_statistic = if (any(completed)) {
+        median(current$statistic[completed])
+      } else {
+        NA_real_
+      },
+      median_p_value = if (any(completed)) {
+        median(current$p_value[completed])
+      } else {
+        NA_real_
+      },
+      mean_elapsed_seconds = if (any(completed)) {
+        mean(current$elapsed_seconds[completed])
+      } else {
+        NA_real_
+      },
+      stringsAsFactors = FALSE
+    )
+  })
+
+  list(
+    summary = do.call(rbind, summary_rows),
+    results = results,
+    settings = list(
+      n_sim = n_sim,
+      n = n,
+      alpha = alpha,
+      B = B,
+      generating_model = "skewt",
+      models = models,
+      seed = seed
+    ),
+    ad_null_statistics = ad_null_statistics
+  )
+}
+```
+
+The complete 100-replication study is intentionally not evaluated while
+knitting. It requires four quadrature-based Rosenblatt transformations for
+each replication and can therefore take a long time.
+
+```{r skewt-simulation-study, eval=FALSE}
+skewt_study <- skewt_rosenblatt_simulation(
+  n_sim = 100,
+  n = 1000,
+  mu = array(1:24, dim = c(2, 3, 4)),
+  sigmas = list(S1, S2, S3),
+  skew = skew_true,
+  nu = 20,
+  alpha = 0.05,
+  B = 1000,
+  mle_tol = 1e-5,
+  mle_max_iter = 10000,
+  seed = 20260730
+)
+
+skewt_study$summary
+skewt_study$results
+```
+
+For a quick check that the workflow runs before starting all 100 replications:
+
+```{r skewt-simulation-smoke-test, eval=FALSE}
+skewt_smoke_test <- skewt_rosenblatt_simulation(
+  n_sim = 2,
+  n = 1000,
+  mu = array(1:24, dim = c(2, 3, 4)),
+  sigmas = list(S1, S2, S3),
+  skew = array(2 * rnorm(24), dim = c(2, 3, 4)),
+  nu = 20,
+  B = 199,
+  seed = 1
+)
+
+skewt_smoke_test$results
+
+skewt_smoke_test$summary |> View()
+```
+
+
+```{r}
+unif <- rosenblatt_tskewt(skewt_draws, mles_skewt$mu, mles_skewt$skew,
+                          mles_skewt$sigmas, mles_skewt$nu)
+
+
+unif_true <- rosenblatt_tskewt(
+  skewt_draws,
+  mu = array(1:24, dim = c(2, 3, 4)),
+  skew = skew_true,
+  sigmas = list(S1, S2, S3),
+  nu = 20
+)
+
+unif_true |> 
+  c() |> 
+  as_tibble() |> 
+  ggplot() +
+  geom_histogram(aes(x = value, y = after_stat(density)), 
+                 color = "black", fill = "pink", 
+                 binwidth = 0.01, boundary = 0) +
+  geom_density(aes(x = value), color = "red") +
+  theme_minimal()
+
+mles_norm_skew <- tensor_mle(norm_draws, model = "skewt")
+
+unif_false <- rosenblatt_tskewt(
+  norm_draws,
+  mu = mles_norm_skew$mu,
+  skew = mles_norm_skew$skew,
+  sigmas = mles_norm_skew$sigmas,
+  nu = mles_norm_skew$nu
+)
+
+unif_false |> 
+  c() |> 
+  as_tibble() |> 
+  ggplot() +
+  geom_histogram(aes(x = value, y = after_stat(density)), 
+                 color = "black", fill = "pink", 
+                 binwidth = 0.01, boundary = 0) +
+  geom_density(aes(x = value), color = "red") +
+  theme_minimal()
+```
+
+# Recommended procedure
+
+This file contains only the recommended characteristic-function goodness-of-fit
+test. It supports all five distributions fitted by `tensor_mle()`:
+
+- tensor normal;
+- tensor skew-\(t\);
+- tensor variance-gamma;
+- tensor inverse-Gaussian; and
+- tensor generalized hyperbolic.
+
+For each fitted model, the test compares the empirical characteristic function
+with the fitted theoretical characteristic function at a fixed collection of
+multiscale frequencies:
+
+\[
+T_n
+=
+n\frac{1}{L}\sum_{\ell=1}^L
+\left|
+\widehat\varphi_n(t_\ell)
+-
+\varphi(t_\ell;\widehat\theta)
+\right|^2.
+\]
+
+The frequencies include both dense directions and rank-one tensor directions
+at several radii. The theoretical characteristic functions are evaluated
+analytically, so no reference sample is needed to approximate them.
+
+The null distribution is obtained with a parametric bootstrap. Every bootstrap
+sample is refitted before its statistic is calculated. This is the part that
+accounts for estimating the model parameters from the same observations used
+in the goodness-of-fit test.
+
+# 1. Construct multiscale frequencies
+
+Rank-one directions are included because they can detect discrepancies aligned
+with the tensor modes. Dense directions can detect discrepancies that are not
+well aligned with a single separable direction.
+
+```{r frequency-directions}
+.multiscale_cf_rank_one_direction <- function(dims) {
+  mode_vectors <- lapply(dims, function(mode_size) {
+    direction <- rnorm(mode_size)
+    direction / sqrt(sum(direction^2))
+  })
+
+  as.numeric(Reduce(
+    function(left, right) as.vector(outer(left, right)),
+    mode_vectors
+  ))
+}
+```
+
+```{r frequency-grid}
+make_multiscale_cf_frequencies <- function(dims,
+                                           radii = c(0.5, 1, 2, 3),
+                                           n_per_type = 8L,
+                                           seed = NULL) {
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  if (any(!is.finite(radii)) || any(radii <= 0)) {
+    stop("`radii` must contain positive finite values.", call. = FALSE)
+  }
+  if (length(n_per_type) != 1L || !is.finite(n_per_type) ||
+      n_per_type < 1L || n_per_type != floor(n_per_type)) {
+    stop("`n_per_type` must be one positive integer.", call. = FALSE)
+  }
+
+  p <- prod(dims)
+  n_per_type <- as.integer(n_per_type)
+  n_frequencies <- length(radii) * 2L * n_per_type
+  frequencies <- matrix(0, nrow = n_frequencies, ncol = p)
+  direction_type <- character(n_frequencies)
+  frequency_radius <- numeric(n_frequencies)
+  row <- 0L
+
+  for (radius in radii) {
+    for (j in seq_len(n_per_type)) {
+      row <- row + 1L
+      dense <- rnorm(p)
+      frequencies[row, ] <- radius * dense / sqrt(sum(dense^2))
+      direction_type[row] <- "dense"
+      frequency_radius[row] <- radius
+
+      row <- row + 1L
+      frequencies[row, ] <- radius *
+        .multiscale_cf_rank_one_direction(dims)
+      direction_type[row] <- "rank-one"
+      frequency_radius[row] <- radius
+    }
+  }
+
+  attr(frequencies, "direction_type") <- direction_type
+  attr(frequencies, "radius") <- frequency_radius
+  frequencies
+}
+```
+
+# 2. Center and whiten the tensor observations
+
+Whitening is applied mode by mode. This avoids constructing the full
+Kronecker covariance matrix.
+
+```{r whitening-matrices}
+.multiscale_cf_whitening <- function(sigmas) {
+  lapply(sigmas, function(sigma) {
+    sigma <- as.matrix(sigma)
+    sigma <- (sigma + t(sigma)) / 2
+    solve(t(chol(sigma)))
+  })
+}
+```
+
+```{r standardize-draws}
+.multiscale_cf_standardize <- function(draws, fit) {
+  n <- n_draws(draws)
+  dims <- draw_shape(draws)
+  whitening <- .multiscale_cf_whitening(fit$sigmas)
+  result <- matrix(0, nrow = n, ncol = prod(dims))
+
+  for (i in seq_len(n)) {
+    current <- pull_draw(draws, i) - fit$mu
+    for (mode in seq_along(whitening)) {
+      current <- n_prod(current, mode, whitening[[mode]])
+    }
+    result[i, ] <- as.numeric(unclass(current))
+  }
+
+  result
+}
+```
+
+```{r whiten-skew}
+.multiscale_cf_whiten_skew <- function(skew, sigmas) {
+  whitening <- .multiscale_cf_whitening(sigmas)
+  result <- skew
+
+  for (mode in seq_along(whitening)) {
+    result <- n_prod(result, mode, whitening[[mode]])
+  }
+
+  as.numeric(result)
+}
+```
+
+# 3. Evaluate the fitted theoretical characteristic function
+
+After whitening, the tensor normal characteristic function is
+\(\exp(-\lVert t\rVert^2/2)\).
+
+Each skewed model has the representation
+
+\[
+Z = W a + \sqrt{W}\,\varepsilon,
+\qquad \varepsilon\sim N(0,I),
+\]
+
+where \(a\) is the whitened skew tensor. Its characteristic function is the
+Laplace transform of \(W\), evaluated at
+
+\[
+s=\frac{\lVert t\rVert^2}{2}-i\,t^\top a.
+\]
+
+```{r mixing-laplace-transforms}
+.multiscale_cf_mixing_laplace <- function(s, model, fit) {
+  if (model == "skewt") {
+    shape <- fit$nu / 2
+    rate <- fit$nu / 2
+    answer <- complex(length(s))
+    at_zero <- Mod(s) < sqrt(.Machine$double.eps)
+    answer[at_zero] <- 1 + 0i
+
+    if (any(!at_zero)) {
+      current_s <- s[!at_zero]
+      argument <- 2 * sqrt(rate * current_s)
+
+      # BesselK(..., expon.scaled = TRUE) equals exp(argument) K(argument).
+      log_bessel_k <- log(Bessel::BesselK(
+        argument,
+        nu = shape,
+        expon.scaled = TRUE
+      )) - argument
+
+      answer[!at_zero] <- exp(
+        log(2) +
+          (shape / 2) * (log(rate) + log(current_s)) -
+          lgamma(shape) +
+          log_bessel_k
+      )
+    }
+    return(answer)
+  }
+
+  if (model == "vargamma") {
+    return((fit$gamma / (fit$gamma + s))^fit$gamma)
+  }
+
+  if (model == "invgauss") {
+    return(exp(
+      fit$kappa * (1 - sqrt(1 + 2 * s / fit$kappa^2))
+    ))
+  }
+
+  if (model == "genhyper") {
+    shifted_psi <- fit$omega + 2 * s
+    argument <- sqrt(fit$omega * shifted_psi)
+
+    log_numerator_bessel <- log(Bessel::BesselK(
+      argument,
+      nu = fit$lambda,
+      expon.scaled = TRUE
+    )) - argument
+    log_denominator_bessel <- log(Bessel::BesselK(
+      fit$omega,
+      nu = fit$lambda,
+      expon.scaled = TRUE
+    )) - fit$omega
+
+    return(exp(
+      (fit$lambda / 2) * (log(fit$omega) - log(shifted_psi)) +
+        log_numerator_bessel - log_denominator_bessel
+    ))
+  }
+
+  stop(
+    "No mixing distribution is required for the normal model.",
+    call. = FALSE
+  )
+}
+```
+
+```{r model-characteristic-function}
+.multiscale_cf_model <- function(frequencies, model, fit) {
+  q <- rowSums(frequencies^2)
+
+  if (model == "normal") {
+    return(exp(-q / 2))
+  }
+
+  whitened_skew <- .multiscale_cf_whiten_skew(
+    fit$skew,
+    fit$sigmas
+  )
+  skew_projection <- drop(frequencies %*% whitened_skew)
+  s <- q / 2 - 1i * skew_projection
+
+  .multiscale_cf_mixing_laplace(s, model, fit)
+}
+```
+
+# 4. Calculate the observed discrepancy
+
+```{r cf-test-statistic}
+.multiscale_cf_statistic <- function(draws, model, fit, frequencies) {
+  standardized <- .multiscale_cf_standardize(draws, fit)
+  phases <- standardized %*% t(frequencies)
+  empirical_cf <- colMeans(exp(1i * phases))
+  theoretical_cf <- .multiscale_cf_model(frequencies, model, fit)
+
+  if (any(!is.finite(theoretical_cf))) {
+    stop(
+      "The fitted model produced a non-finite characteristic function.",
+      call. = FALSE
+    )
+  }
+
+  squared_difference <- Mod(empirical_cf - theoretical_cf)^2
+
+  list(
+    statistic = n_draws(draws) * mean(squared_difference),
+    empirical_cf = empirical_cf,
+    theoretical_cf = theoretical_cf,
+    squared_difference = squared_difference
+  )
+}
+```
+
+# 5. Simulate from each fitted model
+
+```{r simulate-fitted-model}
+.multiscale_cf_simulate <- function(n, model, fit) {
+  switch(
+    model,
+    normal = rtnorm(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas
+    ),
+    skewt = rtskewt(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas,
+      skew = fit$skew,
+      nu = fit$nu
+    ),
+    vargamma = rtvargamma(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas,
+      skew = fit$skew,
+      scale = fit$gamma
+    ),
+    invgauss = rtinvgauss(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas,
+      skew = fit$skew,
+      kappa = fit$kappa
+    ),
+    genhyper = rtgenhyper(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas,
+      skew = fit$skew,
+      lambda = fit$lambda,
+      omega = fit$omega
+    )
+  )
+}
+```
+
+# 6. Run the complete test
+
+This is the only function users need to call. Bootstrap failures are retained
+in the result rather than silently discarded.
+
+```{r multiscale-cf-bootstrap-test}
+tensor_cf_multiscale_bootstrap <- function(
+    draws,
+    model = c("normal", "skewt", "vargamma", "invgauss", "genhyper"),
+    B = 999L,
+    frequencies = NULL,
+    radii = c(0.5, 1, 2, 3),
+    n_per_type = 8L,
+    max_iter = 1000L,
+    tol = 1e-4,
+    quiet = TRUE,
+    restrict = NULL,
+    seed = NULL,
+    show_progress = FALSE) {
+  model <- match.arg(model)
+  data_name <- deparse(substitute(draws))
+
+  if (!inherits(draws, "tensor")) {
+    stop("`draws` must be a tensor object.", call. = FALSE)
+  }
+  if (n_draws(draws) < 2L) {
+    stop("At least two tensor draws are required.", call. = FALSE)
+  }
+  if (length(B) != 1L || !is.finite(B) ||
+      B < 1L || B != floor(B)) {
+    stop("`B` must be one positive integer.", call. = FALSE)
+  }
+
+  B <- as.integer(B)
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  p <- prod(draw_shape(draws))
+  if (is.null(frequencies)) {
+    frequencies <- make_multiscale_cf_frequencies(
+      dims = draw_shape(draws),
+      radii = radii,
+      n_per_type = n_per_type
+    )
+  } else {
+    frequency_attributes <- attributes(frequencies)[
+      c("direction_type", "radius")
+    ]
+    frequencies <- as.matrix(frequencies)
+    if (ncol(frequencies) != p) {
+      stop("`frequencies` must have ", p, " columns.", call. = FALSE)
+    }
+    attributes(frequencies)[names(frequency_attributes)] <-
+      frequency_attributes
+  }
+
+  observed_fit <- tensor_mle(
+    draws,
+    model = model,
+    max_iter = max_iter,
+    tol = tol,
+    quiet = quiet,
+    restrict = restrict
+  )
+  observed <- .multiscale_cf_statistic(
+    draws,
+    model,
+    observed_fit,
+    frequencies
+  )
+
+  bootstrap_statistics <- rep(NA_real_, B)
+  failure_messages <- character(B)
+
+  for (b in seq_len(B)) {
+    if (show_progress) {
+      message("Bootstrap replicate ", b, " of ", B, " for ", model)
+    }
+
+    bootstrap_result <- tryCatch({
+      bootstrap_draws <- .multiscale_cf_simulate(
+        n_draws(draws),
+        model,
+        observed_fit
+      )
+      bootstrap_fit <- tensor_mle(
+        bootstrap_draws,
+        model = model,
+        max_iter = max_iter,
+        tol = tol,
+        quiet = quiet,
+        restrict = restrict
+      )
+      .multiscale_cf_statistic(
+        bootstrap_draws,
+        model,
+        bootstrap_fit,
+        frequencies
+      )
+    }, error = function(error) error)
+
+    if (inherits(bootstrap_result, "error")) {
+      failure_messages[b] <- conditionMessage(bootstrap_result)
+    } else if (is.finite(bootstrap_result$statistic)) {
+      bootstrap_statistics[b] <- bootstrap_result$statistic
+    } else {
+      failure_messages[b] <- "The bootstrap statistic was non-finite."
+    }
+  }
+
+  successful <- is.finite(bootstrap_statistics)
+  if (!any(successful)) {
+    stop("All bootstrap replicates failed.", call. = FALSE)
+  }
+
+  p_value <- (
+    1 + sum(bootstrap_statistics[successful] >= observed$statistic)
+  ) / (1 + sum(successful))
+
+  model_label <- c(
+    normal = "tensor normal",
+    skewt = "tensor skew-t",
+    vargamma = "tensor variance-gamma",
+    invgauss = "tensor inverse-Gaussian",
+    genhyper = "tensor generalized hyperbolic"
+  )[[model]]
+
+  structure(
+    list(
+      statistic = c(T = observed$statistic),
+      parameter = c(B = sum(successful)),
+      p.value = p_value,
+      method = paste0(
+        "Parametric-bootstrap multiscale CF test for the ",
+        model_label
+      ),
+      data.name = data_name,
+      model = model,
+      fit = observed_fit,
+      frequencies = frequencies,
+      empirical_cf = observed$empirical_cf,
+      theoretical_cf = observed$theoretical_cf,
+      squared_difference = observed$squared_difference,
+      bootstrap_statistics = bootstrap_statistics,
+      B_requested = B,
+      B_successful = sum(successful),
+      B_failed = sum(!successful),
+      failure_messages = failure_messages[!successful]
+    ),
+    class = c("tensor_cf_bootstrap_test", "htest")
+  )
+}
+```
+
+# 7. Use the test
+
+Use a small value of `B` only while checking an analysis. A reported test
+should generally use at least `B = 999`, giving a minimum attainable add-one
+p-value of \(1/1000\).
+
+```{r quick-example, eval=FALSE}
+
+quick_result <- tensor_cf_multiscale_bootstrap(
+  draws = norm_draws,
+  model = "skewt",
+  B = 49,
+  seed = 20260722,
+  show_progress = TRUE
+)
+
+quick_result
+```
+
+```{r reported-example, eval=FALSE}
+final_result <- tensor_cf_multiscale_bootstrap(
+  draws = observed_tensor_draws,
+  model = "skewt",
+  B = 999,
+  radii = c(0.5, 1, 2, 3),
+  n_per_type = 8,
+  max_iter = 1000,
+  tol = 1e-4,
+  seed = 20260722,
+  show_progress = TRUE
+)
+
+final_result
+```
+
+# 8. Compare all five fitted models
+
+Use one frequency matrix for every model so differences are not caused by
+different randomly generated directions. Each p-value is a goodness-of-fit
+assessment of its own model; the p-values should not be used to rank models.
+
+```{r all-model-example, eval=FALSE}
+models <- c("normal", "skewt", "vargamma", "invgauss", "genhyper")
+
+shared_frequencies <- make_multiscale_cf_frequencies(
+  dims = draw_shape(observed_tensor_draws),
+  radii = c(0.5, 1, 2, 3),
+  n_per_type = 8,
+  seed = 20260722
+)
+
+all_model_tests <- setNames(
+  lapply(models, function(current_model) {
+    tensor_cf_multiscale_bootstrap(
+      draws = observed_tensor_draws,
+      model = current_model,
+      B = 999,
+      frequencies = shared_frequencies,
+      max_iter = 1000,
+      tol = 1e-4,
+      seed = 20260722,
+      show_progress = TRUE
+    )
+  }),
+  models
+)
+
+all_model_results <- data.frame(
+  model = models,
+  statistic = vapply(
+    all_model_tests,
+    function(test) unname(test$statistic),
+    numeric(1)
+  ),
+  p_value = vapply(
+    all_model_tests,
+    function(test) test$p.value,
+    numeric(1)
+  ),
+  successful_bootstraps = vapply(
+    all_model_tests,
+    function(test) test$B_successful,
+    integer(1)
+  ),
+  failed_bootstraps = vapply(
+    all_model_tests,
+    function(test) test$B_failed,
+    integer(1)
+  )
+)
+
+all_model_results
+```
+
+# 9. Interpret the result
+
+A small p-value indicates that the empirical characteristic function differs
+from the fitted model by more than expected under the fitted null distribution.
+Failing to reject does not establish that the distribution is correct; it
+means that this set of multiscale CF features did not detect a discrepancy.
+
+Always inspect:
+
+- `p.value`, the add-one bootstrap p-value;
+- `B_successful` and `B_failed`, which reveal refitting stability;
+- `failure_messages`, if any refits failed; and
+- `squared_difference`, which shows which frequencies contributed most.

@@ -46,7 +46,7 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE, model) {
     skew_compute <- skew
 
     for (d in seq_along(sigmas)) {
-      skew_compute <- n_prod(skew_compute, chol2inv(chol(sigmas[[d]])), d)
+      skew_compute <- n_prod(skew_compute, d, chol2inv(chol(sigmas[[d]])))
     }
 
     rho <- sum(skew * skew_compute)
@@ -66,8 +66,8 @@ em_est <- function(draws, max_iter = 1000, tol = 1e-6, quiet = TRUE, model) {
       for (d in seq_along(sigmas)) {
         centered_compute <- n_prod(
           centered_compute,
-          chol2inv(chol(sigmas[[d]])),
-          d
+          d,
+          chol2inv(chol(sigmas[[d]]))
         )
       }
       delta_vals[i] <- sum(center_draw * centered_compute)

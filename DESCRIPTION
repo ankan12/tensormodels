@@ -11,6 +11,7 @@ LinkingTo:
     Rcpp, RcppEigen
 Imports: 
     Bessel,
+    GIGrvg,
     ggplot2,
     Rcpp,
     vctrs

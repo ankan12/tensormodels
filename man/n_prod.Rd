@@ -4,16 +4,16 @@
 \alias{n_prod}
 \title{n-mode product}
 \usage{
-n_prod(tensor, mat, n)
+n_prod(tensor, n, mat)
 
-n_prod(tensor, mat, n)
+n_prod(tensor, n, mat)
 }
 \arguments{
 \item{tensor}{A tensor object or an array.}
 
-\item{mat}{A compatible matrix.}
-
 \item{n}{The mode within each tensor draw.}
+
+\item{mat}{A compatible matrix.}
 }
 \value{
 An array: the result of the n-mode product.
@@ -37,5 +37,5 @@ This operation is also called the tensor times matrix product.
 \examples{
 a <- array(1:3, dim = c(3, 1, 1))
 x <- matrix(4:9, nrow = 2, ncol = 3)
-n_prod(a, x, 1)
+n_prod(a, 1, x)
 }

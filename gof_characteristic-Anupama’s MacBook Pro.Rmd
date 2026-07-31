@@ -1,0 +1,5586 @@
+---
+title: "Characteristic-function goodness-of-fit tests"
+output: pdf_document
+date: "2026-07-19"
+---
+
+```{r setup, message=FALSE, warning=FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4
+)
+
+library(tensormodels)
+library(tidyverse)
+```
+
+# Simple parameter-adjusted characteristic-function test
+
+The functions in this section implement the test in small, separate steps.
+The main quantities are:
+
+\[
+s_i(\widehat\theta)
+  = \nabla_\theta \log f(X_i;\widehat\theta),
+\qquad
+\widehat I
+  = \frac{1}{n}\sum_{i=1}^n s_i s_i^\top,
+\]
+
+and
+
+\[
+\widehat C
+  = \frac{1}{n}\sum_{i=1}^n
+      \{g(X_i)-\bar g\}\{s_i-\bar s\}^\top,
+\]
+
+where \(g(X_i)\) contains the cosine and sine characteristic-function
+features. The fitted-parameter correction removes the part of these features
+that is explained by the likelihood scores.
+
+The functions are intentionally written with ordinary loops and intermediate
+objects so that every step can be inspected.
+
+```{r simple-adjusted-characteristic-functions}
+# ---------------------------------------------------------------------------
+# 1. Create characteristic-function frequencies
+# ---------------------------------------------------------------------------
+
+make_cf_frequencies <- function(tensor_dim,
+                                n_directions = 5L,
+                                radii = c(0.5, 1, 2, 3),
+                                seed = NULL) {
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  p <- prod(tensor_dim)
+  number_frequencies <- n_directions * length(radii)
+  frequencies <- matrix(
+    0,
+    nrow = number_frequencies,
+    ncol = p
+  )
+
+  current_row <- 1L
+
+  for (radius in radii) {
+    for (j in seq_len(n_directions)) {
+      # Draw a direction and rescale it to have length one.
+      direction <- rnorm(p)
+      direction <- direction / sqrt(sum(direction^2))
+
+      # The radius determines how far from zero the frequency lies.
+      frequencies[current_row, ] <- radius * direction
+      current_row <- current_row + 1L
+    }
+  }
+
+  frequencies
+}
+
+
+# ---------------------------------------------------------------------------
+# 2. Standardize every tensor observation
+# ---------------------------------------------------------------------------
+
+standardize_cf_draws <- function(draws, fit) {
+  n <- n_draws(draws)
+  p <- prod(draw_shape(draws))
+  number_modes <- length(draw_shape(draws))
+
+  # W_d Sigma_d W_d' = I for each tensor mode.
+  whitening <- vector("list", number_modes)
+
+  for (mode in seq_len(number_modes)) {
+    sigma <- as.matrix(fit$sigmas[[mode]])
+    sigma <- (sigma + t(sigma)) / 2
+    whitening[[mode]] <- solve(t(chol(sigma)))
+  }
+
+  standardized <- matrix(0, nrow = n, ncol = p)
+
+  for (i in seq_len(n)) {
+    current <- pull_draw(draws, i) - fit$mu
+
+    for (mode in seq_len(number_modes)) {
+      current <- n_prod(current, mode, whitening[[mode]])
+    }
+
+    standardized[i, ] <- as.numeric(unclass(current))
+  }
+
+  standardized
+}
+
+
+# ---------------------------------------------------------------------------
+# 3. Evaluate the theoretical CF of the standardized fitted model
+# ---------------------------------------------------------------------------
+
+theoretical_standardized_cf <- function(
+    frequencies,
+    fit,
+    model = c(
+      "normal",
+      "skewt",
+      "vargamma",
+      "invgauss",
+      "genhyper"
+    )) {
+
+  model <- match.arg(model)
+  frequencies <- as.matrix(frequencies)
+
+  # q_j = ||t_j||^2 for the standardized observations.
+  q <- rowSums(frequencies^2)
+
+  if (model == "normal") {
+    return(as.complex(exp(-q / 2)))
+  }
+
+  # The skew tensor must be transformed by the same whitening matrices used
+  # for the observations.
+  whitened_skew <- fit$skew
+
+  for (mode in seq_along(fit$sigmas)) {
+    sigma <- as.matrix(fit$sigmas[[mode]])
+    sigma <- (sigma + t(sigma)) / 2
+    whitening <- solve(t(chol(sigma)))
+    whitened_skew <- n_prod(whitened_skew, mode, whitening)
+  }
+
+  whitened_skew <- as.numeric(whitened_skew)
+  skew_projection <- drop(frequencies %*% whitened_skew)
+
+  # All four skewed models have the standardized representation
+  #
+  #     Z = W * skew + sqrt(W) * epsilon.
+  #
+  # Their CF is the Laplace transform of W evaluated at this complex value.
+  s <- q / 2 - 1i * skew_projection
+
+  if (model == "skewt") {
+    shape <- fit$nu / 2
+    rate <- fit$nu / 2
+    answer <- complex(length(s))
+    at_zero <- Mod(s) < sqrt(.Machine$double.eps)
+    answer[at_zero] <- 1 + 0i
+
+    if (any(!at_zero)) {
+      current_s <- s[!at_zero]
+      argument <- 2 * sqrt(rate * current_s)
+
+      # BesselK(..., expon.scaled = TRUE) returns exp(argument) K(argument).
+      log_bessel <- log(Bessel::BesselK(
+        argument,
+        nu = shape,
+        expon.scaled = TRUE
+      )) - argument
+
+      answer[!at_zero] <- exp(
+        log(2) +
+          (shape / 2) * (log(rate) + log(current_s)) -
+          lgamma(shape) +
+          log_bessel
+      )
+    }
+
+    return(answer)
+  }
+
+  if (model == "vargamma") {
+    return((fit$gamma / (fit$gamma + s))^fit$gamma)
+  }
+
+  if (model == "invgauss") {
+    return(exp(
+      fit$kappa *
+        (1 - sqrt(1 + 2 * s / fit$kappa^2))
+    ))
+  }
+
+  # Generalized-hyperbolic mixing distribution.
+  shifted_psi <- fit$omega + 2 * s
+  argument <- sqrt(fit$omega * shifted_psi)
+
+  log_numerator_bessel <- log(Bessel::BesselK(
+    argument,
+    nu = fit$lambda,
+    expon.scaled = TRUE
+  )) - argument
+
+  log_denominator_bessel <- log(Bessel::BesselK(
+    fit$omega,
+    nu = fit$lambda,
+    expon.scaled = TRUE
+  )) - fit$omega
+
+  exp(
+    (fit$lambda / 2) *
+      (log(fit$omega) - log(shifted_psi)) +
+      log_numerator_bessel -
+      log_denominator_bessel
+  )
+}
+
+
+# ---------------------------------------------------------------------------
+# 4. List every free parameter direction
+# ---------------------------------------------------------------------------
+
+make_score_directions <- function(
+    fit,
+    model,
+    tensor_dim,
+    restrict = NULL) {
+
+  p <- prod(tensor_dim)
+  number_modes <- length(tensor_dim)
+  directions <- list()
+
+  # There is one location parameter for every entry of the mean tensor.
+  for (j in seq_len(p)) {
+    directions[[length(directions) + 1L]] <- list(
+      type = "mu",
+      index = j,
+      name = paste0("mu[", j, "]"),
+      scale = max(1, abs(as.numeric(fit$mu)[j]))
+    )
+  }
+
+  # Every non-normal model has one skew parameter per tensor entry.
+  if (model != "normal") {
+    for (j in seq_len(p)) {
+      directions[[length(directions) + 1L]] <- list(
+        type = "skew",
+        index = j,
+        name = paste0("skew[", j, "]"),
+        scale = max(1, abs(as.numeric(fit$skew)[j]))
+      )
+    }
+  }
+
+  # A restricted normal covariance factor is fixed and has no score direction.
+  fixed_modes <- integer(0)
+
+  if (model == "normal" && length(restrict)) {
+    fixed_modes <- as.integer(restrict)
+  }
+
+  for (mode in seq_len(number_modes)) {
+    if (mode %in% fixed_modes) {
+      next
+    }
+
+    mode_size <- tensor_dim[mode]
+    sigma <- as.matrix(fit$sigmas[[mode]])
+    sigma_scale <- max(1, sqrt(mean(sigma^2)))
+
+    if (mode < number_modes) {
+      # The package fixes the trace of the first D - 1 covariance factors.
+      # E_jj - E_pp changes two diagonal values but leaves the trace unchanged.
+      if (mode_size > 1L) {
+        for (row in seq_len(mode_size - 1L)) {
+          direction_matrix <- matrix(0, mode_size, mode_size)
+          direction_matrix[row, row] <- 1
+          direction_matrix[mode_size, mode_size] <- -1
+
+          directions[[length(directions) + 1L]] <- list(
+            type = "sigma",
+            mode = mode,
+            matrix = direction_matrix,
+            name = paste0(
+              "sigma", mode, "_diag_contrast_", row
+            ),
+            scale = sigma_scale
+          )
+        }
+      }
+    } else {
+      # The last covariance factor carries the unrestricted overall scale.
+      for (row in seq_len(mode_size)) {
+        direction_matrix <- matrix(0, mode_size, mode_size)
+        direction_matrix[row, row] <- 1
+
+        directions[[length(directions) + 1L]] <- list(
+          type = "sigma",
+          mode = mode,
+          matrix = direction_matrix,
+          name = paste0("sigma", mode, "_diag_", row),
+          scale = sigma_scale
+        )
+      }
+    }
+
+    # One symmetric direction for each free off-diagonal covariance entry.
+    if (mode_size > 1L) {
+      for (row in seq_len(mode_size - 1L)) {
+        for (column in seq.int(row + 1L, mode_size)) {
+          direction_matrix <- matrix(0, mode_size, mode_size)
+          direction_matrix[row, column] <- 1
+          direction_matrix[column, row] <- 1
+
+          directions[[length(directions) + 1L]] <- list(
+            type = "sigma",
+            mode = mode,
+            matrix = direction_matrix,
+            name = paste0(
+              "sigma", mode, "_offdiag_", row, "_", column
+            ),
+            scale = sigma_scale
+          )
+        }
+      }
+    }
+  }
+
+  # Positive mixing parameters are perturbed on the logarithmic scale.
+  if (model == "skewt") {
+    directions[[length(directions) + 1L]] <- list(
+      type = "log_nu",
+      name = "log(nu)",
+      scale = 1
+    )
+  }
+
+  if (model == "vargamma") {
+    directions[[length(directions) + 1L]] <- list(
+      type = "log_gamma",
+      name = "log(gamma)",
+      scale = 1
+    )
+  }
+
+  if (model == "invgauss") {
+    directions[[length(directions) + 1L]] <- list(
+      type = "log_kappa",
+      name = "log(kappa)",
+      scale = 1
+    )
+  }
+
+  if (model == "genhyper") {
+    directions[[length(directions) + 1L]] <- list(
+      type = "lambda",
+      name = "lambda",
+      scale = max(1, abs(fit$lambda))
+    )
+
+    directions[[length(directions) + 1L]] <- list(
+      type = "log_omega",
+      name = "log(omega)",
+      scale = 1
+    )
+  }
+
+  directions
+}
+
+
+# ---------------------------------------------------------------------------
+# 5. Move the fitted model in one parameter direction
+# ---------------------------------------------------------------------------
+
+perturb_fit_in_direction <- function(
+    fit,
+    direction,
+    amount,
+    tensor_dim) {
+
+  candidate <- fit
+
+  if (direction$type == "mu") {
+    value <- as.numeric(candidate$mu)
+    value[direction$index] <- value[direction$index] + amount
+    candidate$mu <- array(value, dim = tensor_dim)
+  }
+
+  if (direction$type == "skew") {
+    value <- as.numeric(candidate$skew)
+    value[direction$index] <- value[direction$index] + amount
+    candidate$skew <- array(value, dim = tensor_dim)
+  }
+
+  if (direction$type == "sigma") {
+    mode <- direction$mode
+    candidate$sigmas[[mode]] <-
+      candidate$sigmas[[mode]] +
+      amount * direction$matrix
+
+    candidate$sigmas[[mode]] <-
+      (candidate$sigmas[[mode]] +
+         t(candidate$sigmas[[mode]])) / 2
+  }
+
+  if (direction$type == "log_nu") {
+    candidate$nu <- fit$nu * exp(amount)
+  }
+
+  if (direction$type == "log_gamma") {
+    candidate$gamma <- fit$gamma * exp(amount)
+  }
+
+  if (direction$type == "log_kappa") {
+    candidate$kappa <- fit$kappa * exp(amount)
+  }
+
+  if (direction$type == "lambda") {
+    candidate$lambda <- fit$lambda + amount
+  }
+
+  if (direction$type == "log_omega") {
+    candidate$omega <- fit$omega * exp(amount)
+  }
+
+  candidate
+}
+
+
+# ---------------------------------------------------------------------------
+# 6. Evaluate one log likelihood per observation
+# ---------------------------------------------------------------------------
+
+model_log_density <- function(draws, fit, model) {
+  switch(
+    model,
+    normal = dtnorm(
+      draws,
+      mu = fit$mu,
+      sigmas = fit$sigmas,
+      log = TRUE
+    ),
+    skewt = dtskewt(
+      draws,
+      mu = fit$mu,
+      skew = fit$skew,
+      sigmas = fit$sigmas,
+      nu = fit$nu,
+      log = TRUE
+    ),
+    vargamma = dtvargamma(
+      draws,
+      mu = fit$mu,
+      skew = fit$skew,
+      sigmas = fit$sigmas,
+      scale = fit$gamma,
+      log = TRUE
+    ),
+    invgauss = dtinvgauss(
+      draws,
+      mu = fit$mu,
+      skew = fit$skew,
+      sigmas = fit$sigmas,
+      kappa = fit$kappa,
+      log = TRUE
+    ),
+    genhyper = dtgenhyper(
+      draws,
+      mu = fit$mu,
+      skew = fit$skew,
+      sigmas = fit$sigmas,
+      lambda = fit$lambda,
+      omega = fit$omega,
+      log = TRUE
+    )
+  )
+}
+
+
+# ---------------------------------------------------------------------------
+# 7. Estimate the likelihood score matrix
+# ---------------------------------------------------------------------------
+
+estimate_score_matrix <- function(
+    draws,
+    fit,
+    model,
+    restrict = NULL,
+    finite_difference = 1e-5) {
+
+  n <- n_draws(draws)
+  tensor_dim <- draw_shape(draws)
+
+  directions <- make_score_directions(
+    fit = fit,
+    model = model,
+    tensor_dim = tensor_dim,
+    restrict = restrict
+  )
+
+  number_parameters <- length(directions)
+  scores <- matrix(
+    NA_real_,
+    nrow = n,
+    ncol = number_parameters
+  )
+  parameter_names <- character(number_parameters)
+
+  for (parameter in seq_len(number_parameters)) {
+    direction <- directions[[parameter]]
+    parameter_names[parameter] <- direction$name
+
+    # Central finite difference:
+    #
+    #   score = {log f(theta + h) - log f(theta - h)} / (2h).
+    step <- finite_difference * direction$scale
+    derivative_found <- FALSE
+
+    # A covariance factor may be close to its positive-definite boundary.
+    # If necessary, make the numerical step smaller.
+    for (attempt in seq_len(12L)) {
+      fit_plus <- perturb_fit_in_direction(
+        fit,
+        direction,
+        amount = step,
+        tensor_dim = tensor_dim
+      )
+
+      fit_minus <- perturb_fit_in_direction(
+        fit,
+        direction,
+        amount = -step,
+        tensor_dim = tensor_dim
+      )
+
+      covariance_ok <- TRUE
+
+      if (direction$type == "sigma") {
+        mode <- direction$mode
+
+        plus_cholesky <- try(
+          chol(fit_plus$sigmas[[mode]]),
+          silent = TRUE
+        )
+        minus_cholesky <- try(
+          chol(fit_minus$sigmas[[mode]]),
+          silent = TRUE
+        )
+
+        covariance_ok <-
+          !inherits(plus_cholesky, "try-error") &&
+          !inherits(minus_cholesky, "try-error")
+      }
+
+      if (covariance_ok) {
+        log_plus <- tryCatch(
+          model_log_density(draws, fit_plus, model),
+          error = function(error) rep(NA_real_, n)
+        )
+
+        log_minus <- tryCatch(
+          model_log_density(draws, fit_minus, model),
+          error = function(error) rep(NA_real_, n)
+        )
+
+        if (all(is.finite(log_plus)) && all(is.finite(log_minus))) {
+          scores[, parameter] <-
+            (log_plus - log_minus) / (2 * step)
+
+          derivative_found <- TRUE
+          break
+        }
+      }
+
+      step <- step / 2
+    }
+
+    if (!derivative_found) {
+      stop(
+        "Could not estimate the score for ",
+        direction$name,
+        ".",
+        call. = FALSE
+      )
+    }
+  }
+
+  colnames(scores) <- parameter_names
+  scores
+}
+
+
+# ---------------------------------------------------------------------------
+# 8. Estimate the CF gradient term
+# ---------------------------------------------------------------------------
+
+estimate_cf_gradient <- function(feature_matrix, score_matrix) {
+  n <- nrow(feature_matrix)
+
+  centered_features <- sweep(
+    feature_matrix,
+    2,
+    colMeans(feature_matrix),
+    "-"
+  )
+
+  centered_scores <- sweep(
+    score_matrix,
+    2,
+    colMeans(score_matrix),
+    "-"
+  )
+
+  # This is Cov{g(X), score(X)}. Under the MLE information identity it
+  # supplies the gradient term in the fitted-parameter CF correction.
+  crossprod(centered_features, centered_scores) / n
+}
+
+
+# ---------------------------------------------------------------------------
+# 9. Compute the fitted-parameter corrected covariance matrix
+# ---------------------------------------------------------------------------
+
+compute_corrected_cf_covariance <- function(
+    feature_matrix,
+    score_matrix,
+    information_tolerance = 1e-8) {
+
+  n <- nrow(feature_matrix)
+
+  centered_features <- sweep(
+    feature_matrix,
+    2,
+    colMeans(feature_matrix),
+    "-"
+  )
+
+  centered_scores <- sweep(
+    score_matrix,
+    2,
+    colMeans(score_matrix),
+    "-"
+  )
+
+  # Outer-product estimate of Fisher information.
+  information <- crossprod(centered_scores) / n
+  information <- (information + t(information)) / 2
+
+  # Use only identifiable information directions.
+  information_eigen <- eigen(
+    information,
+    symmetric = TRUE
+  )
+
+  cutoff <- max(information_eigen$values, 0) *
+    information_tolerance
+
+  keep <- information_eigen$values > cutoff
+
+  if (!any(keep)) {
+    stop(
+      "The estimated information matrix has rank zero.",
+      call. = FALSE
+    )
+  }
+
+  kept_vectors <- information_eigen$vectors[
+    , keep, drop = FALSE
+  ]
+
+  inverse_information <- kept_vectors %*%
+    diag(
+      1 / information_eigen$values[keep],
+      nrow = sum(keep)
+    ) %*%
+    t(kept_vectors)
+
+  cf_gradient <- estimate_cf_gradient(
+    feature_matrix,
+    score_matrix
+  )
+
+  # Remove the portion of every CF feature explained by MLE estimation.
+  fitted_parameter_part <- centered_scores %*%
+    inverse_information %*%
+    t(cf_gradient)
+
+  adjusted_features <-
+    centered_features - fitted_parameter_part
+
+  corrected_covariance <-
+    crossprod(adjusted_features) / n
+
+  corrected_covariance <-
+    (corrected_covariance + t(corrected_covariance)) / 2
+
+  list(
+    covariance = corrected_covariance,
+    information = information,
+    inverse_information = inverse_information,
+    information_rank = sum(keep),
+    cf_gradient = cf_gradient,
+    adjusted_features = adjusted_features
+  )
+}
+
+
+# ---------------------------------------------------------------------------
+# 10. Perform the complete characteristic-function GOF test
+# ---------------------------------------------------------------------------
+
+gof_characteristic_adjusted <- function(
+    draws,
+    model = c(
+      "normal",
+      "skewt",
+      "vargamma",
+      "invgauss",
+      "genhyper"
+    ),
+    frequencies = NULL,
+    n_directions = 5L,
+    radii = c(0.5, 1, 2, 3),
+    n_mixture = 100000L,
+    max_iter = 1000L,
+    tol = 1e-6,
+    quiet = TRUE,
+    restrict = NULL,
+    finite_difference = 1e-5,
+    information_tolerance = 1e-8,
+    eigen_tolerance = 1e-10,
+    seed = NULL) {
+
+  model <- match.arg(model)
+  data_name <- deparse(substitute(draws))
+
+  if (!inherits(draws, "tensor")) {
+    stop("`draws` must be a tensor object.", call. = FALSE)
+  }
+
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  # Fit the model once. No bootstrap samples are fitted.
+  fit <- tensor_mle(
+    draws,
+    model = model,
+    max_iter = max_iter,
+    tol = tol,
+    quiet = quiet,
+    restrict = restrict
+  )
+
+  if (is.null(frequencies)) {
+    frequencies <- make_cf_frequencies(
+      tensor_dim = draw_shape(draws),
+      n_directions = n_directions,
+      radii = radii
+    )
+  } else {
+    frequencies <- as.matrix(frequencies)
+  }
+
+  n <- n_draws(draws)
+  number_frequencies <- nrow(frequencies)
+
+  # Each row contains one standardized tensor observation.
+  standardized <- standardize_cf_draws(draws, fit)
+
+  # The phase matrix has one row per observation and one column per frequency.
+  phases <- standardized %*% t(frequencies)
+
+  # These are the real and imaginary components of exp(i t'X).
+  feature_matrix <- cbind(
+    cos(phases),
+    sin(phases)
+  )
+
+  empirical_cf <- colMeans(exp(1i * phases))
+
+  theoretical_cf <- theoretical_standardized_cf(
+    frequencies = frequencies,
+    fit = fit,
+    model = model
+  )
+
+  cf_difference <- empirical_cf - theoretical_cf
+
+  test_statistic <- n * mean(
+    Mod(cf_difference)^2
+  )
+
+  # Estimate one likelihood-score column for every free fitted parameter.
+  score_matrix <- estimate_score_matrix(
+    draws = draws,
+    fit = fit,
+    model = model,
+    restrict = restrict,
+    finite_difference = finite_difference
+  )
+
+  correction <- compute_corrected_cf_covariance(
+    feature_matrix = feature_matrix,
+    score_matrix = score_matrix,
+    information_tolerance = information_tolerance
+  )
+
+  # The statistic averages over frequencies, so divide the covariance by L.
+  all_eigenvalues <- eigen(
+    correction$covariance / number_frequencies,
+    symmetric = TRUE,
+    only.values = TRUE
+  )$values
+
+  eigenvalue_cutoff <- max(all_eigenvalues, 0) *
+    eigen_tolerance
+
+  eigenvalues <- all_eigenvalues[
+    all_eigenvalues > eigenvalue_cutoff
+  ]
+
+  if (!length(eigenvalues)) {
+    stop(
+      "The corrected covariance matrix has rank zero.",
+      call. = FALSE
+    )
+  }
+
+  # Simulate the limiting weighted chi-squared distribution.
+  mixture_statistics <- numeric(n_mixture)
+
+  for (j in seq_along(eigenvalues)) {
+    mixture_statistics <- mixture_statistics +
+      eigenvalues[j] * rchisq(n_mixture, df = 1)
+  }
+
+  p_value <- (
+    1 + sum(mixture_statistics >= test_statistic)
+  ) / (
+    n_mixture + 1
+  )
+
+  structure(
+    list(
+      statistic = c(T = test_statistic),
+      p.value = p_value,
+      method = paste(
+        "Parameter-adjusted characteristic-function test for",
+        model
+      ),
+      data.name = data_name,
+      model = model,
+      fit = fit,
+      frequencies = frequencies,
+      empirical_cf = empirical_cf,
+      theoretical_cf = theoretical_cf,
+      score_matrix = score_matrix,
+      cf_gradient = correction$cf_gradient,
+      information = correction$information,
+      information_rank = correction$information_rank,
+      corrected_covariance = correction$covariance,
+      eigenvalues = eigenvalues,
+      all_eigenvalues = all_eigenvalues,
+      mixture_statistics = mixture_statistics
+    ),
+    class = "htest"
+  )
+}
+```
+
+The complete test can now be called with:
+
+```{r simple-adjusted-characteristic-example, eval=FALSE}
+result <- gof_characteristic_adjusted(
+  draws = norm_draws,
+  model = "normal",
+  seed = 123
+)
+
+result$statistic
+result$p.value
+```
+
+
+We generate our tensor variate normal draws of interest. 
+```{r}
+mu_true <- tensor(data = 1:24, dim = c(2, 3, 4))
+
+s1 <- matrix(c(
+  1.0, 0.5,
+  0.5, 1.0
+), nrow = 2, byrow = TRUE)
+
+s2 <- matrix(c(
+  1.0, 0.4, 0.2,
+  0.4, 1.0, 0.3,
+  0.2, 0.3, 1.0
+), nrow = 3, byrow = TRUE)
+
+s3 <- matrix(c(
+  1.0, 0.3, 0.2, 0.1,
+  0.3, 1.0, 0.4, 0.2,
+  0.2, 0.4, 1.0, 0.3,
+  0.1, 0.2, 0.3, 1.0
+), nrow = 4, byrow = TRUE)
+
+sigmas_true <- list(s1, s2, s3)
+
+norm_draws <- rtnorm(1e3, mu_true, sigmas_true)
+
+mles <- tensor_mle(norm_draws, model = "normal")
+```
+
+
+```{r}
+freq <- make_reference_freq(c(2, 2))
+s <- freq[1]
+t <- freq[2]
+
+small <- rtnorm(100, mu = matrix(1:4, nrow = 2))
+
+mle_small <- tensor_mle(small, model = "normal")
+
+# 
+# cftnorm(s, mle_small$mu, mle_small$sigmas)
+# cftnorm(t, mle_small$mu, mle_small$sigmas)
+```
+
+The function below calculates the score matrix for a tensor variate normal of
+any shape. The \(2\times2\) model is used only for the example following the
+function. For identifiability, `tensor_mle()` fixes the trace of every
+covariance factor except the last one. The covariance perturbations below
+preserve those trace constraints.
+
+```{r tvn-score-information}
+# Calculate one score row per tensor draw for a fitted TVN model.
+#
+# Column j approximates the derivative of each draw's log density with
+# respect to one locally free fitted parameter. We use the finite difference
+#
+#   {log f(theta + step) - log f(theta - step)} / (2 * step).
+#
+# `restrict` optionally lists covariance modes that were fixed when fitting.
+score_matrix <- function(draws, fit, finite_difference = 1e-5, restrict = NULL) {
+  dims <- draw_shape(draws)
+  number_modes <- length(dims)
+  p <- prod(dims)
+  n <- n_draws(draws)
+
+  if (length(fit$sigmas) != number_modes) {
+    stop("The fitted covariance factors do not match the tensor shape.")
+  }
+
+  # Each entry records one valid direction in which a fitted parameter
+  # can be moved.
+  directions <- list()
+
+  for (j in seq_len(p)) { #store each mu value as a parameter
+    directions[[length(directions) + 1L]] <- list(
+      type = "mu",
+      index = j,
+      name = paste0("mu[", j, "]"),
+      scale = max(1, abs(as.numeric(fit$mu)[j]))
+    )
+  }
+
+  # Create the free symmetric directions for every covariance factor.
+  for (mode in seq_len(number_modes)) {
+    if (mode %in% restrict) {
+      next
+    }
+
+    mode_size <- dims[mode]
+    sigma_mode <- fit$sigmas[[mode]]
+    covariance_scale <- max(1, sqrt(mean(sigma_mode^2)))
+
+    if (mode < number_modes && mode_size > 1L) {
+      # The trace of this covariance is fixed. Increasing one diagonal
+      # entry while decreasing the last preserves the trace.
+      for (row in seq_len(mode_size - 1L)) {
+        direction_matrix <- matrix(0, mode_size, mode_size)
+        direction_matrix[row, row] <- 1
+        direction_matrix[mode_size, mode_size] <- -1
+
+        directions[[length(directions) + 1L]] <- list(
+          type = "sigma",
+          mode = mode,
+          matrix = direction_matrix,
+          name = paste0("sigma", mode, "_diag_", row),
+          scale = covariance_scale
+        )
+      }
+    } else {
+      # The last covariance factor is unrestricted.
+      for (row in seq_len(mode_size)) {
+        direction_matrix <- matrix(0, mode_size, mode_size)
+        direction_matrix[row, row] <- 1
+
+        directions[[length(directions) + 1L]] <- list(
+          type = "sigma",
+          mode = mode,
+          matrix = direction_matrix,
+          name = paste0("sigma", mode, "_diag_", row),
+          scale = covariance_scale
+        )
+      }
+    }
+
+    # A symmetric off-diagonal pair is one free parameter.
+    if (mode_size > 1L) {
+      for (row in seq_len(mode_size - 1L)) {
+        for (column in seq.int(row + 1L, mode_size)) {
+          direction_matrix <- matrix(0, mode_size, mode_size)
+          direction_matrix[row, column] <- 1
+          direction_matrix[column, row] <- 1
+
+          directions[[length(directions) + 1L]] <- list(
+            type = "sigma",
+            mode = mode,
+            matrix = direction_matrix,
+            name = paste0(
+              "sigma", mode, "_offdiag_", row, "_", column
+            ),
+            scale = covariance_scale
+          )
+        }
+      }
+    }
+  }
+
+  number_parameters <- length(directions)
+  scores <- matrix(NA_real_, nrow = n, ncol = number_parameters)
+
+  # Move the fitted model a small distance in one parameter direction.
+  perturb_fit <- function(direction, amount) {
+    candidate <- fit
+
+    if (direction$type == "mu") {
+      candidate_mu <- as.numeric(candidate$mu)
+      candidate_mu[direction$index] <-
+        candidate_mu[direction$index] + amount
+      candidate$mu <- array(candidate_mu, dim = dims)
+    }
+
+    if (direction$type == "sigma") {
+      mode <- direction$mode
+      candidate$sigmas[[mode]] <-
+        candidate$sigmas[[mode]] + amount * direction$matrix
+    }
+
+    candidate
+  }
+
+  for (j in seq_len(number_parameters)) {
+    direction <- directions[[j]]
+    step <- finite_difference * direction$scale
+    derivative_found <- FALSE
+
+    # A covariance estimate might be close to the positive-definite
+    # boundary. If necessary, reduce the finite-difference step.
+    for (attempt in seq_len(12L)) {
+      fit_plus <- perturb_fit(direction, step)
+      fit_minus <- perturb_fit(direction, -step)
+
+      covariance_ok <- TRUE
+
+      if (direction$type == "sigma") {
+        mode <- direction$mode
+        covariance_ok <-
+          !inherits(
+            try(chol(fit_plus$sigmas[[mode]]), silent = TRUE),
+            "try-error"
+          ) &&
+          !inherits(
+            try(chol(fit_minus$sigmas[[mode]]), silent = TRUE),
+            "try-error"
+          )
+      }
+
+      if (covariance_ok) {
+        log_density_plus <- tryCatch(
+          dtnorm(
+            draws,
+            mu = fit_plus$mu,
+            sigmas = fit_plus$sigmas,
+            log = TRUE
+          ),
+          error = function(error) rep(NA_real_, n)
+        )
+
+        log_density_minus <- tryCatch(
+          dtnorm(
+            draws,
+            mu = fit_minus$mu,
+            sigmas = fit_minus$sigmas,
+            log = TRUE
+          ),
+          error = function(error) rep(NA_real_, n)
+        )
+
+        if (all(is.finite(log_density_plus)) &&
+            all(is.finite(log_density_minus))) {
+          scores[, j] <- (
+            log_density_plus - log_density_minus
+          ) / (2 * step)
+
+          derivative_found <- TRUE
+          break
+        }
+      }
+
+      step <- step / 2
+    }
+
+    if (!derivative_found) {
+      stop(
+        "Could not calculate the score direction ",
+        direction$name,
+        "."
+      )
+    }
+  }
+
+  parameter_names <- character(number_parameters)
+
+  for (j in seq_len(number_parameters)) {
+    parameter_names[j] <- directions[[j]]$name
+  }
+
+  colnames(scores) <- parameter_names
+
+  scores
+}
+
+# Demonstration: 100 draws from a 2 x 2 TVN.
+tvn_scores <- score_matrix(
+  draws = small,
+  fit = mle_small
+)
+
+# At the exact MLE, the average score is zero. Centering removes small
+# deviations caused by optimizer and finite-difference tolerances.
+centered_tvn_scores <- sweep(
+  tvn_scores,
+  MARGIN = 2,
+  STATS = colMeans(tvn_scores),
+  FUN = "-"
+)
+
+# The average outer product of the individual scores estimates the
+# per-observation Fisher information matrix.
+I_hat <- crossprod(centered_tvn_scores) / n_draws(small)
+
+round(I_hat, 3)
+eigen(I_hat, symmetric = TRUE, only.values = TRUE)$values
+
+# Estimate the gradient of the CF at frequency s.
+#
+# For each fitted parameter, average
+#
+#   observed CF value at s * score for that parameter.
+#
+# The result has one complex derivative for every column of tvn_scores.
+n <- n_draws(small)
+p <- prod(draw_shape(small))
+
+small_matrix <- matrix(
+  unclass(small),
+  nrow = n,
+  ncol = p
+)
+
+s_vector <- as.numeric(s)
+s_angles <- as.vector(small_matrix %*% s_vector)
+s_cf_values <- exp(1i * s_angles)
+s_cf_values <- s_cf_values - mean(s_cf_values)
+
+gradient_s <- complex(length = ncol(centered_tvn_scores))
+
+for (j in seq_len(ncol(centered_tvn_scores))) {
+  gradient_s[j] <- mean(
+    s_cf_values * centered_tvn_scores[, j]
+  )
+}
+
+names(gradient_s) <- colnames(centered_tvn_scores)
+gradient_s
+
+# Repeat the same calculation at frequency t.
+t_vector <- as.numeric(t)
+t_angles <- as.vector(small_matrix %*% t_vector)
+t_cf_values <- exp(1i * t_angles)
+t_cf_values <- t_cf_values - mean(t_cf_values)
+
+gradient_t <- complex(length = ncol(centered_tvn_scores))
+
+for (j in seq_len(ncol(centered_tvn_scores))) {
+  gradient_t[j] <- mean(
+    t_cf_values * centered_tvn_scores[, j]
+  )
+}
+
+names(gradient_t) <- colnames(centered_tvn_scores)
+gradient_t
+
+# This is the fitted-parameter correction for the covariance between the
+# CF differences at s and t.
+mle_correction_st <- sum(
+  gradient_s * solve(I_hat, Conj(gradient_t))
+)
+
+```
+
+
+```{r}
+
+first <- cftnorm(s-t, mle_small$mu, mle_small$sigmas)
+second <- cftnorm(s, mle_small$mu, mle_small$sigmas) *
+          Conj(cftnorm(t, mle_small$mu, mle_small$sigmas))
+third <- t(gradient_s) %*% solve(I_hat) %*% Conj(gradient_t)
+
+first - second - third
+
+cftnorm(s, mle_small$mu, mle_small$sigmas) * solve(I_hat) * cftnorm(t, mle_small$mu, mle_small$sigmas)
+```
+
+The function below creates frequencies in a standardized reference space. It
+first generates random directions with Frobenius norm one, and then evaluates
+each direction at several distances from zero. The default radii cover regions
+where the standardized normal characteristic function is large, intermediate,
+small, and nearly zero.
+
+```{r}
+make_reference_freq <- function(
+    tensor_dim,
+    n_directions = 50,
+    radii = c(0.5, 1, 2, 3),
+    seed = 1) {
+
+  # Use a seed so that the same inputs produce the same frequencies.
+  set.seed(seed)
+
+  # p is the number of entries in one tensor.
+  p <- prod(tensor_dim)
+
+  # Generate one random direction in R^p for each row.
+  direction_matrix <- matrix(
+    rnorm(n_directions * p),
+    nrow = n_directions,
+    ncol = p
+  )
+
+  # Scale every direction so that its Frobenius norm is one.
+  # After normalization, the direction controls where we look,
+  # while the radius below controls how far from zero we look.
+  for (j in 1:n_directions) {
+
+    direction_length <- sqrt(
+      sum(direction_matrix[j, ]^2)
+    )
+
+    direction_matrix[j, ] <-
+      direction_matrix[j, ] / direction_length
+  }
+
+  # We use every direction once at every requested radius.
+  number_frequencies <-
+    n_directions * length(radii)
+
+  frequency_matrix <- matrix(
+    0,
+    nrow = number_frequencies,
+    ncol = p
+  )
+
+  current_row <- 1
+
+  for (radius in radii) {
+    for (j in 1:n_directions) {
+
+      frequency_matrix[current_row, ] <-
+        radius * direction_matrix[j, ]
+
+      current_row <- current_row + 1
+    }
+  }
+
+  tensor( #each row is a tensor freq
+    data = c(t(frequency_matrix)),
+    dim = tensor_dim,
+    n = number_frequencies
+  )
+}
+```
+
+
+First, we define the empirical characteristic function. For any tensor object with independent, identically distributed draws, we can compute the empirical characteristic function. Given a frequency tensor $\mathcal{T}$, we want to compute $E[\exp \{i \text{vec}(\tensor{T})' \text{vec}(\tensor{X})\}]$.
+
+```{r}
+emp_cf <- function(draws, frequencies) {
+  n <- n_draws(draws)
+  L <- n_draws(frequencies)
+
+  p <- prod(draw_shape(draws))
+
+  draw_matrix <- matrix(
+    unclass(draws),
+    nrow = n,
+    ncol = p
+  )
+
+  frequency_matrix <- matrix(
+    unclass(frequencies),
+    nrow = L,
+    ncol = p
+  )
+
+  phases <- draw_matrix %*% t(frequency_matrix)
+
+  colMeans(exp(1i * phases))
+}
+```
+
+
+Next, we define the theoretical characteristic function. For the tensor variate normal, this is $E[\exp \{i \text{vec}(\tensor{T})' \text{vec}(\tensor{X})\}] = \exp\left\{i \text{vec}(\tensor{T})' \tensor{M} - \frac{1}{2} \text{vec}(\tensor{T})' \bigotimes_{d=1}^{D} \Sigma_{d} \text{vec}(\tensor{T}) \right\}$.
+```{r}
+cftnorm <- function(freq, mu, sigmas) {
+  num_freq <- n_draws(freq)
+  
+  res <- complex(num_freq)
+  
+  for(i in 1:num_freq) {
+    curr_freq <- pull_draw(freq, i)
+    
+    second_term <- curr_freq
+  
+    for(d in seq_along(sigmas)) {
+      second_term <- n_prod(second_term, d, sigmas[[d]])
+    }
+  
+    first_term <- 1i * sum(curr_freq * mu)
+  
+    res[i] <- exp(first_term - 1/2 * sum(curr_freq * second_term))
+  }
+  res
+}
+```
+
+
+Now we evaluate the empirical and theoretical characteristic function at a variety of frequencies. 
+```{r}
+freqs <- make_reference_freq(tensor_dim = c(2, 3, 4))
+
+distances <-
+  tibble(freqs,
+         emp = emp_cf(norm_draws, freqs),
+         theory = cftnorm(freqs, mles$mu, mles$sigmas),
+         dist = Mod(emp - theory)^2) 
+
+T_stat <- n_draws(norm_draws) * mean(distances$dist)
+```
+
+
+Now we need to compute the null distribution to see if this test statistic is extreme.
+```{r}
+compute_eigen <- function(freqs, mu, sigmas) {
+  L <- n_draws(freqs)
+  
+  # Theoretical CF at the original frequencies
+  phi <- cftnorm(
+    freqs,
+    mu = mu,
+    sigmas = sigmas
+  )
+  
+  # Theoretical means of the cosine/sine features
+  feature_mean <- c(
+    Re(phi),
+    Im(phi)
+  )
+  
+  # Covariance matrix for the 2L cosine/sine features
+  V <- matrix(
+    0,
+    nrow = 2 * L,
+    ncol = 2 * L
+  )
+  
+  for (j in seq_len(L)) {
+    for (k in seq_len(L)) {
+  
+      freq_j <- pull_draw(freqs, j)
+      freq_k <- pull_draw(freqs, k)
+  
+      freq_plus <- freq_j + freq_k
+      freq_minus <- freq_j - freq_k
+  
+      phi_plus <- cftnorm(
+        freq_plus,
+        mu = mu,
+        sigmas = sigmas
+      )
+  
+      phi_minus <- cftnorm(
+        freq_minus,
+        mu = mu,
+        sigmas = sigmas
+      )
+  
+      # E[cos_j cos_k]
+      V[j, k] <- Re(phi_minus + phi_plus) / 2
+  
+      # E[sin_j sin_k]
+      V[L + j, L + k] <- Re(phi_minus - phi_plus) / 2
+  
+      # E[cos_j sin_k]
+      V[j, L + k] <- Im(phi_plus + Conj(phi_minus)) / 2
+  
+      # Symmetrize the cross block
+      V[L + k, j] <- V[j, L + k]
+    }
+  }
+  
+  # Convert second moments into covariances
+  V <- V - tcrossprod(feature_mean)
+  
+  # Remove small numerical asymmetry
+  V <- (V + t(V)) / 2
+  
+  eigen(V / L, symmetric = TRUE, only.values = TRUE)$values
+}
+
+eigen_est <- compute_eigen(freqs, mu = mles$mu, sigmas = mles$sigmas)
+eigen_real <- compute_eigen(freqs, mu = mu_true, sigmas = sigmas_true)
+
+tibble(est = eigen_est,
+       real = eigen_real) |> 
+  pivot_longer(cols = everything()) |> 
+  ggplot() +
+  geom_point(aes(x = value, y = name, color = name)) +
+  theme_minimal()
+
+(eigen_est - eigen_real)^2 |> mean()
+```
+
+
+```{r}
+gof_characteristic <- function(draws, model) {
+  mles <- tensor_mle(draws, model = model) #compute MLEs
+  
+  freqs <- make_reference_freq(tensor_dim = dim(draws)) #generate freqs 
+
+  distances <- #compute the 
+    tibble(freqs,
+           emp = emp_cf(draws, freqs),
+           theory = cftnorm(freqs, mles$mu, mles$sigmas),
+           dist = Mod(emp - theory)^2) 
+  
+  T_stat <- n_draws(draws) * mean(distances$dist) #test statistic
+  
+  #estimate the eigenvalues
+  eigen_est <- compute_eigen(freqs, mu = mles$mu, sigmas = mles$sigmas)
+  
+  n_mixture <- 1e5
+  
+  mixture_stats <- numeric(n_mixture)
+  
+  for (j in seq_along(eigen_est)) { #generate distribution
+    mixture_stats <- mixture_stats + eigen_est[j] * rchisq(n_mixture, df = 1)
+  }
+  
+  p_value <- mean(mixture_stats >= T_stat)
+  
+  p_value
+}
+
+gof_characteristic_param <- function(draws, mu = mu, sigmas = sigmas) {
+  freqs <- make_reference_freq(tensor_dim = dim(draws))
+
+  distances <-
+    tibble(freqs,
+           emp = emp_cf(draws, freqs),
+           theory = cftnorm(freqs, mu, sigmas),
+           dist = Mod(emp - theory)^2) 
+  
+  T_stat <- n_draws(draws) * mean(distances$dist)
+  
+  eigen_est <- compute_eigen(freqs, mu = mu, sigmas = sigmas)
+  
+  n_mixture <- 1e5
+  
+  mixture_stats <- numeric(n_mixture)
+  
+  for (j in seq_along(eigen_est)) {
+    mixture_stats <- mixture_stats + eigen_est[j] * rchisq(n_mixture, df = 1)
+  }
+  
+  p_value <- mean(mixture_stats >= T_stat)
+  
+  p_value
+}
+```
+
+
+```{r}
+#set.seed(123)
+
+all_p_est <- vector("numeric", 1000)
+
+s1 <- matrix(rnorm(4), nrow = 2) |> crossprod()
+s2 <- matrix(rnorm(9), nrow = 3) |> crossprod()
+s3 <- matrix(rnorm(16), nrow = 4) |> crossprod()
+
+mu <- tensor(rnorm(24), dim = c(2, 3, 4))
+  
+sim_charac <- function(i) {
+  rand_draws <- rtnorm(n = 1e3, mu = mu, sigmas = list(s1, s2, s3))
+  # rand_draws <- rtskewt(n = 1e3, mu = mu, sigmas = list(s1, s2, s3),
+  #                       skew = array(2 * rnorm(24), dim = c(2, 3, 4)),
+  #                       nu = 20)
+  
+    
+  tibble(true_mod = "skewt", fit_mod = "normal", 
+         p = gof_characteristic(rand_draws, model = "normal"),
+         iter = i)
+}
+
+```
+
+
+```{r}
+plan(multisession, workers = 4)
+
+tic() #1502 secs for 400 
+res <- future_map_dfr(1:400, sim_charac, .progress = TRUE,
+                      .options = furrr_options(seed = TRUE))
+toc()
+```
+
+
+# Adjust for Parameters
+```{r}
+# Compute eigenvalues after accounting for estimated parameters from same sample as goodness of fit test.
+# V_adjusted = V - C I^{-1} C'
+#
+# V is the known-parameter covariance of the cosine/sine features, I is the per-observation information matrix, and C is their covariance with the score.
+#
+# Scores are calculated by finite differences of this package's own density
+
+compute_eigen_adjusted <- 
+  function(draws, freqs, 
+           model = c("normal", "skewt", "vargamma", "invgauss", "genhyper"),
+           fit = NULL, max_iter = 1000L, tol = 1e-6, quiet = TRUE, 
+           restrict = NULL, finite_difference = 1e-5, information_tolerance = 1e-8,
+           eigen_tolerance = 1e-10, return_details = FALSE) {
+  model <- match.arg(model)
+
+  if (!inherits(draws, "tensor")) {
+    stop("`draws` must be a tensor object.", call. = FALSE)
+  }
+
+  n <- n_draws(draws) #get number of draws and sizes
+  dims <- draw_shape(draws)
+  number_modes <- length(dims)
+  p <- prod(dims)
+
+  if (n < 2L) {
+    stop("At least two tensor draws are required.", call. = FALSE)
+  }
+
+  # Accept either a tensor containing frequency tensors or an ordinary matrix
+  # containing one vectorized frequency in each row.
+  if (inherits(freqs, "tensor")) {
+    if (!identical(as.integer(draw_shape(freqs)), as.integer(dims))) {
+      stop("The frequency tensors must have the same shape as the draws.",
+           call. = FALSE)
+    }
+
+    frequencies <- matrix(
+      unclass(freqs),
+      nrow = n_draws(freqs),
+      ncol = p
+    )
+  } else {
+    frequencies <- as.matrix(freqs)
+  }
+
+  if (ncol(frequencies) != p || nrow(frequencies) < 1L ||
+      any(!is.finite(frequencies))) {
+    stop(
+      "`freqs` must contain finite frequencies with one row per frequency ",
+      "and ", p, " columns.",
+      call. = FALSE
+    )
+  }
+
+  if (length(finite_difference) != 1L ||
+      !is.finite(finite_difference) || finite_difference <= 0) {
+    stop("`finite_difference` must be one positive number.",
+         call. = FALSE)
+  }
+
+  if (length(information_tolerance) != 1L ||
+      !is.finite(information_tolerance) || information_tolerance <= 0) {
+    stop("`information_tolerance` must be one positive number.",
+         call. = FALSE)
+  }
+
+  if (length(eigen_tolerance) != 1L ||
+      !is.finite(eigen_tolerance) || eigen_tolerance <= 0) {
+    stop("`eigen_tolerance` must be one positive number.",
+         call. = FALSE)
+  }
+
+  if (is.null(fit)) {
+    fit <- tensor_mle(draws, model = model, max_iter = max_iter, 
+                      tol = tol, quiet = quiet, restrict = restrict)
+  }
+
+  needed <- switch( #required params for each model
+    model,
+    normal = c("mu", "sigmas"),
+    skewt = c("mu", "sigmas", "skew", "nu"),
+    vargamma = c("mu", "sigmas", "skew", "gamma"),
+    invgauss = c("mu", "sigmas", "skew", "kappa"),
+    genhyper = c("mu", "sigmas", "skew", "lambda", "omega")
+  )
+
+  missing_fit <- setdiff(needed, names(fit))
+  if (length(missing_fit)) {
+    stop(
+      "`fit` is missing: ", paste(missing_fit, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  #calculate the known-parameter covariance V using the theoretical CF
+  feature_covariance <- .gof_feature_covariance(
+    frequencies = frequencies,
+    model = model,
+    fit = fit
+  )
+  
+  #standardize draws
+  standardized <- .gof_standardize_draws(draws, fit)
+  phases <- standardized %*% t(frequencies) #mulyiply by freqs
+  
+  #compute observed cos and sin vals
+  feature_values <- cbind(cos(phases), sin(phases)) 
+
+  # A parameter direction describes one locally free coordinate in the fitted
+  # model. Covariance directions preserve the package's trace constraints.
+  directions <- list()
+
+  for (j in seq_len(p)) {
+    directions[[length(directions) + 1L]] <- list(
+      type = "mu",
+      index = j,
+      name = paste0("mu[", j, "]"),
+      scale = max(1, abs(as.numeric(fit$mu)[j]))
+    )
+  }
+
+  if (model != "normal") {
+    for (j in seq_len(p)) {
+      directions[[length(directions) + 1L]] <- list(
+        type = "skew",
+        index = j,
+        name = paste0("skew[", j, "]"),
+        scale = max(1, abs(as.numeric(fit$skew)[j]))
+      )
+    }
+  }
+
+  # tensor_mle_normal() fixes covariance factors named in `restrict`.
+  # The current skewed-model fitters estimate every covariance factor.
+  fixed_modes <- integer(0)
+  if (model == "normal" && length(restrict)) {
+    fixed_modes <- as.integer(restrict)
+  }
+
+  for (mode in seq_len(number_modes)) {
+    if (mode %in% fixed_modes) {
+      next
+    }
+
+    mode_size <- dims[mode]
+    sigma_mode <- as.matrix(fit$sigmas[[mode]])
+    covariance_scale <- max(1, sqrt(mean(sigma_mode^2)))
+
+    # All but the last covariance factor have trace fixed to their dimension.
+    # Diagonal contrasts change one diagonal entry up and the last one down,
+    # so the perturbation has trace zero.
+    if (mode < number_modes && mode_size > 1L) {
+      for (row in seq_len(mode_size - 1L)) {
+        direction_matrix <- matrix(0, mode_size, mode_size)
+        direction_matrix[row, row] <- 1
+        direction_matrix[mode_size, mode_size] <- -1
+
+        directions[[length(directions) + 1L]] <- list(
+          type = "sigma",
+          mode = mode,
+          matrix = direction_matrix,
+          name = paste0("sigma", mode, "_diag_contrast_", row),
+          scale = covariance_scale
+        )
+      }
+    } else {
+      # The last covariance factor is unrestricted, as is the only factor in
+      # an ordinary multivariate model.
+      for (row in seq_len(mode_size)) {
+        direction_matrix <- matrix(0, mode_size, mode_size)
+        direction_matrix[row, row] <- 1
+
+        directions[[length(directions) + 1L]] <- list(
+          type = "sigma",
+          mode = mode,
+          matrix = direction_matrix,
+          name = paste0("sigma", mode, "_diag_", row),
+          scale = covariance_scale
+        )
+      }
+    }
+
+    # A symmetric off-diagonal entry is one free covariance parameter.
+    if (mode_size > 1L) {
+      for (row in seq_len(mode_size - 1L)) {
+        for (column in seq.int(row + 1L, mode_size)) {
+          direction_matrix <- matrix(0, mode_size, mode_size)
+          direction_matrix[row, column] <- 1
+          direction_matrix[column, row] <- 1
+
+          directions[[length(directions) + 1L]] <- list(
+            type = "sigma",
+            mode = mode,
+            matrix = direction_matrix,
+            name = paste0(
+              "sigma", mode, "_offdiag_", row, "_", column
+            ),
+            scale = covariance_scale
+          )
+        }
+      }
+    }
+  }
+
+  if (model == "skewt") {
+    # Perturb log(nu), rather than nu itself, so both finite-difference values
+    # are always positive.
+    directions[[length(directions) + 1L]] <- list(
+      type = "log_nu",
+      name = "log(nu)",
+      scale = 1
+    )
+  }
+
+  if (model == "vargamma") {
+    # gamma is positive, so perturb it on its logarithmic scale.
+    directions[[length(directions) + 1L]] <- list(
+      type = "log_gamma",
+      name = "log(gamma)",
+      scale = 1
+    )
+  }
+
+  if (model == "invgauss") {
+    # kappa is positive, so perturb it on its logarithmic scale.
+    directions[[length(directions) + 1L]] <- list(
+      type = "log_kappa",
+      name = "log(kappa)",
+      scale = 1
+    )
+  }
+
+  if (model == "genhyper") {
+    # lambda may be negative, zero, or positive, so use its ordinary scale.
+    directions[[length(directions) + 1L]] <- list(
+      type = "lambda",
+      name = "lambda",
+      scale = max(1, abs(fit$lambda))
+    )
+
+    # omega must be positive.
+    directions[[length(directions) + 1L]] <- list(
+      type = "log_omega",
+      name = "log(omega)",
+      scale = 1
+    )
+  }
+
+  number_parameters <- length(directions)
+  parameter_names <- character(number_parameters)
+  score_matrix <- matrix(NA_real_, nrow = n, ncol = number_parameters)
+
+  # Make a copy of the fitted parameters moved a small amount in one valid
+  # parameter direction.
+  perturb_fit <- function(base_fit, direction, amount) {
+    candidate <- base_fit
+
+    if (direction$type == "mu") {
+      value <- as.numeric(candidate$mu)
+      value[direction$index] <- value[direction$index] + amount
+      candidate$mu <- array(value, dim = dims)
+    }
+
+    if (direction$type == "skew") {
+      value <- as.numeric(candidate$skew)
+      value[direction$index] <- value[direction$index] + amount
+      candidate$skew <- array(value, dim = dims)
+    }
+
+    if (direction$type == "sigma") {
+      mode <- direction$mode
+      candidate$sigmas[[mode]] <-
+        candidate$sigmas[[mode]] + amount * direction$matrix
+      candidate$sigmas[[mode]] <-
+        (candidate$sigmas[[mode]] + t(candidate$sigmas[[mode]])) / 2
+    }
+
+    if (direction$type == "log_nu") {
+      candidate$nu <- base_fit$nu * exp(amount)
+    }
+
+    if (direction$type == "log_gamma") {
+      candidate$gamma <- base_fit$gamma * exp(amount)
+    }
+
+    if (direction$type == "log_kappa") {
+      candidate$kappa <- base_fit$kappa * exp(amount)
+    }
+
+    if (direction$type == "lambda") {
+      candidate$lambda <- base_fit$lambda + amount
+    }
+
+    if (direction$type == "log_omega") {
+      candidate$omega <- base_fit$omega * exp(amount)
+    }
+
+    candidate
+  }
+
+  # Return one log density per observation under a candidate parameter value.
+  log_density <- function(candidate) {
+    switch(
+      model,
+      normal = dtnorm(
+        draws,
+        mu = candidate$mu,
+        sigmas = candidate$sigmas,
+        log = TRUE
+      ),
+      skewt = dtskewt(
+        draws,
+        mu = candidate$mu,
+        skew = candidate$skew,
+        sigmas = candidate$sigmas,
+        nu = candidate$nu,
+        log = TRUE
+      ),
+      vargamma = dtvargamma(
+        draws,
+        mu = candidate$mu,
+        skew = candidate$skew,
+        sigmas = candidate$sigmas,
+        scale = candidate$gamma,
+        log = TRUE
+      ),
+      invgauss = dtinvgauss(
+        draws,
+        mu = candidate$mu,
+        skew = candidate$skew,
+        sigmas = candidate$sigmas,
+        kappa = candidate$kappa,
+        log = TRUE
+      ),
+      genhyper = dtgenhyper(
+        draws,
+        mu = candidate$mu,
+        skew = candidate$skew,
+        sigmas = candidate$sigmas,
+        lambda = candidate$lambda,
+        omega = candidate$omega,
+        log = TRUE
+      )
+    )
+  }
+
+  # Numerical derivative of each observation's log likelihood. If a
+  # covariance perturbation gets too close to the positive-definite boundary,
+  # repeatedly halve the step.
+  for (j in seq_len(number_parameters)) {
+    direction <- directions[[j]]
+    parameter_names[j] <- direction$name
+    step <- finite_difference * direction$scale
+    derivative_found <- FALSE
+
+    for (attempt in seq_len(12L)) {
+      fit_plus <- perturb_fit(fit, direction, step)
+      fit_minus <- perturb_fit(fit, direction, -step)
+
+      covariance_ok <- TRUE
+      if (direction$type == "sigma") {
+        mode <- direction$mode
+        covariance_ok <-
+          !inherits(try(chol(fit_plus$sigmas[[mode]]), silent = TRUE),
+                    "try-error") &&
+          !inherits(try(chol(fit_minus$sigmas[[mode]]), silent = TRUE),
+                    "try-error")
+      }
+
+      if (covariance_ok) {
+        log_plus <- tryCatch(
+          log_density(fit_plus),
+          error = function(error) rep(NA_real_, n)
+        )
+        log_minus <- tryCatch(
+          log_density(fit_minus),
+          error = function(error) rep(NA_real_, n)
+        )
+
+        if (length(log_plus) == n && length(log_minus) == n &&
+            all(is.finite(log_plus)) && all(is.finite(log_minus))) {
+          score_matrix[, j] <- (log_plus - log_minus) / (2 * step)
+          derivative_found <- TRUE
+          break
+        }
+      }
+
+      step <- step / 2
+    }
+
+    if (!derivative_found) {
+      stop(
+        "Could not calculate a stable likelihood derivative for ",
+        direction$name, ".",
+        call. = FALSE
+      )
+    }
+  }
+
+  colnames(score_matrix) <- parameter_names
+
+  # Estimate covariances rather than raw second moments. At an exact MLE the
+  # average score is zero, but centering makes this less sensitive to finite
+  # optimizer tolerance.
+  centered_scores <- sweep(
+    score_matrix,
+    2,
+    colMeans(score_matrix),
+    "-"
+  )
+  centered_features <- sweep(
+    feature_values,
+    2,
+    colMeans(feature_values),
+    "-"
+  )
+
+  information <- crossprod(centered_scores) / n
+  information <- (information + t(information)) / 2
+
+  # Use a symmetric Moore-Penrose inverse. This safely removes score
+  # directions that are numerically redundant.
+  information_eigen <- eigen(information, symmetric = TRUE)
+  largest_information <- max(information_eigen$values, 0)
+  information_cutoff <- largest_information * information_tolerance
+  keep_information <- information_eigen$values > information_cutoff
+
+  if (!any(keep_information)) {
+    stop("The estimated information matrix has numerical rank zero.",
+         call. = FALSE)
+  }
+
+  if (sum(keep_information) < number_parameters) {
+    warning(
+      "The estimated information matrix has rank ",
+      sum(keep_information), " but there are ", number_parameters,
+      " fitted parameter directions. The correction uses the identifiable ",
+      "score directions only.",
+      call. = FALSE
+    )
+  }
+
+  kept_vectors <- information_eigen$vectors[
+    , keep_information, drop = FALSE
+  ]
+  inverse_information <- kept_vectors %*%
+    diag(
+      1 / information_eigen$values[keep_information],
+      nrow = sum(keep_information)
+    ) %*%
+    t(kept_vectors)
+
+  # C estimates Cov(feature, score). Removing its score projection is the
+  # finite-frequency version of the fitted-parameter kernel correction.
+  feature_score_covariance <-
+    crossprod(centered_features, centered_scores) / n
+
+  parameter_correction <- feature_score_covariance %*%
+    inverse_information %*%
+    t(feature_score_covariance)
+
+  # The empirical covariance and C I^{-1} C' are estimated from the same
+  # observations. Their difference is the covariance of the feature residuals
+  # after projecting out the score directions. Calculating it through the
+  # residuals guarantees a positive-semidefinite estimate in finite samples.
+  #
+  # Its probability limit is the theoretical V - C I^{-1} C' correction.
+  score_projection <- centered_scores %*%
+    inverse_information %*%
+    t(feature_score_covariance)
+  adjusted_feature_values <- centered_features - score_projection
+  adjusted_covariance <- crossprod(adjusted_feature_values) / n
+  adjusted_covariance <-
+    (adjusted_covariance + t(adjusted_covariance)) / 2
+
+  empirical_feature_covariance <- crossprod(centered_features) / n
+  empirical_feature_covariance <-
+    (empirical_feature_covariance + t(empirical_feature_covariance)) / 2
+
+  model_based_adjusted_covariance <-
+    feature_covariance - parameter_correction
+  model_based_adjusted_covariance <-
+    (model_based_adjusted_covariance +
+       t(model_based_adjusted_covariance)) / 2
+
+  number_frequencies <- nrow(frequencies)
+  adjusted_eigen <- eigen(
+    adjusted_covariance / number_frequencies,
+    symmetric = TRUE,
+    only.values = TRUE
+  )$values
+
+  largest_adjusted <- max(adjusted_eigen, 0)
+  eigen_cutoff <- largest_adjusted * eigen_tolerance
+  eigenvalues <- adjusted_eigen[adjusted_eigen > eigen_cutoff]
+
+  if (!length(eigenvalues)) {
+    stop("The adjusted feature covariance has numerical rank zero.",
+         call. = FALSE)
+  }
+
+  if (!return_details) {
+    return(eigenvalues)
+  }
+
+  # Detailed output is useful when checking numerical rank or validating the
+  # correction in a simulation study.
+  list(
+    eigenvalues = eigenvalues,
+    all_eigenvalues = adjusted_eigen,
+    adjusted_feature_covariance = adjusted_covariance,
+    unadjusted_feature_covariance = feature_covariance,
+    empirical_feature_covariance = empirical_feature_covariance,
+    model_based_adjusted_covariance = model_based_adjusted_covariance,
+    parameter_correction = parameter_correction,
+    information = information,
+    information_eigenvalues = information_eigen$values,
+    information_rank = sum(keep_information),
+    number_parameters = number_parameters,
+    parameter_names = parameter_names,
+    mean_score = colMeans(score_matrix),
+    fit = fit,
+    frequencies = frequencies
+  )
+}
+```
+```{r}
+for(i in 1:20) {
+  rand_draws <- rtskewt(n = 1e3, mu = mu, sigmas = list(s1, s2, s3),
+                        skew = array(2 * rnorm(24), dim = c(2, 3, 4)),
+                        nu = 20)
+  
+  all_p_est[i] <- gof_characteristic(rand_draws, model = "normal")
+}
+
+res$p[1:400] |> 
+  as_tibble() |> 
+  ggplot() +
+  geom_histogram(aes(x = value), bins = 40, 
+                 fill = "pink", color = "black") +
+  theme_minimal()
+
+sum(res$p[1:400] <= 0.05)
+sum(res$p[1:400] <= 0.10)
+```
+
+
+```{r}
+set.seed(123)
+
+n_mixture <- 100000
+
+mixture_stats <- numeric(n_mixture)
+
+for (j in seq_along(eigen_est)) {
+  mixture_stats <- mixture_stats +
+    eigen_est[j] * rchisq(n_mixture, df = 1)
+}
+
+p_value <- mean(mixture_stats >= T_stat)
+
+p_value
+
+ggplot() +
+  geom_histogram(aes(x = mixture_stats), bins = 50, 
+                 fill = "pink", color = "black") +
+  geom_vline(aes(xintercept = T_stat), color = "red", lty = 2) +
+  theme_minimal()
+```
+
+
+# Recommended test: multiscale CF with a parametric bootstrap
+
+This is the primary goodness-of-fit procedure used in this notebook. It tests
+the tensor normal and all four skewed variance-mixture models implemented by
+`tensor_mle()`: skew-$t$, variance-gamma, inverse-Gaussian, and generalized
+hyperbolic. The test uses both dense tensor directions and rank-one tensor
+directions at several frequency radii. The same frequencies are retained for
+the observed data and every bootstrap sample. Each bootstrap sample is refit,
+so the p-value accounts for estimating the null model from the data.
+
+The statistic is
+
+\[
+T_n = n\frac{1}{L}\sum_{\ell=1}^L
+  \left|\widehat\varphi_n(t_\ell)
+  -\varphi(t_\ell;\widehat\theta)\right|^2.
+\]
+
+The model CFs below are evaluated analytically. Consequently, the test does
+not add Monte Carlo error when evaluating the skewed-model CFs.
+
+```{r recommended-multiscale-cf-functions}
+.multiscale_cf_whitening <- function(sigmas) {
+  lapply(sigmas, function(sigma) {
+    sigma <- as.matrix(sigma)
+    sigma <- (sigma + t(sigma)) / 2
+    solve(t(chol(sigma)))
+  })
+}
+
+.multiscale_cf_standardize <- function(draws, fit) {
+  n <- n_draws(draws)
+  dims <- draw_shape(draws)
+  whitening <- .multiscale_cf_whitening(fit$sigmas)
+  result <- matrix(0, nrow = n, ncol = prod(dims))
+
+  for (i in seq_len(n)) {
+    current <- pull_draw(draws, i) - fit$mu
+    for (mode in seq_along(whitening)) {
+      current <- n_prod(current, mode, whitening[[mode]])
+    }
+    result[i, ] <- as.numeric(unclass(current))
+  }
+
+  result
+}
+
+.multiscale_cf_rank_one_direction <- function(dims) {
+  mode_vectors <- lapply(dims, function(mode_size) {
+    direction <- rnorm(mode_size)
+    direction / sqrt(sum(direction^2))
+  })
+
+  as.numeric(Reduce(
+    function(left, right) as.vector(outer(left, right)),
+    mode_vectors
+  ))
+}
+
+# Generate an equal number of dense and rank-one directions at each radius.
+# Every row has the radius recorded in its `radius` attribute.
+make_multiscale_cf_frequencies <- function(dims,
+                                           radii = c(0.5, 1, 2, 3),
+                                           n_per_type = 8L,
+                                           seed = NULL) {
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  if (any(!is.finite(radii)) || any(radii <= 0)) {
+    stop("`radii` must contain positive finite values.", call. = FALSE)
+  }
+  if (length(n_per_type) != 1L || !is.finite(n_per_type) ||
+      n_per_type < 1L || n_per_type != floor(n_per_type)) {
+    stop("`n_per_type` must be one positive integer.", call. = FALSE)
+  }
+
+  p <- prod(dims)
+  n_per_type <- as.integer(n_per_type)
+  n_frequencies <- length(radii) * 2L * n_per_type
+  frequencies <- matrix(0, nrow = n_frequencies, ncol = p)
+  direction_type <- character(n_frequencies)
+  frequency_radius <- numeric(n_frequencies)
+  row <- 0L
+
+  for (radius in radii) {
+    for (j in seq_len(n_per_type)) {
+      row <- row + 1L
+      dense <- rnorm(p)
+      frequencies[row, ] <- radius * dense / sqrt(sum(dense^2))
+      direction_type[row] <- "dense"
+      frequency_radius[row] <- radius
+
+      row <- row + 1L
+      frequencies[row, ] <- radius *
+        .multiscale_cf_rank_one_direction(dims)
+      direction_type[row] <- "rank-one"
+      frequency_radius[row] <- radius
+    }
+  }
+
+  attr(frequencies, "direction_type") <- direction_type
+  attr(frequencies, "radius") <- frequency_radius
+  frequencies
+}
+
+.multiscale_cf_whiten_skew <- function(skew, sigmas) {
+  whitening <- .multiscale_cf_whitening(sigmas)
+  result <- skew
+
+  for (mode in seq_along(whitening)) {
+    result <- n_prod(result, mode, whitening[[mode]])
+  }
+
+  as.numeric(result)
+}
+
+# Laplace transform E[exp(-s W)] for the mixing variable W. In the CF,
+# s = ||t||^2 / 2 - i <t, whitened_skew>, whose real part is nonnegative.
+.multiscale_cf_mixing_laplace <- function(s, model, fit) {
+  if (model == "skewt") {
+    shape <- fit$nu / 2
+    rate <- fit$nu / 2
+    answer <- complex(length(s))
+    at_zero <- Mod(s) < sqrt(.Machine$double.eps)
+    answer[at_zero] <- 1 + 0i
+
+    if (any(!at_zero)) {
+      current_s <- s[!at_zero]
+      argument <- 2 * sqrt(rate * current_s)
+
+      # BesselK(..., expon.scaled = TRUE) equals exp(argument) K(argument).
+      log_bessel_k <- log(Bessel::BesselK(
+        argument,
+        nu = shape,
+        expon.scaled = TRUE
+      )) - argument
+
+      answer[!at_zero] <- exp(
+        log(2) +
+          (shape / 2) * (log(rate) + log(current_s)) -
+          lgamma(shape) +
+          log_bessel_k
+      )
+    }
+    return(answer)
+  }
+
+  if (model == "vargamma") {
+    return((fit$gamma / (fit$gamma + s))^fit$gamma)
+  }
+
+  if (model == "invgauss") {
+    return(exp(
+      fit$kappa * (1 - sqrt(1 + 2 * s / fit$kappa^2))
+    ))
+  }
+
+  if (model == "genhyper") {
+    shifted_psi <- fit$omega + 2 * s
+    argument <- sqrt(fit$omega * shifted_psi)
+
+    log_numerator_bessel <- log(Bessel::BesselK(
+      argument,
+      nu = fit$lambda,
+      expon.scaled = TRUE
+    )) - argument
+    log_denominator_bessel <- log(Bessel::BesselK(
+      fit$omega,
+      nu = fit$lambda,
+      expon.scaled = TRUE
+    )) - fit$omega
+
+    return(exp(
+      (fit$lambda / 2) * (log(fit$omega) - log(shifted_psi)) +
+        log_numerator_bessel - log_denominator_bessel
+    ))
+  }
+
+  stop("No mixing distribution is required for the normal model.",
+       call. = FALSE)
+}
+
+.multiscale_cf_model <- function(frequencies, model, fit) {
+  q <- rowSums(frequencies^2)
+
+  if (model == "normal") {
+    return(exp(-q / 2))
+  }
+
+  whitened_skew <- .multiscale_cf_whiten_skew(
+    fit$skew,
+    fit$sigmas
+  )
+  skew_projection <- drop(frequencies %*% whitened_skew)
+  s <- q / 2 - 1i * skew_projection
+
+  .multiscale_cf_mixing_laplace(s, model, fit)
+}
+
+.multiscale_cf_statistic <- function(draws, model, fit, frequencies) {
+  standardized <- .multiscale_cf_standardize(draws, fit)
+  phases <- standardized %*% t(frequencies)
+  empirical_cf <- colMeans(exp(1i * phases))
+  theoretical_cf <- .multiscale_cf_model(frequencies, model, fit)
+
+  if (any(!is.finite(theoretical_cf))) {
+    stop("The fitted model produced a non-finite characteristic function.",
+         call. = FALSE)
+  }
+
+  squared_difference <- Mod(empirical_cf - theoretical_cf)^2
+
+  list(
+    statistic = n_draws(draws) * mean(squared_difference),
+    empirical_cf = empirical_cf,
+    theoretical_cf = theoretical_cf,
+    squared_difference = squared_difference
+  )
+}
+
+.multiscale_cf_simulate <- function(n, model, fit) {
+  switch(
+    model,
+    normal = rtnorm(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas
+    ),
+    skewt = rtskewt(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas,
+      skew = fit$skew,
+      nu = fit$nu
+    ),
+    vargamma = rtvargamma(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas,
+      skew = fit$skew,
+      scale = fit$gamma
+    ),
+    invgauss = rtinvgauss(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas,
+      skew = fit$skew,
+      kappa = fit$kappa
+    ),
+    genhyper = rtgenhyper(
+      n = n,
+      mu = fit$mu,
+      sigmas = fit$sigmas,
+      skew = fit$skew,
+      lambda = fit$lambda,
+      omega = fit$omega
+    )
+  )
+}
+
+tensor_cf_multiscale_bootstrap <- function(
+    draws,
+    model = c("normal", "skewt", "vargamma", "invgauss", "genhyper"),
+    B = 999L,
+    frequencies = NULL,
+    radii = c(0.5, 1, 2, 3),
+    n_per_type = 8L,
+    max_iter = 1000L,
+    tol = 1e-4,
+    quiet = TRUE,
+    restrict = NULL,
+    seed = NULL,
+    show_progress = FALSE) {
+  model <- match.arg(model)
+  data_name <- deparse(substitute(draws))
+
+  if (!inherits(draws, "tensor")) {
+    stop("`draws` must be a tensor object.", call. = FALSE)
+  }
+  if (n_draws(draws) < 2L) {
+    stop("At least two tensor draws are required.", call. = FALSE)
+  }
+  if (length(B) != 1L || !is.finite(B) ||
+      B < 1L || B != floor(B)) {
+    stop("`B` must be one positive integer.", call. = FALSE)
+  }
+
+  B <- as.integer(B)
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  p <- prod(draw_shape(draws))
+  if (is.null(frequencies)) {
+    frequencies <- make_multiscale_cf_frequencies(
+      dims = draw_shape(draws),
+      radii = radii,
+      n_per_type = n_per_type
+    )
+  } else {
+    frequency_attributes <- attributes(frequencies)[
+      c("direction_type", "radius")
+    ]
+    frequencies <- as.matrix(frequencies)
+    if (ncol(frequencies) != p) {
+      stop("`frequencies` must have ", p, " columns.", call. = FALSE)
+    }
+    attributes(frequencies)[names(frequency_attributes)] <-
+      frequency_attributes
+  }
+
+  observed_fit <- tensor_mle(
+    draws,
+    model = model,
+    max_iter = max_iter,
+    tol = tol,
+    quiet = quiet,
+    restrict = restrict
+  )
+  observed <- .multiscale_cf_statistic(
+    draws,
+    model,
+    observed_fit,
+    frequencies
+  )
+
+  bootstrap_statistics <- rep(NA_real_, B)
+  failure_messages <- character(B)
+
+  for (b in seq_len(B)) {
+    if (show_progress) {
+      message("Bootstrap replicate ", b, " of ", B, " for ", model)
+    }
+
+    bootstrap_result <- tryCatch({
+      bootstrap_draws <- .multiscale_cf_simulate(
+        n_draws(draws),
+        model,
+        observed_fit
+      )
+      bootstrap_fit <- tensor_mle(
+        bootstrap_draws,
+        model = model,
+        max_iter = max_iter,
+        tol = tol,
+        quiet = quiet,
+        restrict = restrict
+      )
+      .multiscale_cf_statistic(
+        bootstrap_draws,
+        model,
+        bootstrap_fit,
+        frequencies
+      )
+    }, error = function(error) error)
+
+    if (inherits(bootstrap_result, "error")) {
+      failure_messages[b] <- conditionMessage(bootstrap_result)
+    } else if (is.finite(bootstrap_result$statistic)) {
+      bootstrap_statistics[b] <- bootstrap_result$statistic
+    } else {
+      failure_messages[b] <- "The bootstrap statistic was non-finite."
+    }
+  }
+
+  successful <- is.finite(bootstrap_statistics)
+  if (!any(successful)) {
+    stop("All bootstrap replicates failed.", call. = FALSE)
+  }
+
+  p_value <- (
+    1 + sum(bootstrap_statistics[successful] >= observed$statistic)
+  ) / (1 + sum(successful))
+
+  model_label <- c(
+    normal = "tensor normal",
+    skewt = "tensor skew-t",
+    vargamma = "tensor variance-gamma",
+    invgauss = "tensor inverse-Gaussian",
+    genhyper = "tensor generalized hyperbolic"
+  )[[model]]
+
+  structure(
+    list(
+      statistic = c(T = observed$statistic),
+      parameter = c(B = sum(successful)),
+      p.value = p_value,
+      method = paste0(
+        "Parametric-bootstrap multiscale CF test for the ",
+        model_label
+      ),
+      data.name = data_name,
+      model = model,
+      fit = observed_fit,
+      frequencies = frequencies,
+      empirical_cf = observed$empirical_cf,
+      theoretical_cf = observed$theoretical_cf,
+      squared_difference = observed$squared_difference,
+      bootstrap_statistics = bootstrap_statistics,
+      B_requested = B,
+      B_successful = sum(successful),
+      B_failed = sum(!successful),
+      failure_messages = failure_messages[!successful]
+    ),
+    class = c("tensor_cf_bootstrap_test", "htest")
+  )
+}
+```
+
+The following chunk applies the test to the same data under all five fitted
+models. It is not evaluated automatically because `B = 999` requires 4,995
+model refits. Using one shared frequency matrix makes the five diagnostics
+directly comparable. Their p-values assess each model separately; they are not
+scores for ranking the models.
+
+```{r recommended-all-model-bootstrap, eval=FALSE}
+grabmyo_tensors <- readRDS("grabmyo_session1_tensors_16x28x16.rds")
+grabmyo_draws <- as_tensor(simplify2array(grabmyo_tensors), obs = 4)
+
+models <- c("normal", "skewt", "vargamma", "invgauss", "genhyper")
+model_names <- c(
+  normal = "Tensor normal",
+  skewt = "Tensor skew-t",
+  vargamma = "Tensor variance-gamma",
+  invgauss = "Tensor inverse-Gaussian",
+  genhyper = "Tensor generalized hyperbolic"
+)
+
+shared_frequencies <- make_multiscale_cf_frequencies(
+  dims = draw_shape(grabmyo_draws),
+  radii = c(0.5, 1, 2, 3),
+  n_per_type = 8,
+  seed = 20260722
+)
+
+all_model_cf_tests <- setNames(
+  lapply(models, function(current_model) {
+    tensor_cf_multiscale_bootstrap(
+      grabmyo_draws,
+      model = current_model,
+      B = 999,
+      frequencies = shared_frequencies,
+      max_iter = 1000,
+      tol = 1e-4,
+      seed = 20260722,
+      show_progress = TRUE
+    )
+  }),
+  models
+)
+
+all_model_cf_results <- data.frame(
+  Model = unname(model_names[models]),
+  Statistic = vapply(
+    all_model_cf_tests,
+    function(test) unname(test$statistic),
+    numeric(1)
+  ),
+  p.value = vapply(
+    all_model_cf_tests,
+    function(test) test$p.value,
+    numeric(1)
+  ),
+  Successful = vapply(
+    all_model_cf_tests,
+    function(test) test$B_successful,
+    integer(1)
+  ),
+  Failed = vapply(
+    all_model_cf_tests,
+    function(test) test$B_failed,
+    integer(1)
+  )
+)
+
+knitr::kable(all_model_cf_results, digits = 4)
+```
+
+
+```{r}
+univar_draws <- rnorm(n = 1e3, mean = 6, sd = 2)
+
+emp_cf <- function(draws, t) {
+  res <- mean(exp(1i * t * draws))
+  tibble(real = Re(res), img = Im(res))
+}
+
+theory_cf <- function(mu, sigma, t) {
+  res <- exp(1i * t * mu - 1/2 * sigma^2 * t^2)
+  tibble(real = Re(res), img = Im(res))
+}
+
+tibble(t = seq(-2, 2, by = 0.05),
+       emp = emp_cf(draws = univar_draws, t))
+
+ggplot() +
+  geom_function(fun = Re(emp_cf), args = list(draws = univar_draws))
+```
+
+
+```{r}
+tensor_ecf <- function(draws, freq) {
+  num_draws <- n_draws(draws)
+  num_freq <- n_draws(freq)
+  nstar <- prod(draw_shape(draws))
+
+  #each row is a vectorized tensor obs
+  draw_matrix <- matrix(unclass(draws),
+                        nrow = num_draws,
+                        ncol = nstar)
+
+  empirical_cf <- complex(num_freq)
+
+  for (j in 1:num_freq) { #get empirical cf for each freq
+    # pull_draw() works consistently for one or many frequencies.
+    curr_freq <- pull_draw(freq, j)
+
+    #compute 1 inner prod for each obs
+    phases <- drop(draw_matrix %*% c(curr_freq))
+
+    #average cf
+    empirical_cf[j] <- mean(cos(phases)) + 1i * mean(sin(phases))
+  }
+
+  empirical_cf
+}
+```
+
+
+```{r}
+norm_draws <- rtnorm(n = 1e3, mu = array(1:24, dim = c(2, 3, 4)))
+
+mle_norm <- tensor_mle(norm_draws, model = "normal")
+
+freq <- tensor(data = rnorm(48), dim = c(2, 3, 4), n = 2)
+
+cftnorm(freq = freq,
+        mu = mle_norm$mu, 
+        sigmas = mle_norm$sigmas)
+
+tensor_ecf(norm_draws, freq)
+```
+
+
+```{r}
+set.seed(123)
+
+make_reference_freq <- function(tensor_dim,
+                                num_per_radius = 50) {
+  p <- prod(tensor_dim)
+
+  radii <- c(0.5, 1, 2, 3)
+
+  number_frequencies <-
+    length(radii) * num_per_radius
+
+  frequency_values <-
+    numeric(number_frequencies * p)
+
+  frequency_number <- 0
+
+  for (radius in radii) {
+
+    for (j in 1:num_per_radius) {
+
+      frequency_number <-
+        frequency_number + 1
+
+      # Generate a direction
+      direction <- rnorm(p)
+
+      # Make its length exactly one
+      direction <-
+        direction /
+        sqrt(sum(direction^2))
+
+      # Give it the desired distance from zero
+      current_frequency <-
+        radius * direction
+
+      # Store this frequency
+      first_position <-
+        (frequency_number - 1) * p + 1
+
+      last_position <-
+        frequency_number * p
+
+      frequency_values[
+        first_position:last_position
+      ] <- current_frequency
+    }
+  }
+
+  tensor(
+    data = frequency_values,
+    dim = tensor_dim,
+    n = number_frequencies
+  )
+}
+```
+
+
+```{r raw-scale-cf-statistic}
+# Generate frequencies on a reference scale. These have norms
+# 0.5, 1, 2, and 3, regardless of the dimensions of a tensor draw.
+reference_freq <- make_reference_freq(
+  tensor_dim = draw_shape(norm_draws),
+  num_per_radius = 50,
+  seed = 123
+)
+
+# Keep the observations on their original scale. Instead, transform only the
+# frequencies so that they account for the fitted mode covariance matrices.
+freq <- reference_freq
+
+for (d in seq_along(mle_norm$sigmas)) {
+  frequency_transform <- solve(chol(mle_norm$sigmas[[d]]))
+
+  freq <- n_prod(
+    freq,
+    d,
+    frequency_transform
+  )
+}
+
+# Compare the theoretical and empirical CFs at the transformed frequencies.
+cf_tibble <- tibble::tibble(
+  freq = freq,
+  cf_theory = cftnorm(
+    freq,
+    mu = mle_norm$mu,
+    sigmas = mle_norm$sigmas
+  ),
+  cf_emp = tensor_ecf(
+    norm_draws,
+    freq
+  ),
+  diff = Mod(cf_theory - cf_emp)
+)
+
+# The test statistic is n times the mean SQUARED CF difference.
+stat <- n_draws(norm_draws) * mean(cf_tibble$diff^2)
+
+stat
+```
+
+
+```{r}
+L <- n_draws(freq)
+
+# Each frequency contributes one cosine feature and one sine feature.
+number_features <- 2 * L
+
+# The means of the cosine features are Re(phi), and the means of the sine
+# features are Im(phi).
+phi <- cf_tibble$cf_theory
+feature_mean <- c(Re(phi), Im(phi))
+
+# This matrix will contain E[feature_a * feature_b].
+second_moment <- matrix(
+  0,
+  nrow = number_features,
+  ncol = number_features
+)
+
+for (j in 1:L) {
+  freq_j <- pull_draw(freq, j)
+
+  for (k in 1:L) {
+    freq_k <- pull_draw(freq, k)
+
+    freq_plus <- freq_j + freq_k
+    freq_j_minus_k <- freq_j - freq_k
+    freq_k_minus_j <- freq_k - freq_j
+
+    # The product-to-sum formulas require the fitted CF at the sum and
+    # differences of each pair of frequencies.
+    phi_plus <- cftnorm(
+      freq_plus,
+      mu = mle_norm$mu,
+      sigmas = mle_norm$sigmas
+    )
+    phi_j_minus_k <- cftnorm(
+      freq_j_minus_k,
+      mu = mle_norm$mu,
+      sigmas = mle_norm$sigmas
+    )
+    phi_k_minus_j <- cftnorm(
+      freq_k_minus_j,
+      mu = mle_norm$mu,
+      sigmas = mle_norm$sigmas
+    )
+
+    # E[cos(t_j'X) cos(t_k'X)]
+    second_moment[j, k] <-
+      Re(phi_j_minus_k + phi_plus) / 2
+
+    # E[sin(t_j'X) sin(t_k'X)]
+    second_moment[L + j, L + k] <-
+      Re(phi_j_minus_k - phi_plus) / 2
+
+    # E[cos(t_j'X) sin(t_k'X)]
+    second_moment[j, L + k] <-
+      Im(phi_plus + phi_k_minus_j) / 2
+
+    # The second-moment matrix is symmetric.
+    second_moment[L + k, j] <-
+      second_moment[j, L + k]
+  }
+}
+
+# Convert second moments to covariances:
+# Cov(A, B) = E[A * B] - E[A] * E[B].
+feature_covariance <- matrix(
+  0,
+  nrow = number_features,
+  ncol = number_features
+)
+
+for (a in 1:number_features) {
+  for (b in 1:number_features) {
+    feature_covariance[a, b] <-
+      second_moment[a, b] -
+      feature_mean[a] * feature_mean[b]
+  }
+}
+
+# Remove tiny numerical asymmetry before calling eigen().
+feature_covariance <-
+  (feature_covariance + t(feature_covariance)) / 2
+
+eigen_result <- eigen(
+  feature_covariance / L,
+  symmetric = TRUE,
+  only.values = TRUE
+)
+
+all_lambda <- eigen_result$values
+
+cutoff <- max(all_lambda) * 1e-10
+
+lambda <- all_lambda[
+  all_lambda > cutoff
+]
+```
+
+
+```{r vectorized-normal-feature-covariance}
+# This is a faster, vectorized version of the preceding covariance calculation.
+# It avoids constructing t_j + t_k and t_j - t_k with nested R loops.
+
+L <- n_draws(freq)
+p <- prod(draw_shape(freq))
+
+# Rows are frequencies and columns are tensor entries.
+reference_matrix <- matrix(
+  unclass(reference_freq),
+  nrow = L,
+  ncol = p
+)
+
+raw_frequency_matrix <- matrix(
+  unclass(freq),
+  nrow = L,
+  ncol = p
+)
+
+# Squared norm of each reference frequency.
+squared_norm <- rowSums(reference_matrix^2)
+
+# Entry (j, k) is the inner product of reference frequencies j and k.
+frequency_inner_products <- tcrossprod(reference_matrix)
+
+# Entry (j, k) is ||s_j||^2 + ||s_k||^2.
+pair_squared_norm <- outer(
+  squared_norm,
+  squared_norm,
+  "+"
+)
+
+# Calculate ||s_j + s_k||^2 and ||s_j - s_k||^2 for every pair.
+quadratic_plus <-
+  pair_squared_norm +
+  2 * frequency_inner_products
+
+quadratic_minus <-
+  pair_squared_norm -
+  2 * frequency_inner_products
+
+# Remove tiny negative values caused by floating-point rounding.
+quadratic_minus <- pmax(quadratic_minus, 0)
+
+# The raw-scale normal CF also contains t' * mu.
+mu_vector <- c(mle_norm$mu)
+
+location <- drop(
+  raw_frequency_matrix %*% mu_vector
+)
+
+location_plus <- outer(
+  location,
+  location,
+  "+"
+)
+
+location_minus <- outer(
+  location,
+  location,
+  "-"
+)
+
+# Evaluate phi(t_j + t_k) and phi(t_j - t_k) for every pair at once.
+phi_plus <- exp(
+  1i * location_plus -
+  0.5 * quadratic_plus
+)
+
+phi_minus <- exp(
+  1i * location_minus -
+  0.5 * quadratic_minus
+)
+
+# Use the product-to-sum identities to form all second moments.
+cos_cos_second_moment <-
+  (Re(phi_minus) + Re(phi_plus)) / 2
+
+sin_sin_second_moment <-
+  (Re(phi_minus) - Re(phi_plus)) / 2
+
+# phi(t_k - t_j) is Conj(phi(t_j - t_k)), which gives the minus sign.
+cos_sin_second_moment <-
+  (Im(phi_plus) - Im(phi_minus)) / 2
+
+second_moment_vectorized <- rbind(
+  cbind(
+    cos_cos_second_moment,
+    cos_sin_second_moment
+  ),
+  cbind(
+    t(cos_sin_second_moment),
+    sin_sin_second_moment
+  )
+)
+
+# Means of the original cosine and sine features.
+phi_original <- exp(
+  1i * location -
+  0.5 * squared_norm
+)
+
+feature_mean_vectorized <- c(
+  Re(phi_original),
+  Im(phi_original)
+)
+
+# Cov(A, B) = E[A * B] - E[A] * E[B].
+feature_covariance_vectorized <-
+  second_moment_vectorized -
+  tcrossprod(feature_mean_vectorized)
+
+feature_covariance_vectorized <-
+  (
+    feature_covariance_vectorized +
+    t(feature_covariance_vectorized)
+  ) / 2
+
+eigen_result_vectorized <- eigen(
+  feature_covariance_vectorized / L,
+  symmetric = TRUE,
+  only.values = TRUE
+)
+
+all_lambda_vectorized <-
+  eigen_result_vectorized$values
+
+cutoff_vectorized <-
+  max(all_lambda_vectorized) * 1e-10
+
+lambda_vectorized <- all_lambda_vectorized[
+  all_lambda_vectorized > cutoff_vectorized
+]
+
+# These should be close to zero when the loop and vectorized calculations agree.
+max_covariance_difference <- max(
+  abs(
+    feature_covariance_vectorized -
+    feature_covariance
+  )
+)
+
+max_eigenvalue_difference <- max(
+  abs(
+    all_lambda_vectorized -
+    all_lambda
+  )
+)
+
+c(
+  max_covariance_difference = max_covariance_difference,
+  max_eigenvalue_difference = max_eigenvalue_difference
+)
+
+# Use the faster result in the null-distribution calculation below.
+feature_covariance <- feature_covariance_vectorized
+lambda <- lambda_vectorized
+```
+
+
+```{r}
+set.seed(123)
+
+number_simulations <- 10000
+
+null_statistics <- numeric(
+  number_simulations
+)
+
+for (j in 1:length(lambda)) {
+
+  null_statistics <-
+    null_statistics +
+    lambda[j] *
+    rchisq(
+      number_simulations,
+      df = 1
+    )
+}
+
+ggplot() +
+  geom_histogram(aes(x = null_statistics), fill = "pink", color = "black", bins = 80) +
+  geom_vline(xintercept = stat, lty = 2, color = "red") +
+  theme_minimal()
+
+mean(stat <= null_statistics)
+```
+
+
+```{r}
+eigen(mle_norm$sigmas[[1]])
+```
+
+
+```{r}
+standardize <- function(draws) {
+  mle_draws <- tensor_mle(draws, model = "normal")
+  
+  #standardize draws with mean and covar
+  standard_draws <- draws - mle_draws$mu
+  
+  num_sigmas <- length(draw_shape(draws))
+  
+  for(i in 1:num_sigmas) {
+    sigma_i <- mle_draws$sigmas[[i]]
+    inv_sigma <- solve(t(chol(sigma_i)))
+    
+    standard_draws <- n_prod(standard_draws, i, inv_sigma)
+  }
+  standard_draws
+}
+```
+
+
+```{r}
+n <- n_draws(standard_draws)
+p <- prod(draw_shape(standard_draws))
+
+# Rows are draws; columns are tensor entries.
+draw_matrix <- matrix(
+  unclass(standard_draws),
+  nrow = n,
+  ncol = p
+)
+
+# Choose one frequency tensor.
+set.seed(123)
+
+frequency <- array(
+  rnorm(p, sd = 1 / sqrt(p)),
+  dim = draw_shape(standard_draws)
+)
+
+frequency_vector <- as.numeric(frequency)
+
+# One tensor inner product for each draw.
+phases <- drop(draw_matrix %*% frequency_vector)
+
+# Empirical characteristic function at this frequency.
+empirical_cf <-
+  mean(cos(phases)) +
+  1i * mean(sin(phases))
+
+empirical_cf
+```
+
+
+```{r}
+theoretical_cf <- complex(num_freq)
+
+for (j in seq_len(num_freq)) {
+  frequency <- frequencies[j, ]
+
+  phases <- drop(draw_matrix %*% frequency)
+
+  empirical_cf[j] <-
+    mean(cos(phases)) +
+    1i * mean(sin(phases))
+
+  theoretical_cf[j] <-
+    exp(-sum(frequency^2) / 2)
+}
+```
+
+
+```{r}
+n_frequencies <- 1e3
+
+frequencies <- matrix(
+  rnorm(n_frequencies * nstar, sd = 1 / sqrt(nstar)),
+  nrow = n_frequencies
+)
+
+
+#empirical CF
+phases <- standard_draws %*% frequency
+empirical_cf <- mean(exp(1i * phases))
+
+#theoretical CF
+```
+
+# A simple tensor characteristic-function goodness-of-fit test
+
+The function below compares the empirical characteristic function with the
+characteristic function of a fitted tensor-variate normal or tensor-variate
+skewed $t$ model. Its statistic is
+
+\[
+T_n = \frac{n}{L}\sum_{j=1}^L
+\left|\widehat\varphi_n(t_j)-\varphi(t_j;\widehat\theta)\right|^2,
+\]
+
+where $L$ is the number of randomly selected frequency vectors. The p-value
+is computed with a parametric bootstrap. Each bootstrap sample is re-fitted,
+which accounts for using the same data to estimate the model and assess its
+fit. A small `B` is useful while experimenting; use at least `B = 999` for a
+reported analysis.
+
+```{r simple-gof-test}
+# Return matrices W_k for which W_k Sigma_k W_k' = I.
+# Applying these matrices mode by mode standardizes the covariance without
+# constructing a potentially enormous Kronecker covariance matrix.
+.gof_whitening_matrices <- function(sigmas) {
+  whitening <- vector("list", length(sigmas))
+
+  for (k in seq_along(sigmas)) {
+    sigma_k <- as.matrix(sigmas[[k]])
+    sigma_k <- (sigma_k + t(sigma_k)) / 2
+    chol_k <- chol(sigma_k)
+    whitening[[k]] <- solve(t(chol_k))
+  }
+
+  whitening
+}
+
+# Center and whiten every tensor draw, then place the vectorized draws in an
+# n by p matrix. Here p is the number of entries in one tensor draw.
+.gof_standardize_draws <- function(draws, fit) {
+  n <- n_draws(draws)
+  p <- prod(draw_shape(draws))
+  whitening <- .gof_whitening_matrices(fit$sigmas)
+  standardized <- matrix(0, nrow = n, ncol = p)
+
+  for (i in seq_len(n)) {
+    current_draw <- pull_draw(draws, i) - fit$mu
+
+    for (k in seq_along(whitening)) {
+      current_draw <- n_prod(current_draw, k, whitening[[k]])
+    }
+
+    standardized[i, ] <- as.numeric(unclass(current_draw))
+  }
+
+  standardized
+}
+
+# Characteristic function of the standardized skewed t distribution.
+# If W ~ InvGamma(nu/2, nu/2), then the standardized model is
+# Z = W * a + sqrt(W) * epsilon, where epsilon ~ N(0, I).
+.gof_skewt_cf <- function(frequencies, whitened_skew, nu) {
+  number_frequencies <- nrow(frequencies)
+  cf_values <- complex(number_frequencies)
+  a <- nu / 2
+  b <- nu / 2
+
+  for (j in seq_len(number_frequencies)) {
+    frequency <- frequencies[j, ]
+    q <- sum(frequency^2)
+    r <- sum(frequency * whitened_skew)
+    s <- q / 2 - 1i * r
+
+    # The CF equals one at the zero frequency.
+    if (Mod(s) < .Machine$double.eps^0.5) {
+      cf_values[j] <- 1 + 0i
+    } else {
+      # E[exp(-s W)] for an inverse-gamma W. The exponentially scaled
+      # Bessel function is used to reduce numerical underflow.
+      bessel_argument <- 2 * sqrt(b * s)
+      log_cf <- log(2) +
+        (a / 2) * (log(b) + log(s)) -
+        lgamma(a) +
+        log(Bessel::BesselK(
+          bessel_argument,
+          nu = a,
+          expon.scaled = TRUE
+        )) -
+        bessel_argument
+
+      cf_values[j] <- exp(log_cf)
+    }
+  }
+
+  cf_values
+}
+
+# Create a function that evaluates the fitted standardized model CF.
+.gof_make_model_cf <- function(model, fit) {
+  if (model == "normal") {
+    return(function(frequencies) {
+      number_frequencies <- nrow(frequencies)
+      cf_values <- complex(number_frequencies)
+
+      for (j in seq_len(number_frequencies)) {
+        cf_values[j] <- exp(-sum(frequencies[j, ]^2) / 2)
+      }
+
+      cf_values
+    })
+  }
+
+  if (model == "skewt") {
+    whitening <- .gof_whitening_matrices(fit$sigmas)
+    whitened_skew <- fit$skew
+
+    for (k in seq_along(whitening)) {
+      whitened_skew <- n_prod(whitened_skew, k, whitening[[k]])
+    }
+
+    whitened_skew <- as.numeric(whitened_skew)
+
+    return(function(frequencies) {
+      .gof_skewt_cf(
+        frequencies = frequencies,
+        whitened_skew = whitened_skew,
+        nu = fit$nu
+      )
+    })
+  }
+
+  # The multiscale CF helper already implements the remaining normal
+  # variance-mean mixtures after modewise whitening.
+  if (model %in% c("vargamma", "invgauss", "genhyper")) {
+    return(function(frequencies) {
+      .multiscale_cf_model(
+        frequencies = frequencies,
+        model = model,
+        fit = fit
+      )
+    })
+  }
+
+  stop("No characteristic function is available for model `", model, "`.",
+       call. = FALSE)
+}
+
+# Compute T_n for one data set and an already fitted model.
+.gof_cf_statistic <- function(draws, model, fit, frequencies) {
+  standardized <- .gof_standardize_draws(draws, fit)
+  number_frequencies <- nrow(frequencies)
+  empirical_cf <- complex(number_frequencies)
+
+  # Compute the empirical CF separately at each frequency.
+  for (j in seq_len(number_frequencies)) {
+    phases <- standardized %*% frequencies[j, ]
+    empirical_cf[j] <- mean(exp(1i * phases))
+  }
+
+  model_cf <- .gof_make_model_cf(model, fit)
+  theoretical_cf <- model_cf(frequencies)
+
+  differences <- empirical_cf - theoretical_cf
+  statistic <- n_draws(draws) * mean(Mod(differences)^2)
+
+  list(
+    statistic = statistic,
+    empirical_cf = empirical_cf,
+    theoretical_cf = theoretical_cf
+  )
+}
+
+# Compute the known-parameter covariance matrix of the cosine and sine CF
+# features. Product-to-sum identities let us calculate every entry using CF
+# values at sums and differences of the original frequencies.
+.gof_feature_covariance <- function(frequencies, model, fit) {
+  number_frequencies <- nrow(frequencies)
+  number_features <- 2 * number_frequencies
+  model_cf <- .gof_make_model_cf(model, fit)
+
+  phi <- model_cf(frequencies)
+  feature_mean <- c(Re(phi), Im(phi))
+  second_moment <- matrix(
+    0,
+    nrow = number_features,
+    ncol = number_features
+  )
+
+  for (j in seq_len(number_frequencies)) {
+    for (k in seq_len(number_frequencies)) {
+      frequency_plus <- frequencies[j, ] + frequencies[k, ]
+      frequency_j_minus_k <- frequencies[j, ] - frequencies[k, ]
+      frequency_k_minus_j <- -frequency_j_minus_k
+
+      pair_frequencies <- rbind(
+        frequency_plus,
+        frequency_j_minus_k,
+        frequency_k_minus_j
+      )
+      pair_cf <- model_cf(pair_frequencies)
+
+      phi_plus <- pair_cf[1]
+      phi_j_minus_k <- pair_cf[2]
+      phi_k_minus_j <- pair_cf[3]
+
+      # cos(A) cos(B) = {cos(A-B) + cos(A+B)} / 2
+      second_moment[j, k] <-
+        Re(phi_j_minus_k + phi_plus) / 2
+
+      # sin(A) sin(B) = {cos(A-B) - cos(A+B)} / 2
+      second_moment[number_frequencies + j,
+                    number_frequencies + k] <-
+        Re(phi_j_minus_k - phi_plus) / 2
+
+      # cos(A) sin(B) = {sin(A+B) + sin(B-A)} / 2
+      second_moment[j, number_frequencies + k] <-
+        Im(phi_plus + phi_k_minus_j) / 2
+      second_moment[number_frequencies + k, j] <-
+        second_moment[j, number_frequencies + k]
+    }
+  }
+
+  feature_covariance <- second_moment - tcrossprod(feature_mean)
+
+  # Remove tiny asymmetry caused by floating-point calculations.
+  (feature_covariance + t(feature_covariance)) / 2
+}
+
+
+# Perform the complete parameter-adjusted eigenvalue GOF test.
+#
+# If `fit` is supplied, it should be the model fitted to these same draws.
+# Supplying true parameters would incorrectly apply a fitted-parameter
+# correction; use the known-parameter eigenvalue test for that situation.
+gof_test_eigenvalues_adjusted <- function(
+    draws,
+    model = c(
+      "normal",
+      "skewt",
+      "vargamma",
+      "invgauss",
+      "genhyper"
+    ),
+    fit = NULL,
+    freqs = NULL,
+    n_frequencies = 20L,
+    n_mixture = 100000L,
+    frequency_sd = NULL,
+    max_iter = 1000L,
+    tol = 1e-6,
+    quiet = TRUE,
+    restrict = NULL,
+    finite_difference = 1e-5,
+    information_tolerance = 1e-8,
+    eigen_tolerance = 1e-10,
+    seed = NULL) {
+
+  model <- match.arg(model)
+  data_name <- deparse(substitute(draws))
+
+  if (!inherits(draws, "tensor")) {
+    stop("`draws` must be a tensor object.", call. = FALSE)
+  }
+
+  if (n_draws(draws) < 2L) {
+    stop("At least two tensor draws are required.", call. = FALSE)
+  }
+
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  p <- prod(draw_shape(draws))
+
+  if (is.null(freqs)) {
+    if (length(n_frequencies) != 1L ||
+        !is.finite(n_frequencies) ||
+        n_frequencies < 1L ||
+        n_frequencies != floor(n_frequencies)) {
+      stop("`n_frequencies` must be one positive integer.",
+           call. = FALSE)
+    }
+
+    n_frequencies <- as.integer(n_frequencies)
+
+    if (is.null(frequency_sd)) {
+      frequency_sd <- 1 / sqrt(p)
+    }
+
+    freqs <- matrix(
+      rnorm(
+        n = n_frequencies * p,
+        sd = frequency_sd
+      ),
+      nrow = n_frequencies,
+      ncol = p
+    )
+  } else if (inherits(freqs, "tensor")) {
+    if (!identical(
+      as.integer(draw_shape(freqs)),
+      as.integer(draw_shape(draws))
+    )) {
+      stop("The frequency tensors must have the same shape as the draws.",
+           call. = FALSE)
+    }
+
+    freqs <- matrix(
+      unclass(freqs),
+      nrow = n_draws(freqs),
+      ncol = p
+    )
+  } else {
+    freqs <- as.matrix(freqs)
+
+    if (ncol(freqs) != p || nrow(freqs) < 1L ||
+        any(!is.finite(freqs))) {
+      stop(
+        "`freqs` must have one row per frequency and ",
+        p,
+        " finite columns.",
+        call. = FALSE
+      )
+    }
+  }
+
+  if (length(n_mixture) != 1L ||
+      !is.finite(n_mixture) ||
+      n_mixture < 1L ||
+      n_mixture != floor(n_mixture)) {
+    stop("`n_mixture` must be one positive integer.",
+         call. = FALSE)
+  }
+
+  n_mixture <- as.integer(n_mixture)
+
+  if (is.null(fit)) {
+    fit <- tensor_mle(
+      draws,
+      model = model,
+      max_iter = max_iter,
+      tol = tol,
+      quiet = quiet,
+      restrict = restrict
+    )
+  }
+
+  observed <- .gof_cf_statistic(
+    draws = draws,
+    model = model,
+    fit = fit,
+    frequencies = freqs
+  )
+
+  adjusted <- compute_eigen_adjusted(
+    draws = draws,
+    freqs = freqs,
+    model = model,
+    fit = fit,
+    max_iter = max_iter,
+    tol = tol,
+    quiet = quiet,
+    restrict = restrict,
+    finite_difference = finite_difference,
+    information_tolerance = information_tolerance,
+    eigen_tolerance = eigen_tolerance,
+    return_details = TRUE
+  )
+
+  eigenvalues <- adjusted$eigenvalues
+  mixture_statistics <- numeric(n_mixture)
+
+  for (j in seq_along(eigenvalues)) {
+    mixture_statistics <- mixture_statistics +
+      eigenvalues[j] * rchisq(n_mixture, df = 1)
+  }
+
+  p_value <- (
+    1 + sum(mixture_statistics >= observed$statistic)
+  ) / (
+    n_mixture + 1
+  )
+
+  model_label <- switch(
+    model,
+    normal = "tensor-variate normal",
+    skewt = "tensor-variate skewed t",
+    vargamma = "tensor-variate variance-gamma",
+    invgauss = "tensor-variate inverse-Gaussian",
+    genhyper = "tensor-variate generalized hyperbolic"
+  )
+
+  structure(
+    list(
+      statistic = c(T = observed$statistic),
+      parameter = c(
+        rank = length(eigenvalues),
+        information_rank = adjusted$information_rank
+      ),
+      p.value = p_value,
+      method = paste(
+        "Parameter-adjusted eigenvalue CF goodness-of-fit test for the",
+        model_label
+      ),
+      data.name = data_name,
+      model = model,
+      fit = fit,
+      frequencies = freqs,
+      empirical_cf = observed$empirical_cf,
+      theoretical_cf = observed$theoretical_cf,
+      adjusted_feature_covariance =
+        adjusted$adjusted_feature_covariance,
+      unadjusted_feature_covariance =
+        adjusted$unadjusted_feature_covariance,
+      parameter_correction = adjusted$parameter_correction,
+      eigenvalues = eigenvalues,
+      all_eigenvalues = adjusted$all_eigenvalues,
+      information = adjusted$information,
+      information_eigenvalues =
+        adjusted$information_eigenvalues,
+      information_rank = adjusted$information_rank,
+      number_parameters = adjusted$number_parameters,
+      parameter_names = adjusted$parameter_names,
+      mean_score = adjusted$mean_score,
+      n_mixture = n_mixture,
+      parameters_treated_as_known = FALSE
+    ),
+    class = "htest"
+  )
+}
+
+#' Characteristic-function goodness-of-fit test for tensor data
+#'
+#' @param draws A tensor object containing IID tensor draws.
+#' @param model Either "normal" or "skewt".
+#' @param B Number of parametric bootstrap samples. Use 999 or more for a
+#'   reported analysis.
+#' @param n_frequencies Number of characteristic-function frequencies.
+#' @param frequency_sd Standard deviation used to generate each frequency
+#'   coordinate. The default keeps frequency norms near one as p increases.
+#' @param max_iter,tol,quiet,restrict Arguments passed to tensor_mle().
+#' @param seed Optional random-number seed for reproducibility.
+#'
+#' @return An htest object containing the statistic and bootstrap p-value.
+gof_test <- function(draws,
+                     model = c("normal", "skewt"),
+                     B = 199L,
+                     n_frequencies = 20L,
+                     frequency_sd = NULL,
+                     max_iter = 1000L,
+                     tol = 1e-4,
+                     quiet = TRUE,
+                     restrict = NULL,
+                     seed = NULL) {
+  model <- match.arg(model)
+  data_name <- deparse(substitute(draws))
+
+  if (!inherits(draws, "tensor")) {
+    stop("`draws` must be a tensor object.", call. = FALSE)
+  }
+
+  if (n_draws(draws) < 2L) {
+    stop("At least two tensor draws are required.", call. = FALSE)
+  }
+
+  if (length(B) != 1L || !is.finite(B) || B < 1 || B != floor(B)) {
+    stop("`B` must be one positive integer.", call. = FALSE)
+  }
+
+  if (length(n_frequencies) != 1L || !is.finite(n_frequencies) ||
+      n_frequencies < 1 || n_frequencies != floor(n_frequencies)) {
+    stop("`n_frequencies` must be one positive integer.", call. = FALSE)
+  }
+
+  B <- as.integer(B)
+  n_frequencies <- as.integer(n_frequencies)
+
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  n <- n_draws(draws)
+  p <- prod(draw_shape(draws))
+
+  if (is.null(frequency_sd)) {
+    frequency_sd <- 1 / sqrt(p)
+  }
+
+  # Use one fixed frequency matrix for the observed statistic and every
+  # bootstrap statistic. This ensures that they are directly comparable.
+  frequencies <- matrix(
+    rnorm(n_frequencies * p, sd = frequency_sd),
+    nrow = n_frequencies,
+    ncol = p
+  )
+
+  # Fit the requested null model to the observed draws.
+  observed_fit <- tensor_mle(
+    draws,
+    model = model,
+    max_iter = max_iter,
+    tol = tol,
+    quiet = quiet,
+    restrict = restrict
+  )
+
+  observed <- .gof_cf_statistic(
+    draws = draws,
+    model = model,
+    fit = observed_fit,
+    frequencies = frequencies
+  )
+
+  bootstrap_statistics <- numeric(B)
+
+  # Generate samples from the fitted model. Crucially, each bootstrap sample
+  # is re-fitted before its statistic is computed.
+  for (b in seq_len(B)) {
+    if (model == "normal") {
+      bootstrap_draws <- rtnorm(
+        n = n,
+        mu = observed_fit$mu,
+        sigmas = observed_fit$sigmas
+      )
+    } else {
+      bootstrap_draws <- rtskewt(
+        n = n,
+        mu = observed_fit$mu,
+        sigmas = observed_fit$sigmas,
+        skew = observed_fit$skew,
+        nu = observed_fit$nu
+      )
+    }
+
+    bootstrap_fit <- tensor_mle(
+      bootstrap_draws,
+      model = model,
+      max_iter = max_iter,
+      tol = tol,
+      quiet = quiet,
+      restrict = restrict
+    )
+
+    bootstrap_result <- .gof_cf_statistic(
+      draws = bootstrap_draws,
+      model = model,
+      fit = bootstrap_fit,
+      frequencies = frequencies
+    )
+
+    bootstrap_statistics[b] <- bootstrap_result$statistic
+  }
+
+  # The add-one formula prevents a bootstrap p-value of exactly zero.
+  p_value <- (1 + sum(bootstrap_statistics >= observed$statistic)) /
+    (B + 1)
+
+  method_name <- if (model == "normal") {
+    "Bootstrap CF goodness-of-fit test for the tensor-variate normal"
+  } else {
+    "Bootstrap CF goodness-of-fit test for the tensor-variate skewed t"
+  }
+
+  structure(
+    list(
+      statistic = c(T = observed$statistic),
+      parameter = c(B = B),
+      p.value = p_value,
+      method = method_name,
+      data.name = data_name,
+      fit = observed_fit,
+      frequencies = frequencies,
+      empirical_cf = observed$empirical_cf,
+      theoretical_cf = observed$theoretical_cf,
+      bootstrap_statistics = bootstrap_statistics
+    ),
+    class = "htest"
+  )
+}
+
+#' Eigenvalue CF goodness-of-fit test for tensor data
+#'
+#' This faster version treats the fitted parameters as if they were known. It
+#' does not generate tensor bootstrap samples or re-fit the model. Instead, it
+#' approximates the null distribution by a weighted sum of chi-squares:
+#'
+#'     lambda_1 * chi-square_1 + ... + lambda_r * chi-square_1.
+#'
+#' @param draws A tensor object containing IID tensor draws.
+#' @param model Either "normal" or "skewt".
+#' @param n_frequencies Number of characteristic-function frequencies.
+#' @param n_mixture Number of draws from the weighted chi-squared limit used
+#'   to calculate the p-value. These are inexpensive scalar simulations.
+#' @param frequency_sd Standard deviation used to generate each frequency
+#'   coordinate. The default keeps frequency norms near one as p increases.
+#' @param eigen_tolerance Relative cutoff for retaining positive eigenvalues.
+#' @param max_iter,tol,quiet,restrict Arguments passed to tensor_mle().
+#' @param seed Optional random-number seed for reproducibility.
+#'
+#' @return An htest object containing the statistic, eigenvalues, and p-value.
+gof_test_eigenvalues <- function(draws,
+                                 model = c("normal", "skewt"),
+                                 n_frequencies = 20L,
+                                 n_mixture = 100000L,
+                                 frequency_sd = NULL,
+                                 eigen_tolerance = 1e-10,
+                                 max_iter = 1000L,
+                                 tol = 1e-4,
+                                 quiet = TRUE,
+                                 restrict = NULL,
+                                 seed = NULL) {
+  model <- match.arg(model)
+  data_name <- deparse(substitute(draws))
+
+  if (!inherits(draws, "tensor")) {
+    stop("`draws` must be a tensor object.", call. = FALSE)
+  }
+
+  if (n_draws(draws) < 2L) {
+    stop("At least two tensor draws are required.", call. = FALSE)
+  }
+
+  if (length(n_frequencies) != 1L || !is.finite(n_frequencies) ||
+      n_frequencies < 1 || n_frequencies != floor(n_frequencies)) {
+    stop("`n_frequencies` must be one positive integer.", call. = FALSE)
+  }
+
+  if (length(n_mixture) != 1L || !is.finite(n_mixture) ||
+      n_mixture < 1 || n_mixture != floor(n_mixture)) {
+    stop("`n_mixture` must be one positive integer.", call. = FALSE)
+  }
+
+  if (length(eigen_tolerance) != 1L || !is.finite(eigen_tolerance) ||
+      eigen_tolerance <= 0) {
+    stop("`eigen_tolerance` must be one positive number.", call. = FALSE)
+  }
+
+  n_frequencies <- as.integer(n_frequencies)
+  n_mixture <- as.integer(n_mixture)
+
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  p <- prod(draw_shape(draws))
+
+  if (is.null(frequency_sd)) {
+    frequency_sd <- 1 / sqrt(p)
+  }
+
+  frequencies <- matrix(
+    rnorm(n_frequencies * p, sd = frequency_sd),
+    nrow = n_frequencies,
+    ncol = p
+  )
+
+  # This is the only model fit required by the eigenvalue method.
+  fit <- tensor_mle(
+    draws,
+    model = model,
+    max_iter = max_iter,
+    tol = tol,
+    quiet = quiet,
+    restrict = restrict
+  )
+
+  observed <- .gof_cf_statistic(
+    draws = draws,
+    model = model,
+    fit = fit,
+    frequencies = frequencies
+  )
+
+  feature_covariance <- .gof_feature_covariance(
+    frequencies = frequencies,
+    model = model,
+    fit = fit
+  )
+
+  # Because T_n divides the squared CF differences by L, its limiting
+  # chi-squared weights are the eigenvalues of V / L.
+  eigen_result <- eigen(
+    feature_covariance / n_frequencies,
+    symmetric = TRUE,
+    only.values = TRUE
+  )
+  all_eigenvalues <- eigen_result$values
+  largest_eigenvalue <- max(all_eigenvalues, 0)
+  cutoff <- largest_eigenvalue * eigen_tolerance
+  eigenvalues <- all_eigenvalues[all_eigenvalues > cutoff]
+
+  if (length(eigenvalues) == 0L) {
+    stop("The feature covariance has numerical rank zero.", call. = FALSE)
+  }
+
+  # This simulation uses scalar chi-squares only. It does not simulate tensor
+  # data and does not call tensor_mle() again.
+  mixture_statistics <- numeric(n_mixture)
+
+  for (j in seq_along(eigenvalues)) {
+    mixture_statistics <- mixture_statistics +
+      eigenvalues[j] * rchisq(n_mixture, df = 1)
+  }
+
+  # The add-one formula prevents a simulated p-value of exactly zero.
+  p_value <- (1 + sum(mixture_statistics >= observed$statistic)) /
+    (n_mixture + 1)
+
+  method_name <- if (model == "normal") {
+    paste(
+      "Eigenvalue CF goodness-of-fit test for the tensor-variate normal",
+      "(fitted parameters treated as known)"
+    )
+  } else {
+    paste(
+      "Eigenvalue CF goodness-of-fit test for the tensor-variate skewed t",
+      "(fitted parameters treated as known)"
+    )
+  }
+
+  structure(
+    list(
+      statistic = c(T = observed$statistic),
+      parameter = c(rank = length(eigenvalues)),
+      p.value = p_value,
+      method = method_name,
+      data.name = data_name,
+      fit = fit,
+      frequencies = frequencies,
+      empirical_cf = observed$empirical_cf,
+      theoretical_cf = observed$theoretical_cf,
+      feature_covariance = feature_covariance,
+      eigenvalues = eigenvalues,
+      all_eigenvalues = all_eigenvalues,
+      n_mixture = n_mixture,
+      parameters_treated_as_known = TRUE
+    ),
+    class = "htest"
+  )
+}
+```
+
+
+```{r simple-eigenvalue-test-example}
+normal_draws <- rtnorm(n = 1e3, mu = mu, sigmas = list(s1, s2, s3))
+
+# Example:
+tic()
+normal_result <- gof_test_eigenvalues(
+  draws = normal_draws,
+  model = "normal",
+  seed = 123)
+toc()
+
+normal_result
+
+skewt_draws <- rtskewt(n = 1e3, mu = mu,
+                       sigmas = list(s1, s2, s3),
+                       skew = array(rnorm(24), dim = c(2, 3, 4)))
+
+# Fast eigenvalue version (no tensor bootstrap or repeated model fits):
+gof_test_eigenvalues(draws = skewt_draws, model = "normal", seed = 123)
+```
+
+# Simple simulation study
+
+This simulation checks three basic behaviors of the eigenvalue test:
+
+1. Normal data should usually not be rejected by the normal model.
+2. Skewed (t) data should often be rejected by the normal model.
+3. Skewed (t) data should usually not be rejected by the skewed (t) model.
+
+The first and third scenarios estimate the null rejection rate, which should be
+near `alpha`. The second scenario estimates power and should have a larger
+rejection rate. Because the fitted parameters are currently treated as known,
+the null rejection rates are particularly important to inspect.
+
+```{r simple-eigenvalue-simulation}
+# Run a small simulation study for the eigenvalue GOF test.
+simple_gof_simulation <- function(number_simulations = 25L,
+                                  sample_size = 200L,
+                                  alpha = 0.05,
+                                  n_frequencies = 10L,
+                                  n_mixture = 20000L,
+                                  seed = 20260721,
+                                  show_progress = TRUE) {
+  set.seed(seed)
+
+  # Parameters shared by the normal and skewed t distributions.
+  mu <- matrix(c(-0.5, 0, 0.5, 1), nrow = 2, ncol = 2)
+  sigmas <- list(
+    matrix(c(1, 0.25, 0.25, 1.25), nrow = 2, ncol = 2),
+    matrix(c(0.8, -0.15, -0.15, 1.1), nrow = 2, ncol = 2)
+  )
+
+  # These values create a moderately skewed, heavy-tailed alternative to the
+  # tensor normal. Change them to investigate easier or harder alternatives.
+  skew <- matrix(c(0.7, -0.35, 0.45, 0.2), nrow = 2, ncol = 2)
+  nu <- 6
+
+  scenario_names <- c(
+    "normal data: test normal",
+    "skewt data: test normal",
+    "skewt data: test skewt"
+  )
+
+  # There are three test results for each simulation repetition.
+  results <- data.frame(
+    simulation = rep(seq_len(number_simulations), each = 3L),
+    scenario = rep(scenario_names, times = number_simulations),
+    p_value = NA_real_,
+    reject = NA,
+    expected_reject = rep(c(FALSE, TRUE, FALSE),
+                          times = number_simulations),
+    correct_decision = NA
+  )
+
+  row_number <- 1L
+
+  for (simulation in seq_len(number_simulations)) {
+    if (show_progress) {
+      message(
+        "Simulation ", simulation, " of ", number_simulations
+      )
+    }
+
+    normal_draws <- rtnorm(
+      n = sample_size,
+      mu = mu,
+      sigmas = sigmas
+    )
+
+    skewt_draws <- rtskewt(
+      n = sample_size,
+      mu = mu,
+      sigmas = sigmas,
+      skew = skew,
+      nu = nu
+    )
+
+    # Normal model applied to data generated from the normal model.
+    normal_null <- tryCatch(
+      gof_test_eigenvalues(
+        draws = normal_draws,
+        model = "normal",
+        n_frequencies = n_frequencies,
+        n_mixture = n_mixture,
+        quiet = TRUE
+      ),
+      error = function(error) NULL
+    )
+
+    if (!is.null(normal_null)) {
+      results$p_value[row_number] <- normal_null$p.value
+    }
+    row_number <- row_number + 1L
+
+    # Normal model applied to skewed t data. Rejection is the desired outcome.
+    normal_alternative <- tryCatch(
+      gof_test_eigenvalues(
+        draws = skewt_draws,
+        model = "normal",
+        n_frequencies = n_frequencies,
+        n_mixture = n_mixture,
+        quiet = TRUE
+      ),
+      error = function(error) NULL
+    )
+
+    if (!is.null(normal_alternative)) {
+      results$p_value[row_number] <- normal_alternative$p.value
+    }
+    row_number <- row_number + 1L
+
+    # Skewed t model applied to data generated from the skewed t model.
+    skewt_null <- tryCatch(
+      gof_test_eigenvalues(
+        draws = skewt_draws,
+        model = "skewt",
+        n_frequencies = n_frequencies,
+        n_mixture = n_mixture,
+        quiet = TRUE
+      ),
+      error = function(error) NULL
+    )
+
+    if (!is.null(skewt_null)) {
+      results$p_value[row_number] <- skewt_null$p.value
+    }
+    row_number <- row_number + 1L
+  }
+
+  results$reject <- results$p_value < alpha
+  results$correct_decision <-
+    results$reject == results$expected_reject
+
+  # Summarize each scenario with explicit loops to keep the calculation easy
+  # to inspect.
+  summary <- data.frame(
+    scenario = scenario_names,
+    successful_fits = integer(length(scenario_names)),
+    rejection_rate = numeric(length(scenario_names)),
+    correct_decision_rate = numeric(length(scenario_names))
+  )
+
+  for (j in seq_along(scenario_names)) {
+    rows <- results$scenario == scenario_names[j]
+    successful <- rows & !is.na(results$p_value)
+
+    summary$successful_fits[j] <- sum(successful)
+
+    if (sum(successful) > 0L) {
+      summary$rejection_rate[j] <- mean(results$reject[successful])
+      summary$correct_decision_rate[j] <-
+        mean(results$correct_decision[successful])
+    } else {
+      summary$rejection_rate[j] <- NA_real_
+      summary$correct_decision_rate[j] <- NA_real_
+    }
+  }
+
+  list(
+    summary = summary,
+    results = results,
+    settings = list(
+      number_simulations = number_simulations,
+      sample_size = sample_size,
+      alpha = alpha,
+      n_frequencies = n_frequencies,
+      n_mixture = n_mixture,
+      mu = mu,
+      sigmas = sigmas,
+      skew = skew,
+      nu = nu
+    )
+  )
+}
+```
+
+Start with a small run to make sure everything behaves as expected. Increase
+`number_simulations` to at least 500 when estimating a (5\%\) rejection rate
+for a formal study.
+
+```{r run-simple-eigenvalue-simulation, eval=FALSE}
+simulation_result <- simple_gof_simulation(
+  number_simulations = 25,
+  sample_size = 200,
+  seed = 123
+)
+
+simulation_result$summary
+
+# Inspect all individual p-values and decisions if needed.
+head(simulation_result$results)
+```
+
+For the two correctly specified scenarios, do not look only at the
+`correct_decision_rate`: a test that never rejects would score highly by that
+measure. Also check that the `rejection_rate` is reasonably close to `alpha`
+and that the null p-values are spread across ([0,1]). Rejection rates near zero
+together with p-values concentrated near one indicate that treating fitted
+parameters as known is making the test conservative.
+
+# Simulation study for the parameter-adjusted eigenvalue test
+
+This version uses `compute_eigen_adjusted()` rather than the known-parameter
+eigenvalues. The same fixed frequencies are used in every repetition and in
+all scenarios. This makes changes in the results come from the simulated
+samples rather than from selecting new frequencies for every test.
+
+Each distribution is tested against its own fitted model to estimate Type I
+error. Each skewed distribution is also tested against the tensor normal to
+provide a simple power check. Correctly specified models should have rejection
+rates near 0.05 and 0.10 in a large simulation; the misspecified normal models
+should be rejected more often.
+
+```{r adjusted-eigenvalue-simulation}
+adjusted_eigenvalue_simulation <- function(
+    number_simulations = 10L,
+    sample_size = 300L,
+    n_frequencies = 12L,
+    n_mixture = 20000L,
+    seed = 20260723,
+    show_progress = TRUE) {
+
+  set.seed(seed)
+
+  # We use small 2 x 2 tensors so that a reasonably large simulation can be
+  # completed quickly. The function itself works with other tensor dimensions.
+  tensor_dims <- c(2, 2)
+  p <- prod(tensor_dims)
+
+  mu <- matrix(
+    c(-0.5, 0, 0.5, 1),
+    nrow = 2,
+    ncol = 2
+  )
+
+  sigmas <- list(
+    matrix(c(
+      1, 0.25,
+      0.25, 1.25
+    ), nrow = 2, byrow = TRUE),
+    matrix(c(
+      0.8, -0.15,
+      -0.15, 1.1
+    ), nrow = 2, byrow = TRUE)
+  )
+
+  skew <- matrix(
+    c(0.7, -0.35, 0.45, 0.2),
+    nrow = 2,
+    ncol = 2
+  )
+
+  nu <- 6
+  gamma <- 3
+  kappa <- 2
+  lambda <- 2
+  omega <- 3
+
+  # Construct fixed reference frequencies at several radii. Each row is one
+  # vectorized 2 x 2 frequency tensor.
+  radii <- c(0.5, 1, 2, 3)
+  frequencies <- matrix(
+    0,
+    nrow = n_frequencies,
+    ncol = p
+  )
+
+  for (j in seq_len(n_frequencies)) {
+    direction <- rnorm(p)
+    direction <- direction / sqrt(sum(direction^2))
+
+    radius_number <- ((j - 1L) %% length(radii)) + 1L
+    frequencies[j, ] <- radii[radius_number] * direction
+  }
+
+  # Every distribution has one correctly specified null scenario. Each
+  # skewed distribution also has a normal-model power scenario.
+  data_models <- c(
+    "normal",
+    "skewt", "skewt",
+    "vargamma", "vargamma",
+    "invgauss", "invgauss",
+    "genhyper", "genhyper"
+  )
+
+  fitted_models <- c(
+    "normal",
+    "normal", "skewt",
+    "normal", "vargamma",
+    "normal", "invgauss",
+    "normal", "genhyper"
+  )
+
+  scenario_type <- c(
+    "null",
+    "alternative", "null",
+    "alternative", "null",
+    "alternative", "null",
+    "alternative", "null"
+  )
+
+  scenario_names <- paste(
+    data_models,
+    "data: test",
+    fitted_models
+  )
+
+  number_scenarios <- length(scenario_names)
+  number_rows <- number_simulations * number_scenarios
+
+  results <- data.frame(
+    simulation = rep(
+      seq_len(number_simulations),
+      each = number_scenarios
+    ),
+    scenario = rep(
+      scenario_names,
+      times = number_simulations
+    ),
+    data_model = rep(
+      data_models,
+      times = number_simulations
+    ),
+    fitted_model = rep(
+      fitted_models,
+      times = number_simulations
+    ),
+    scenario_type = rep(
+      scenario_type,
+      times = number_simulations
+    ),
+    statistic = rep(NA_real_, number_rows),
+    p_value = rep(NA_real_, number_rows),
+    number_eigenvalues = rep(NA_integer_, number_rows),
+    information_rank = rep(NA_integer_, number_rows),
+    number_parameters = rep(NA_integer_, number_rows),
+    failure = rep("", number_rows),
+    stringsAsFactors = FALSE
+  )
+
+  # Carry out one adjusted eigenvalue test. This helper is kept inside the
+  # simulation function because it is only needed for this study.
+  one_adjusted_test <- function(current_draws, current_model) {
+
+    current_fit <- tensor_mle(
+      current_draws,
+      model = current_model,
+      max_iter = 1000L,
+      tol = 1e-6,
+      quiet = TRUE
+    )
+
+    # This is the same observed statistic used by gof_test_eigenvalues().
+    observed <- .gof_cf_statistic(
+      draws = current_draws,
+      model = current_model,
+      fit = current_fit,
+      frequencies = frequencies
+    )
+
+    adjusted <- compute_eigen_adjusted(
+      draws = current_draws,
+      freqs = frequencies,
+      model = current_model,
+      fit = current_fit,
+      return_details = TRUE
+    )
+
+    eigenvalues <- adjusted$eigenvalues
+
+    # Simulate the inexpensive weighted chi-squared approximation.
+    mixture_statistics <- numeric(n_mixture)
+
+    for (j in seq_along(eigenvalues)) {
+      mixture_statistics <- mixture_statistics +
+        eigenvalues[j] * rchisq(n_mixture, df = 1)
+    }
+
+    p_value <- (
+      1 + sum(mixture_statistics >= observed$statistic)
+    ) / (
+      n_mixture + 1
+    )
+
+    list(
+      statistic = observed$statistic,
+      p_value = p_value,
+      number_eigenvalues = length(eigenvalues),
+      information_rank = adjusted$information_rank,
+      number_parameters = adjusted$number_parameters
+    )
+  }
+
+  row_number <- 1L
+
+  for (simulation in seq_len(number_simulations)) {
+
+    if (show_progress) {
+      message(
+        "Adjusted-eigenvalue simulation ",
+        simulation,
+        " of ",
+        number_simulations
+      )
+    }
+
+    # Generate one sample from each distribution. When a sample is tested
+    # against two models, both tests use exactly the same observations.
+    generated_draws <- list(
+      normal = rtnorm(
+        n = sample_size,
+        mu = mu,
+        sigmas = sigmas
+      ),
+      skewt = rtskewt(
+        n = sample_size,
+        mu = mu,
+        sigmas = sigmas,
+        skew = skew,
+        nu = nu
+      ),
+      vargamma = rtvargamma(
+        n = sample_size,
+        mu = mu,
+        sigmas = sigmas,
+        skew = skew,
+        scale = gamma
+      ),
+      invgauss = rtinvgauss(
+        n = sample_size,
+        mu = mu,
+        sigmas = sigmas,
+        skew = skew,
+        kappa = kappa
+      ),
+      genhyper = rtgenhyper(
+        n = sample_size,
+        mu = mu,
+        sigmas = sigmas,
+        skew = skew,
+        lambda = lambda,
+        omega = omega
+      )
+    )
+
+    for (scenario in seq_len(number_scenarios)) {
+
+      current_result <- tryCatch(
+        one_adjusted_test(
+          current_draws = generated_draws[[data_models[scenario]]],
+          current_model = fitted_models[scenario]
+        ),
+        error = function(error) error
+      )
+
+      if (inherits(current_result, "error")) {
+        results$failure[row_number] <-
+          conditionMessage(current_result)
+      } else {
+        results$statistic[row_number] <-
+          current_result$statistic
+        results$p_value[row_number] <-
+          current_result$p_value
+        results$number_eigenvalues[row_number] <-
+          current_result$number_eigenvalues
+        results$information_rank[row_number] <-
+          current_result$information_rank
+        results$number_parameters[row_number] <-
+          current_result$number_parameters
+      }
+
+      row_number <- row_number + 1L
+    }
+  }
+
+  # Summarize the null rejection rates and power at both commonly used levels.
+  summary <- data.frame(
+    scenario = scenario_names,
+    scenario_type = scenario_type,
+    successful_tests = integer(number_scenarios),
+    mean_p_value = numeric(number_scenarios),
+    median_p_value = numeric(number_scenarios),
+    rejection_rate_05 = numeric(number_scenarios),
+    rejection_rate_10 = numeric(number_scenarios)
+  )
+
+  for (scenario in seq_len(number_scenarios)) {
+    use_rows <-
+      results$scenario == scenario_names[scenario] &
+      is.finite(results$p_value)
+
+    current_p_values <- results$p_value[use_rows]
+    summary$successful_tests[scenario] <-
+      length(current_p_values)
+
+    if (length(current_p_values) == 0L) {
+      summary$mean_p_value[scenario] <- NA_real_
+      summary$median_p_value[scenario] <- NA_real_
+      summary$rejection_rate_05[scenario] <- NA_real_
+      summary$rejection_rate_10[scenario] <- NA_real_
+    } else {
+      summary$mean_p_value[scenario] <-
+        mean(current_p_values)
+      summary$median_p_value[scenario] <-
+        median(current_p_values)
+      summary$rejection_rate_05[scenario] <-
+        mean(current_p_values <= 0.05)
+      summary$rejection_rate_10[scenario] <-
+        mean(current_p_values <= 0.10)
+    }
+  }
+
+  list(
+    summary = summary,
+    results = results,
+    frequencies = frequencies,
+    settings = list(
+      number_simulations = number_simulations,
+      sample_size = sample_size,
+      n_frequencies = n_frequencies,
+      n_mixture = n_mixture,
+      seed = seed,
+      mu = mu,
+      sigmas = sigmas,
+      skew = skew,
+      nu = nu,
+      gamma = gamma,
+      kappa = kappa,
+      lambda = lambda,
+      omega = omega
+    )
+  )
+}
+```
+
+Start with a very small run to check the computation, then increase
+`number_simulations`. A formal Type I error study should generally use at least
+500 repetitions.
+
+```{r run-adjusted-eigenvalue-simulation, eval=FALSE}
+adjusted_simulation <- adjusted_eigenvalue_simulation(
+  number_simulations = 10,
+  sample_size = 300,
+  n_frequencies = 12,
+  n_mixture = 20000,
+  seed = 123
+)
+
+adjusted_simulation$summary
+
+# The individual p-values are retained for histograms or QQ plots.
+head(adjusted_simulation$results)
+
+# For example, inspect the normal-null p-values.
+normal_null_p_values <- adjusted_simulation$results$p_value[
+  adjusted_simulation$results$scenario ==
+    "normal data: test normal"
+]
+
+hist(
+  normal_null_p_values,
+  breaks = 10,
+  main = "Adjusted eigenvalue p-values: normal null",
+  xlab = "p-value"
+)
+```
+
+
+```{r}
+univar_norm <- rnorm(1e3, mean = 2, sd = 4)
+
+mean_est <- mean(univar_norm)
+sd_est <- sd(univar_norm)
+
+norm_cf <- function(t, mean, sd) {
+  exp(1i * mean * t - 1/2 * sd^2 * t^2)
+}
+
+empirical_cf <- function(draws, t) {
+  z <- complex(length(t))
+
+  for (j in seq_along(t)) {
+    z[j] <- mean(exp(1i * draws * t[j]))
+  }
+
+  z
+}
+```
+
+
+```{r}
+library(ggplot2)
+
+t <- seq(-10, 10, length.out = 500)
+
+all_vals <-
+  tibble(t,
+         z_theory = norm_cf(t, mean_est, sd_est),
+         real_theory = Re(z_theory),
+         img_theory = Im(z_theory),
+         z_emp = empirical_cf(univar_norm, t),
+         real_emp = Re(z_emp),
+         img_emp = Im(z_emp))  
+  
+all_vals |>   
+  select(t, real_theory, img_theory, real_emp, img_emp) |>
+  pivot_longer(cols = -t, names_to = c("component", "source"), 
+               names_sep = "_", values_to = "value") |> 
+  ggplot() +
+  geom_line(aes(x = t, y = value)) +
+  facet_grid(source ~ component) +
+  theme_minimal()
+
+all_vals
+```
+
+
+```{r}
+tau <- 5
+#all_vals_diff <- 
+  all_vals |>
+  mutate(
+    weight = exp(-0.5 * (t / tau)^2),
+
+    z_diff = z_emp - z_theory,
+
+    real_diff = real_emp - real_theory,
+    img_diff  = img_emp - img_theory,
+
+    weighted_real_diff = weight * real_diff,
+    weighted_img_diff  = weight * img_diff,
+
+    abs_diff = Mod(z_diff),
+    weighted_sq_error = weight * abs_diff^2
+  ) |> 
+    
+ggplot() +
+    geom_histogram(aes(x = weighted_sq_error), 
+                   fill = "pink", color = "black", bins = 50) +
+    theme_minimal()
+```
+
+
+```{r}
+set.seed(123)
+
+B <- 2000
+n <- length(univar_norm)
+
+# Observed statistic
+mean_est <- mean(univar_norm)
+sd_est <- sd(univar_norm)
+
+z_emp <- empirical_cf(univar_norm, t)
+z_theory <- norm_cf(t, mean_est, sd_est)
+
+# Use the same weight function as defined above
+weight <- exp(-0.5 * t^2)
+
+dt <- diff(t)[1]
+
+T_obs <- n * sum(
+  weight * Mod(z_emp - z_theory)^2
+) * dt
+
+# Bootstrap null distribution
+T_boot <- numeric(B)
+
+for (b in seq_len(B)) {
+  x_boot <- rnorm(
+    n = n,
+    mean = mean_est,
+    sd = sd_est
+  )
+
+  # Re-estimate parameters within each bootstrap sample
+  mean_boot <- mean(x_boot)
+  sd_boot <- sd(x_boot)
+
+  z_emp_boot <- empirical_cf(x_boot, t)
+  z_theory_boot <- norm_cf(t, mean_boot, sd_boot)
+
+  T_boot[b] <- n * sum(
+    weight * Mod(z_emp_boot - z_theory_boot)^2
+  ) * dt
+}
+
+#bootstrap p-value
+mean(T_boot >= T_obs)
+```
+
+
+```{r}
+set.seed(123)
+
+R <- 500
+alpha <- 0.05
+reject <- logical(R)
+
+for (r in seq_len(R)) {
+  # Example alternative: standardized t distribution
+  x_alt <- as.numeric(scale(rt(n, df = 3)))
+
+  mean_alt <- mean(x_alt)
+  sd_alt <- sd(x_alt)
+
+  z_emp_alt <- empirical_cf(x_alt, t)
+  z_theory_alt <- norm_cf(t, mean_alt, sd_alt)
+
+  T_alt <- n * sum(
+    weight * Mod(z_emp_alt - z_theory_alt)^2
+  ) * dt
+
+  # Bootstrap null fitted to the alternative sample
+  T_null <- numeric(B)
+
+  for (b in seq_len(B)) {
+    x_boot <- rnorm(n, mean_alt, sd_alt)
+
+    z_emp_boot <- empirical_cf(x_boot, t)
+    z_theory_boot <- norm_cf(
+      t, mean(x_boot), sd(x_boot)
+    )
+
+    T_null[b] <- n * sum(
+      weight * Mod(z_emp_boot - z_theory_boot)^2
+    ) * dt
+  }
+
+  p_alt <- mean(T_null >= T_alt)
+  reject[r] <- p_alt < alpha
+}
+
+mean(reject)
+```
+
+
+# Goal
+
+Let \(X_1,\ldots,X_n\) be independent tensor observations. At a frequency
+vector \(t\), the empirical characteristic function (CF) is
+
+\[
+\widehat\varphi_n(t)
+=
+\frac{1}{n}\sum_{i=1}^n \exp\{i t^\top X_i\}.
+\]
+
+Its real and imaginary parts are sample averages of \(\cos(t^\top X_i)\)
+and \(\sin(t^\top X_i)\). The fitted distribution supplies their theoretical
+means and their joint covariance. Consequently, at a fixed set of \(L\)
+frequencies, the CF differences can be treated like a vector of correlated
+sample-mean differences.
+
+Let \(d\) contain the real and imaginary CF differences at all frequencies,
+and let \(V\) be their covariance under the null model. The test statistic is
+
+\[
+Q=n d^\top V^+ d,
+\]
+
+where \(V^+\) is a numerical pseudoinverse. When the model parameters are
+fixed, the asymptotic null distribution is
+
+\[
+Q\ \overset{\cdot}{\sim}\ \chi^2_{\operatorname{rank}(V)}.
+\]
+
+The code below implements this test for the tensor-variate normal (TVN) and
+the tensor-variate skewed \(t\). It avoids a full Kronecker covariance matrix
+by whitening each tensor mode separately.
+
+# Shared helpers
+
+```{r cf-helpers}
+# Apply mode-specific matrices to one tensor.
+.mode_transform <- function(x, matrices) {
+  for (k in seq_along(matrices)) {
+    x <- n_prod(x, k, matrices[[k]])
+  }
+  x
+}
+
+# Return matrices W_k satisfying W_k Sigma_k W_k' = I.
+.whitening_matrices <- function(sigmas) {
+  lapply(sigmas, function(S) {
+    S <- as.matrix(S)
+    S <- (S + t(S)) / 2
+    solve(t(chol(S)))
+  })
+}
+
+# Center and modewise-whiten every tensor, returning an n by p matrix.
+.standardize_tensor_sample <- function(draws, mu, sigmas) {
+  n <- n_draws(draws)
+  dims <- draw_shape(draws)
+  p <- prod(dims)
+  whitening <- .whitening_matrices(sigmas)
+  z <- matrix(NA_real_, nrow = n, ncol = p)
+
+  for (i in seq_len(n)) {
+    zi <- pull_draw(draws, i) - mu
+    zi <- .mode_transform(zi, whitening)
+    z[i, ] <- as.numeric(zi)
+  }
+
+  z
+}
+
+# The cosine/sine observations whose column means form the empirical CF.
+.cf_features <- function(z, frequencies) {
+  phase <- z %*% t(frequencies)
+  cbind(cos(phase), sin(phase))
+}
+
+# Given a CF evaluator, calculate the exact mean vector and covariance matrix
+# of [cos(t_1'X),...,cos(t_L'X),sin(t_1'X),...,sin(t_L'X)].
+#
+# `cf` must accept a matrix with one frequency per row and return one complex
+# CF value per row.
+.cf_feature_moments <- function(frequencies, cf) {
+  L <- nrow(frequencies)
+  phi <- cf(frequencies)
+
+  if (length(phi) != L || any(!is.finite(phi))) {
+    stop("The CF evaluator returned invalid values.", call. = FALSE)
+  }
+
+  feature_mean <- c(Re(phi), Im(phi))
+  feature_second <- matrix(0, nrow = 2 * L, ncol = 2 * L)
+
+  for (j in seq_len(L)) {
+    for (k in seq_len(L)) {
+      t_plus <- frequencies[j, ] + frequencies[k, ]
+      t_j_minus_k <- frequencies[j, ] - frequencies[k, ]
+      t_k_minus_j <- -t_j_minus_k
+
+      phi_plus <- cf(matrix(t_plus, nrow = 1L))
+      phi_j_minus_k <- cf(matrix(t_j_minus_k, nrow = 1L))
+      phi_k_minus_j <- cf(matrix(t_k_minus_j, nrow = 1L))
+
+      # Product-to-sum identities:
+      # cos(A)cos(B) = {cos(A-B) + cos(A+B)}/2
+      # sin(A)sin(B) = {cos(A-B) - cos(A+B)}/2
+      # cos(A)sin(B) = {sin(B+A) + sin(B-A)}/2
+      feature_second[j, k] <-
+        0.5 * Re(phi_j_minus_k + phi_plus)
+
+      feature_second[L + j, L + k] <-
+        0.5 * Re(phi_j_minus_k - phi_plus)
+
+      feature_second[j, L + k] <-
+        0.5 * Im(phi_plus + phi_k_minus_j)
+
+      feature_second[L + k, j] <- feature_second[j, L + k]
+    }
+  }
+
+  feature_cov <- feature_second - tcrossprod(feature_mean)
+  feature_cov <- (feature_cov + t(feature_cov)) / 2
+
+  list(mean = feature_mean, covariance = feature_cov)
+}
+
+# Calculate d' V^+ d using only numerically positive eigenvalues of V.
+.quadratic_form_pinv <- function(d, V, relative_tolerance = 1e-8) {
+  eig <- eigen(V, symmetric = TRUE)
+  cutoff <- max(eig$values, 0) * relative_tolerance
+  keep <- eig$values > cutoff
+
+  if (!any(keep)) {
+    stop("The CF feature covariance has numerical rank zero.", call. = FALSE)
+  }
+
+  projected <- crossprod(eig$vectors[, keep, drop = FALSE], d)
+  value <- sum(as.numeric(projected)^2 / eig$values[keep])
+
+  list(value = value, rank = sum(keep), eigenvalues = eig$values)
+}
+```
+
+# Model characteristic functions
+
+After modewise whitening, the TVN target distribution is \(N_p(0,I_p)\), so
+
+\[
+\varphi_{N_p(0,I)}(t)=\exp(-\lVert t\rVert^2/2).
+\]
+
+For the package's skewed \(t\), the whitened representation is
+
+\[
+Z = W a + \sqrt{W}\,\varepsilon,
+\qquad
+W\sim\operatorname{InvGamma}(\nu/2,\nu/2),
+\qquad
+\varepsilon\sim N_p(0,I_p),
+\]
+
+where \(a\) is the modewise-whitened skew tensor. Conditional on \(W\),
+
+\[
+E\{\exp(i t^\top Z)\mid W\}
+=
+\exp\left\{W\left(i t^\top a-\frac{1}{2}\lVert t\rVert^2\right)\right\}.
+\]
+
+The skewed-\(t\) CF below integrates out \(W\) using a large, reusable set of
+inverse-gamma quadrature draws. These are numerical integration values, not
+estimates of the unobserved \(W_i\)'s that generated the data.
+
+```{r model-cfs}
+.standard_normal_cf <- function(frequencies) {
+  values <- exp(-0.5 * rowSums(frequencies^2))
+  as.complex(values)
+}
+
+.make_standard_skewt_cf <- function(whitened_skew, nu,
+                                    n_mixing = 20000L,
+                                    mixing_uniforms = NULL) {
+  if (!is.numeric(nu) || length(nu) != 1L || !is.finite(nu) || nu <= 0) {
+    stop("`nu` must be one positive finite number.", call. = FALSE)
+  }
+
+  if (is.null(mixing_uniforms)) {
+    w_quadrature <- invgamma::rinvgamma(
+      n = n_mixing,
+      shape = nu / 2,
+      rate = nu / 2
+    )
+  } else {
+    if (!is.numeric(mixing_uniforms) || !length(mixing_uniforms) ||
+        any(!is.finite(mixing_uniforms)) ||
+        any(mixing_uniforms <= 0 | mixing_uniforms >= 1)) {
+      stop("`mixing_uniforms` must contain values strictly between 0 and 1.",
+           call. = FALSE)
+    }
+
+    # Reusing the uniforms gives every fitted nu the appropriate inverse-gamma
+    # law while coupling the numerical CF integration across bootstrap samples.
+    w_quadrature <- invgamma::qinvgamma(
+      mixing_uniforms,
+      shape = nu / 2,
+      rate = nu / 2
+    )
+  }
+
+  whitened_skew <- as.numeric(whitened_skew)
+
+  function(frequencies) {
+    frequencies <- as.matrix(frequencies)
+    q <- rowSums(frequencies^2)
+    ta <- drop(frequencies %*% whitened_skew)
+
+    vapply(seq_len(nrow(frequencies)), function(j) {
+      if (q[j] == 0 && ta[j] == 0) {
+        return(1 + 0i)
+      }
+
+      mean(exp(w_quadrature * (1i * ta[j] - 0.5 * q[j])))
+    }, FUN.VALUE = complex(1))
+  }
+}
+```
+
+# The test function
+
+The default frequencies have independent \(N(0,1/p)\) entries. Thus their
+expected squared norm is approximately one even when the vectorized tensor
+dimension \(p\) is large. This avoids the near-zero kernel/CF behavior that
+can occur when frequencies are too large in high dimension.
+
+```{r test-function}
+tensor_cf_wald_test <- function(draws,
+                                model = c("normal", "skewt"),
+                                fit = NULL,
+                                frequencies = NULL,
+                                n_frequencies = 10L,
+                                frequency_sd = NULL,
+                                n_mixing = 20000L,
+                                mixing_uniforms = NULL,
+                                max_iter = 1000L,
+                                tol = 1e-6,
+                                quiet = TRUE,
+                                restrict = NULL) {
+  model <- match.arg(model)
+
+  if (!inherits(draws, "tensor")) {
+    stop("`draws` must be a `tensor` object.", call. = FALSE)
+  }
+
+  n <- n_draws(draws)
+  dims <- draw_shape(draws)
+  p <- prod(dims)
+
+  if (n < 2L) {
+    stop("At least two tensor observations are required.", call. = FALSE)
+  }
+
+  parameters_estimated <- is.null(fit)
+
+  if (parameters_estimated) {
+    fit <- tensor_mle(
+      draws,
+      model = model,
+      max_iter = max_iter,
+      tol = tol,
+      quiet = quiet,
+      restrict = restrict
+    )
+  }
+
+  required <- if (model == "normal") {
+    c("mu", "sigmas")
+  } else {
+    c("mu", "sigmas", "skew", "nu")
+  }
+
+  missing_fit <- setdiff(required, names(fit))
+  if (length(missing_fit)) {
+    stop(
+      "`fit` is missing: ", paste(missing_fit, collapse = ", "),
+      call. = FALSE
+    )
+  }
+
+  if (is.null(frequencies)) {
+    if (is.null(frequency_sd)) {
+      frequency_sd <- 1 / sqrt(p)
+    }
+
+    frequencies <- matrix(
+      stats::rnorm(n_frequencies * p, sd = frequency_sd),
+      nrow = n_frequencies,
+      ncol = p
+    )
+  } else {
+    frequencies <- as.matrix(frequencies)
+
+    if (ncol(frequencies) != p) {
+      stop(
+        "`frequencies` must have ", p, " columns for this tensor shape.",
+        call. = FALSE
+      )
+    }
+  }
+
+  z <- .standardize_tensor_sample(draws, fit$mu, fit$sigmas)
+  observed_features <- .cf_features(z, frequencies)
+  observed_mean <- colMeans(observed_features)
+
+  if (model == "normal") {
+    cf <- .standard_normal_cf
+  } else {
+    whitening <- .whitening_matrices(fit$sigmas)
+    whitened_skew <- .mode_transform(fit$skew, whitening)
+    cf <- .make_standard_skewt_cf(
+      whitened_skew = whitened_skew,
+      nu = fit$nu,
+      n_mixing = n_mixing,
+      mixing_uniforms = mixing_uniforms
+    )
+  }
+
+  null_moments <- .cf_feature_moments(frequencies, cf)
+  difference <- observed_mean - null_moments$mean
+  quadratic <- .quadratic_form_pinv(
+    difference,
+    null_moments$covariance
+  )
+
+  statistic <- n * quadratic$value
+  df <- quadratic$rank
+  p_value <- stats::pchisq(statistic, df = df, lower.tail = FALSE)
+
+  method <- paste0(
+    "Finite-frequency CF-Wald test for the tensor-variate ",
+    if (model == "normal") "normal" else "skewed t"
+  )
+
+  if (parameters_estimated) {
+    method <- paste0(method, " (plug-in parameter estimates)")
+  }
+
+  structure(
+    list(
+      statistic = c(Q = statistic),
+      parameter = c(df = df),
+      p.value = p_value,
+      method = method,
+      data.name = deparse(substitute(draws)),
+      fit = fit,
+      frequencies = frequencies,
+      observed_cf = complex(
+        real = observed_mean[seq_len(nrow(frequencies))],
+        imaginary = observed_mean[nrow(frequencies) + seq_len(nrow(frequencies))]
+      ),
+      theoretical_cf = complex(
+        real = null_moments$mean[seq_len(nrow(frequencies))],
+        imaginary = null_moments$mean[
+          nrow(frequencies) + seq_len(nrow(frequencies))
+        ]
+      ),
+      difference = difference,
+      feature_covariance = null_moments$covariance,
+      covariance_eigenvalues = quadratic$eigenvalues,
+      parameters_estimated = parameters_estimated
+    ),
+    class = "htest"
+  )
+}
+```
+
+# TVN example
+
+Here the true parameters are supplied to demonstrate the fixed-parameter
+version of the test. Setting `fit = NULL` instead asks the function to estimate
+the TVN parameters with `tensor_mle()`.
+
+```{r tvn-example}
+set.seed(20260719)
+
+normal_mu <- array(c(-0.5, 0, 0.5, 1), dim = c(2, 2))
+normal_sigmas <- list(
+  matrix(c(1, 0.3, 0.3, 1.5), 2, 2),
+  matrix(c(0.8, -0.2, -0.2, 1.2), 2, 2)
+)
+
+normal_draws <- rtnorm(
+  n = 1000,
+  mu = normal_mu,
+  sigmas = normal_sigmas
+)
+
+normal_fixed_fit <- list(
+  mu = normal_mu,
+  sigmas = normal_sigmas
+)
+
+set.seed(1)
+normal_test <- tensor_cf_wald_test(
+  normal_draws,
+  model = "normal",
+  fit = normal_fixed_fit,
+  n_frequencies = 10
+)
+
+normal_test
+```
+
+For real data, the call is:
+
+```{r tvn-fitted-example, eval=FALSE}
+set.seed(1)
+normal_test_fitted <- tensor_cf_wald_test(
+  observed_tensor_draws,
+  model = "normal",
+  n_frequencies = 10
+)
+```
+
+# Tensor skewed-t example
+
+The skewed-\(t\) example uses the same finite-frequency statistic, but its
+theoretical CF and covariance are calculated by integrating over the fitted
+inverse-gamma mixing distribution.
+
+```{r skewt-example}
+set.seed(20260719)
+
+skewt_mu <- array(c(-0.5, 0, 0.5, 1), dim = c(2, 2))
+skewt_skew <- array(c(0.35, -0.15, 0.2, 0.1), dim = c(2, 2))
+skewt_sigmas <- list(
+  matrix(c(1, 0.2, 0.2, 1.3), 2, 2),
+  matrix(c(0.9, -0.1, -0.1, 1.1), 2, 2)
+)
+skewt_nu <- 8
+
+skewt_draws <- rtskewt(
+  n = 1000,
+  mu = skewt_mu,
+  sigmas = skewt_sigmas,
+  skew = skewt_skew,
+  nu = skewt_nu
+)
+
+skewt_fixed_fit <- list(
+  mu = skewt_mu,
+  sigmas = skewt_sigmas,
+  skew = skewt_skew,
+  nu = skewt_nu
+)
+
+set.seed(2)
+skewt_test <- tensor_cf_wald_test(
+  skewt_draws,
+  model = "skewt",
+  fit = skewt_fixed_fit,
+  n_frequencies = 10,
+  n_mixing = 20000
+)
+
+skewt_test
+```
+
+For real data, estimate the parameters by omitting `fit`:
+
+```{r skewt-fitted-example, eval=FALSE}
+set.seed(2)
+skewt_test_fitted <- tensor_cf_wald_test(
+  observed_tensor_draws,
+  model = "skewt",
+  n_frequencies = 10,
+  n_mixing = 20000,
+  tol = 1e-5
+)
+```
+
+# Inspecting the CF differences
+
+The result retains the pointwise empirical and theoretical CF values. This is
+useful because a single p-value does not show which frequencies disagree.
+
+```{r cf-difference-plot}
+cf_difference <- Mod(
+  skewt_test$observed_cf - skewt_test$theoretical_cf
+)
+
+plot(
+  cf_difference,
+  type = "h",
+  lwd = 2,
+  xlab = "Frequency number",
+  ylab = "Absolute CF difference",
+  main = "Tensor skewed-t CF discrepancies"
+)
+```
+
+# Interpretation and current limitation
+
+Large values of \(Q\), and therefore small chi-squared p-values, indicate that
+the empirical CF differs from the model CF by more than expected from ordinary
+sampling variation at the chosen frequencies. Failing to reject does not prove
+that the model is correct; it says that this collection of CF features did not
+find a detectable discrepancy.
+
+The chi-squared reference distribution directly applies when `fit` contains
+parameters fixed independently of `draws`. When `fit = NULL`, the same data are
+used both to estimate the model and to test it. Fitting makes the empirical and
+theoretical CFs artificially closer, so the chi-squared p-value is only a
+**plug-in asymptotic diagnostic**. The parametric-bootstrap function below
+calibrates the fitted-model statistic by repeating the estimation step in every
+bootstrap sample. The `parameters_estimated` element records whether the Wald
+test used fixed or fitted parameters.
+
+Using the same fixed frequency matrix is important when comparing models or
+repeating a simulation study. For example:
+
+```{r shared-frequencies, eval=FALSE}
+set.seed(100)
+p <- prod(draw_shape(observed_tensor_draws))
+shared_frequencies <- matrix(
+  rnorm(10 * p, sd = 1 / sqrt(p)),
+  nrow = 10,
+  ncol = p
+)
+
+normal_result <- tensor_cf_wald_test(
+  observed_tensor_draws,
+  model = "normal",
+  frequencies = shared_frequencies
+)
+
+skewt_result <- tensor_cf_wald_test(
+  observed_tensor_draws,
+  model = "skewt",
+  frequencies = shared_frequencies
+)
+```
+
+# GRABMyo tensor-model goodness-of-fit checks
+
+The processed GRABMyo data contain 43 participant-level tensors, each with
+dimensions $16\times28\times16$. Here we apply the characteristic-function
+test only to the two tensor-variate models used in the main analysis: the
+tensor normal and tensor skew-$t$.
+
+```{r grabmyo-cf-gof, message=FALSE, warning=FALSE}
+grabmyo_tensors <- readRDS("grabmyo_session1_tensors_16x28x16.rds")
+grabmyo_array <- simplify2array(grabmyo_tensors)
+grabmyo_draws <- as_tensor(grabmyo_array, obs = 4)
+
+set.seed(20260722)
+grabmyo_normal_cf <- gof_test_eigenvalues(
+  grabmyo_draws,
+  model = "normal",
+  n_frequencies = 20,
+  n_mixture = 100000,
+  max_iter = 1000,
+  tol = 1e-4,
+  quiet = TRUE
+)
+
+set.seed(20260722)
+grabmyo_skewt_cf <- gof_test_eigenvalues(
+  grabmyo_draws,
+  model = "skewt",
+  n_frequencies = 20,
+  n_mixture = 100000,
+  max_iter = 1000,
+  tol = 1e-4,
+  quiet = TRUE
+)
+
+grabmyo_cf_results <- data.frame(
+  Model = c("Tensor normal", "Tensor skew-t"),
+  Statistic = c(
+    unname(grabmyo_normal_cf$statistic),
+    unname(grabmyo_skewt_cf$statistic)
+  ),
+  `p-value` = c(
+    grabmyo_normal_cf$p.value,
+    grabmyo_skewt_cf$p.value
+  ),
+  `Fitted nu` = c(NA, grabmyo_skewt_cf$fit$nu)
+)
+
+knitr::kable(grabmyo_cf_results, digits = 4)
+```
+
+Both p-values are large, so this characteristic-function diagnostic does not
+reject either fitted tensor model at conventional significance levels. The
+skew-$t$ model is therefore compatible with the GRABMyo data according to
+this diagnostic, although the test does not establish that the model is true.
+The skew-$t$ model also has the lower AIC and BIC from the likelihood-based
+comparison.
+
+This table uses the eigenvalue approximation, which treats the fitted
+parameters as known and is therefore a fast plug-in diagnostic. The fully
+parametric bootstrap below instead refits every simulated sample. Because a
+skew-$t$ refit can encounter a numerical failure, the bootstrap result reports
+both successful and failed replicates.
+
+## Fully parametric bootstrap with refit failures recorded
+
+The following version performs the full parametric bootstrap: it simulates
+from the fitted model, refits that model to every bootstrap sample, and
+recomputes the CF statistic. A failed refit is recorded rather than silently
+discarded, so the stability of the numerical procedure is visible.
+
+```{r cf-parametric-bootstrap-function}
+tensor_cf_parametric_bootstrap <- function(draws,
+                                           model = c("normal", "skewt"),
+                                           fit = NULL,
+                                           frequencies = NULL,
+                                           B = 199L,
+                                           n_frequencies = 10L,
+                                           frequency_sd = NULL,
+                                           n_mixing = 20000L,
+                                           max_iter = 1000L,
+                                           tol = 1e-6,
+                                           quiet = TRUE,
+                                           restrict = NULL,
+                                           seed = NULL,
+                                           show_progress = FALSE) {
+  model <- match.arg(model)
+
+  if (!inherits(draws, "tensor")) {
+    stop("`draws` must be a `tensor` object.", call. = FALSE)
+  }
+  if (n_draws(draws) < 2L) {
+    stop("At least two tensor draws are required.", call. = FALSE)
+  }
+  if (length(B) != 1L || !is.finite(B) || B < 1L || B != floor(B)) {
+    stop("`B` must be one positive integer.", call. = FALSE)
+  }
+
+  B <- as.integer(B)
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  n <- n_draws(draws)
+  p <- prod(draw_shape(draws))
+
+  if (is.null(frequencies)) {
+    if (is.null(frequency_sd)) {
+      frequency_sd <- 1 / sqrt(p)
+    }
+    frequencies <- matrix(
+      rnorm(n_frequencies * p, sd = frequency_sd),
+      nrow = n_frequencies,
+      ncol = p
+    )
+  } else {
+    frequencies <- as.matrix(frequencies)
+    if (ncol(frequencies) != p) {
+      stop("`frequencies` must have ", p, " columns.", call. = FALSE)
+    }
+  }
+
+  # Common uniforms reduce numerical-integration noise in comparisons between
+  # the observed and bootstrap skew-t statistics. Each fitted nu transforms
+  # them to its own inverse-gamma mixing distribution.
+  mixing_uniforms <- if (model == "skewt") {
+    runif(n_mixing)
+  } else {
+    NULL
+  }
+
+  if (is.null(fit)) {
+    fit <- tensor_mle(
+      draws,
+      model = model,
+      max_iter = max_iter,
+      tol = tol,
+      quiet = quiet,
+      restrict = restrict
+    )
+  }
+
+  observed <- tensor_cf_wald_test(
+    draws,
+    model = model,
+    fit = fit,
+    frequencies = frequencies,
+    n_mixing = n_mixing,
+    mixing_uniforms = mixing_uniforms,
+    max_iter = max_iter,
+    tol = tol,
+    quiet = quiet,
+    restrict = restrict
+  )
+
+  bootstrap_statistics <- rep(NA_real_, B)
+  failures <- character(B)
+
+  for (b in seq_len(B)) {
+    if (show_progress) {
+      message("Bootstrap replicate ", b, " of ", B)
+    }
+
+    bootstrap_result <- tryCatch({
+      bootstrap_draws <- if (model == "normal") {
+        rtnorm(
+          n = n,
+          mu = fit$mu,
+          sigmas = fit$sigmas
+        )
+      } else {
+        rtskewt(
+          n = n,
+          mu = fit$mu,
+          sigmas = fit$sigmas,
+          skew = fit$skew,
+          nu = fit$nu
+        )
+      }
+
+      bootstrap_fit <- tensor_mle(
+        bootstrap_draws,
+        model = model,
+        max_iter = max_iter,
+        tol = tol,
+        quiet = quiet,
+        restrict = restrict
+      )
+
+      tensor_cf_wald_test(
+        bootstrap_draws,
+        model = model,
+        fit = bootstrap_fit,
+        frequencies = frequencies,
+        n_mixing = n_mixing,
+        mixing_uniforms = mixing_uniforms,
+        max_iter = max_iter,
+        tol = tol,
+        quiet = quiet,
+        restrict = restrict
+      )
+    }, error = function(error) error)
+
+    if (inherits(bootstrap_result, "error")) {
+      failures[b] <- conditionMessage(bootstrap_result)
+      next
+    }
+
+    bootstrap_statistics[b] <- unname(bootstrap_result$statistic)
+  }
+
+  successful <- is.finite(bootstrap_statistics)
+  if (!any(successful)) {
+    stop("All bootstrap replicates failed.", call. = FALSE)
+  }
+
+  p_value <- (
+    1 + sum(bootstrap_statistics[successful] >= unname(observed$statistic))
+  ) / (1 + sum(successful))
+
+  method <- paste0(
+    "Parametric-bootstrap finite-frequency CF test for the tensor-variate ",
+    if (model == "normal") "normal" else "skewed t"
+  )
+
+  structure(
+    list(
+      statistic = c(Q = unname(observed$statistic)),
+      parameter = c(B = sum(successful)),
+      p.value = p_value,
+      method = method,
+      data.name = deparse(substitute(draws)),
+      fit = fit,
+      frequencies = frequencies,
+      observed_test = observed,
+      bootstrap_statistics = bootstrap_statistics,
+      B_requested = B,
+      B_successful = sum(successful),
+      B_failed = sum(!successful),
+      failure_messages = failures[!successful]
+    ),
+    class = c("tensor_cf_bootstrap_test", "htest")
+  )
+}
+```
+
+# The examples use modest B while developing. Use B >= 999 for reported tests.
+```{r simulated-parametric-bootstrap, eval=FALSE}
+normal_boot <- tensor_cf_parametric_bootstrap(
+  normal_draws,
+  model = "normal",
+  B = 999,
+  n_frequencies = 10,
+  seed = 20260722
+)
+
+skewt_boot <- tensor_cf_parametric_bootstrap(
+  skewt_draws,
+  model = "skewt",
+  B = 999,
+  n_frequencies = 10,
+  n_mixing = 20000,
+  seed = 20260722
+)
+
+data.frame(
+  Model = c("Tensor normal", "Tensor skew-t"),
+  Statistic = c(normal_boot$statistic, skewt_boot$statistic),
+  `p-value` = c(normal_boot$p.value, skewt_boot$p.value),
+  Successful = c(normal_boot$B_successful, skewt_boot$B_successful),
+  Failed = c(normal_boot$B_failed, skewt_boot$B_failed)
+) |>
+  knitr::kable(digits = 4)
+```
+
+## Power sanity check with a deliberately wrong model
+
+As a negative control, generate two compact and well-separated tensor-normal
+populations, combine them into one bimodal sample, and fit a *single*
+tensor-normal model. A single elliptical distribution cannot represent the two
+clusters, so a useful CF test should reject it. This is a demonstration of
+power against one conspicuous alternative, not a general power study.
+
+```{r cf-bootstrap-power-check, message=FALSE, warning=FALSE}
+set.seed(20260725)
+
+power_dims <- c(2, 2)
+power_n_per_group <- 100L
+power_sigmas <- list(diag(0.35, 2), diag(0.35, 2))
+
+power_group_low <- rtnorm(
+  n = power_n_per_group,
+  mu = array(-2.5, dim = power_dims),
+  sigmas = power_sigmas
+)
+power_group_high <- rtnorm(
+  n = power_n_per_group,
+  mu = array(2.5, dim = power_dims),
+  sigmas = power_sigmas
+)
+
+# Combine the two tensor samples along their observation axis.
+power_matrix <- rbind(
+  matrix(unclass(power_group_low), nrow = power_n_per_group),
+  matrix(unclass(power_group_high), nrow = power_n_per_group)
+)
+power_mixture_draws <- tensor(
+  array(
+    power_matrix,
+    dim = c(2L * power_n_per_group, power_dims)
+  ),
+  obs = 1L
+)
+
+# B = 39 keeps this notebook check quick; its smallest possible add-one
+# p-value is 1 / (39 + 1) = 0.025. Use a larger B for a reported analysis.
+power_normal_boot <- tensor_cf_parametric_bootstrap(
+  power_mixture_draws,
+  model = "normal",
+  B = 39,
+  n_frequencies = 10,
+  seed = 20260725
+)
+
+data.frame(
+  Data = "Two-component bimodal tensor mixture",
+  Fitted_model = "Single tensor normal",
+  Statistic = unname(power_normal_boot$statistic),
+  p_value = power_normal_boot$p.value,
+  Successful = power_normal_boot$B_successful,
+  Failed = power_normal_boot$B_failed,
+  Decision_at_0.05 = ifelse(
+    power_normal_boot$p.value < 0.05,
+    "Reject",
+    "Do not reject"
+  )
+) |>
+  knitr::kable(digits = 4)
+
+hist(
+  power_normal_boot$bootstrap_statistics,
+  breaks = 12,
+  main = "Power check: fitted tensor-normal null distribution",
+  xlab = "Bootstrap CF-Wald statistic",
+  col = "grey85",
+  border = "white"
+)
+abline(
+  v = unname(power_normal_boot$statistic),
+  col = "firebrick",
+  lwd = 2,
+  lty = 2
+)
+legend(
+  "topright",
+  legend = "Observed bimodal sample",
+  col = "firebrick",
+  lwd = 2,
+  lty = 2,
+  bty = "n"
+)
+```
+
+With the fixed seed above, the observed statistic is about 335, whereas the
+bootstrap statistics from a correctly specified single tensor-normal model
+are below 23. The add-one bootstrap p-value is 0.025, so the negative-control
+model is rejected at the 5% level. The p-value reaches the resolution limit
+because this short demonstration uses only 39 bootstrap replicates.
+
+For the GRABMyo tensors, the corresponding calls are:
+
+```{r grabmyo-parametric-bootstrap, eval=FALSE}
+grabmyo_normal_boot <- tensor_cf_parametric_bootstrap(
+  grabmyo_draws,
+  model = "normal",
+  B = 999,
+  n_frequencies = 20,
+  seed = 20260722,
+  show_progress = TRUE
+)
+
+grabmyo_skewt_boot <- tensor_cf_parametric_bootstrap(
+  grabmyo_draws,
+  model = "skewt",
+  B = 999,
+  n_frequencies = 20,
+  n_mixing = 20000,
+  seed = 20260722,
+  show_progress = TRUE
+)
+```

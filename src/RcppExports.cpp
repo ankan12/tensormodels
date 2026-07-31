@@ -28,15 +28,15 @@ BEGIN_RCPP
 END_RCPP
 }
 // n_prod
-Rcpp::NumericVector n_prod(Rcpp::NumericVector tensor, Rcpp::NumericMatrix mat, int n);
-RcppExport SEXP _tensormodels_n_prod(SEXP tensorSEXP, SEXP matSEXP, SEXP nSEXP) {
+Rcpp::NumericVector n_prod(Rcpp::NumericVector tensor, int n, Rcpp::NumericMatrix mat);
+RcppExport SEXP _tensormodels_n_prod(SEXP tensorSEXP, SEXP nSEXP, SEXP matSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Rcpp::NumericVector >::type tensor(tensorSEXP);
-    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type mat(matSEXP);
     Rcpp::traits::input_parameter< int >::type n(nSEXP);
-    rcpp_result_gen = Rcpp::wrap(n_prod(tensor, mat, n));
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type mat(matSEXP);
+    rcpp_result_gen = Rcpp::wrap(n_prod(tensor, n, mat));
     return rcpp_result_gen;
 END_RCPP
 }

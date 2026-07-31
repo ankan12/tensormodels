@@ -77,7 +77,7 @@ dtnorm <- function(x, mu = NULL, sigmas = NULL, log = FALSE) {
     ve_xm <- matrix(c(xm), nrow = n_star)
 
     for (k in length(sigmas):1) {
-      xm_tmp <- n_prod(xm_tmp, inv_sigmas[[k]], k)
+      xm_tmp <- n_prod(xm_tmp, k, inv_sigmas[[k]])
     }
 
     delta <- sum(as.numeric(xm_tmp) * ve_xm)

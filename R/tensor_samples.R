@@ -33,7 +33,6 @@ print.tensor <- function(x, ..., n = getOption("tensormodels.print_draws", 3L),
     if (prod(shape) > entries) omitted <- c(omitted, sprintf("%d more entries per draw", prod(shape) - entries))
     cat(sprintf("\n# ... %s\n", paste(omitted, collapse = " and ")))
   }
-  cat("# Use `pull_draw(x, i)` to inspect one draw.\n")
   invisible(x)
 }
 

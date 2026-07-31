@@ -10,8 +10,8 @@ cp_c <- function(X, R = 2L, max_iter = 2000L, tol = 1e-3, init = NULL, verbose =
 #' Compute the n-mode product of a tensor with a matrix.
 #'
 #' @param tensor An array representing the tensor.
-#' @param mat A matrix of size \eqn{m \times n} to multiply with.
 #' @param n  An integer specifying the mode to multiply across.
+#' @param mat A matrix of size \eqn{m \times n} to multiply with.
 #'
 #' @return An array: the result of the n-mode product.
 #'
@@ -28,10 +28,10 @@ cp_c <- function(X, R = 2L, max_iter = 2000L, tol = 1e-3, init = NULL, verbose =
 #' @examples
 #' a <- array(1:3, dim = c(3, 1, 1))
 #' x <- matrix(4:9, nrow = 2, ncol = 3)
-#' n_prod(a, x, 1)
+#' n_prod(a, 1, x)
 #' @export
-n_prod <- function(tensor, mat, n) {
-    .Call(`_tensormodels_n_prod`, tensor, mat, n)
+n_prod <- function(tensor, n, mat) {
+    .Call(`_tensormodels_n_prod`, tensor, n, mat)
 }
 
 #' nm-mode product

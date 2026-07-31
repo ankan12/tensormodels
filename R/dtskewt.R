@@ -62,7 +62,7 @@ dtskewt <- function(x, mu, skew, sigmas, nu, log = FALSE) {
   for(k in length(sigmas):1) {
     sigd <- sigmas[[k]]
 
-    skew_tmp <- n_prod(skew_tmp, inv_sigmas[[k]], k)
+    skew_tmp <- n_prod(skew_tmp, k, inv_sigmas[[k]])
 
     all_det <- all_det + (n_star/(2 * nrow(sigd))) * .logdet_safe(sigd)
   }
@@ -85,7 +85,7 @@ dtskewt <- function(x, mu, skew, sigmas, nu, log = FALSE) {
     ve_xm <- matrix(c(xm), nrow = n_star)
 
     for(k in length(sigmas):1) {
-      xm_tmp <- n_prod(xm_tmp, inv_sigmas[[k]], k)
+      xm_tmp <- n_prod(xm_tmp, k, inv_sigmas[[k]])
     }
 
     xm_tmp <- as.numeric(xm_tmp)

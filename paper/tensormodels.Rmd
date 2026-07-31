@@ -171,13 +171,13 @@ $$(\tensor{A} \times_{n} \mat{U})_{i_1, ..., i_{n-1}, j, i_{n+1}, ... I_N} = \su
 
 The tensor and matrix share one mode in common, denoted here as $I_n$. This operation is also called the tensor times matrix product.
 
-This function is called `n_prod()` in the package \pkg{tensormodels}. It accepts a tensor, a matrix, and a value $n$ specifying which mode to multiply across. For example, let us take $\ve{a} \in \field{k}^3$ and $\mat{U} \in \field{k}^{2\times 3}.$ Then if we compute $\ve{a} \times_{1} \mat{U}$, we expect the final result to be $\in \field{k}^{2 \times 1}.$
+This function is called `n_prod()` in the package \pkg{tensormodels}. It accepts a tensor, a value $n$ specifying which mode to multiply across, and a matrix. For example, let us take $\ve{a} \in \field{k}^3$ and $\mat{U} \in \field{k}^{2\times 3}.$ Then if we compute $\ve{a} \times_{1} \mat{U}$, we expect the final result to be $\in \field{k}^{2 \times 1}.$
 
 ```{r}
 a_vec <- c(1, 2, 3) 
 u_mat <- matrix(4:9, ncol = 3)
 
-n_prod(tensor = a_vec, mat = u_mat, n = 1)
+n_prod(tensor = a_vec, n = 1, mat = u_mat)
 ```
 
 
@@ -1020,7 +1020,7 @@ cf_tensor_skewt <- function(frequency, mu, skew, sigmas, nu) {
 
   sigma_frequency <- frequency
   for (k in seq_along(sigmas)) {
-    sigma_frequency <- n_prod(sigma_frequency, sigmas[[k]], k)
+    sigma_frequency <- n_prod(sigma_frequency, k, sigmas[[k]])
   }
 
   location <- sum(frequency * mu)
@@ -1036,7 +1036,7 @@ T_array <- array(rnorm(prod(dim(mu_true))), dim = dim(mu_true))
 # informative when the tensor dimension is moderate or large.
 sigma_T <- T_array
 for (k in seq_along(sigmas_true)) {
-  sigma_T <- n_prod(sigma_T, sigmas_true[[k]], k)
+  sigma_T <- n_prod(sigma_T, k, sigmas_true[[k]])
 }
 T_array <- T_array / sqrt(sum(T_array * sigma_T))
 

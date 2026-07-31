@@ -49,7 +49,7 @@
     xm_tmp <- xm
 
     for (k in length(sigmas):1) {
-      xm_tmp <- n_prod(xm_tmp, inv_sigmas[[k]], k)
+      xm_tmp <- n_prod(xm_tmp, k, inv_sigmas[[k]])
     }
 
     delta <- sum(as.numeric(xm_tmp) * matrix(c(xm), nrow = n_star))
@@ -78,7 +78,7 @@
 
   skew_tmp <- skew
   for (k in length(sigmas):1) {
-    skew_tmp <- n_prod(skew_tmp, inv_sigmas[[k]], k)
+    skew_tmp <- n_prod(skew_tmp, k, inv_sigmas[[k]])
   }
 
   ve_skew <- matrix(c(skew), nrow = n_star)
@@ -94,7 +94,7 @@
     xm_tmp <- xm
 
     for (k in length(sigmas):1) {
-      xm_tmp <- n_prod(xm_tmp, inv_sigmas[[k]], k)
+      xm_tmp <- n_prod(xm_tmp, k, inv_sigmas[[k]])
     }
 
     ve_xm <- matrix(c(xm), nrow = n_star)
@@ -131,7 +131,7 @@
 
   skew_tmp <- skew
   for (k in seq_along(sigmas)) {
-    skew_tmp <- n_prod(skew_tmp, inv_sigmas[[k]], k)
+    skew_tmp <- n_prod(skew_tmp, k, inv_sigmas[[k]])
   }
 
   ve_skew <- matrix(c(skew), nrow = n_star)
@@ -147,7 +147,7 @@
     xm_tmp <- xm
 
     for (k in seq_along(sigmas)) {
-      xm_tmp <- n_prod(xm_tmp, inv_sigmas[[k]], k)
+      xm_tmp <- n_prod(xm_tmp, k, inv_sigmas[[k]])
     }
 
     ve_xm <- matrix(c(xm), nrow = n_star)
@@ -184,7 +184,7 @@
 
   skew_tmp <- skew
   for (k in length(sigmas):1) {
-    skew_tmp <- n_prod(skew_tmp, inv_sigmas[[k]], k)
+    skew_tmp <- n_prod(skew_tmp, k, inv_sigmas[[k]])
   }
 
   ve_skew <- matrix(c(skew), nrow = n_star)
@@ -200,7 +200,7 @@
     xm_tmp <- xm
 
     for (k in length(sigmas):1) {
-      xm_tmp <- n_prod(xm_tmp, inv_sigmas[[k]], k)
+      xm_tmp <- n_prod(xm_tmp, k, inv_sigmas[[k]])
     }
 
     ve_xm <- matrix(c(xm), nrow = n_star)
@@ -237,7 +237,7 @@
 
   skew_tmp <- skew
   for (k in seq_along(sigmas)) {
-    skew_tmp <- n_prod(skew_tmp, inv_sigmas[[k]], k)
+    skew_tmp <- n_prod(skew_tmp, k, inv_sigmas[[k]])
   }
 
   ve_skew <- matrix(c(skew), nrow = n_star)
@@ -253,7 +253,7 @@
     xm_tmp <- xm
 
     for (k in seq_along(sigmas)) {
-      xm_tmp <- n_prod(xm_tmp, inv_sigmas[[k]], k)
+      xm_tmp <- n_prod(xm_tmp, k, inv_sigmas[[k]])
     }
 
     ve_xm <- matrix(c(xm), nrow = n_star)

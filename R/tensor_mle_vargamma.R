@@ -37,7 +37,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
     centered <- .tensor_single_draw_array(pull_draw(data, i)) - mu
 
     for (d in seq_along(inv_sigma_start)) {
-      centered <- n_prod(centered, inv_sigma_start[[d]], d)
+      centered <- n_prod(centered, d, inv_sigma_start[[d]])
     }
 
     precision_resids_mat[, i] <- as.numeric(centered)
@@ -55,7 +55,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
     inv_sigma <- lapply(sigmas, invert_safe)
 
     for (d in seq_along(sigmas)) {
-      skew_compute <- n_prod(skew_compute, inv_sigma[[d]], d)
+      skew_compute <- n_prod(skew_compute, d, inv_sigma[[d]])
     }
 
     rho <- sum(skew * skew_compute)
@@ -73,7 +73,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
       centered_compute <- center_draw
 
       for (d in seq_along(sigmas)) {
-        centered_compute <- n_prod(centered_compute, inv_sigma[[d]], d)
+        centered_compute <- n_prod(centered_compute, d, inv_sigma[[d]])
       }
       delta_vals[i] <- sum(center_draw * centered_compute)
     }
@@ -141,7 +141,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
       skew_tmp <- new_skew # compute skew once for each dim
 
       for (d in other_modes) { # multiply by inverse covars
-        skew_tmp <- n_prod(skew_tmp, inv_new_sigma[[d]], d)
+        skew_tmp <- n_prod(skew_tmp, d, inv_new_sigma[[d]])
       }
 
       flat_skew_tmp <- matricization(skew_tmp, j) # flatten the skews
@@ -155,7 +155,7 @@ tensor_mle_vargamma <- function(data, max_iter = 1000, tol = 1e-6,
 
         xm_tmp <- xm
         for (d in other_modes) { # multiply by inverse covars
-          xm_tmp <- n_prod(xm_tmp, inv_new_sigma[[d]], d)
+          xm_tmp <- n_prod(xm_tmp, d, inv_new_sigma[[d]])
         }
 
         flat_xm_tmp <- matricization(xm_tmp, j)

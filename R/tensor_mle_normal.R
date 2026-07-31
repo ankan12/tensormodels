@@ -106,7 +106,7 @@ tensor_mle_normal <- function(data, max_iter = 1000, tol = 1e-6,
         flat_xm <- matricization(xm, j)
 
         for(d in other_modes) {
-          xm_tmp <- n_prod(xm_tmp, inv_sigma[[d]], d)
+          xm_tmp <- n_prod(xm_tmp, d, inv_sigma[[d]])
         }
 
         sigma_j <- sigma_j + matricization(xm_tmp, j) %*% t(flat_xm)

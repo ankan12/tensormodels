@@ -34,10 +34,10 @@ tucker <- function(A, ranks = ranks, max_iter = 2000, tol = 1e-3) {
     for(k in 1:order) {
       dims_multiply <- setdiff(1:order, k)
 
-      Y <- n_prod(A, t(list_mats[[dims_multiply[1]]]), dims_multiply[1])
+      Y <- n_prod(A, dims_multiply[1], t(list_mats[[dims_multiply[1]]]))
 
       for(k_inner in dims_multiply[2:length(dims_multiply)]) {
-        Y <- n_prod(Y, t(list_mats[[k_inner]]), k_inner)
+        Y <- n_prod(Y, k_inner, t(list_mats[[k_inner]]))
       }
 
       Y_svd <- matricization(Y, k) |> svd(nu = ranks[k])
@@ -45,10 +45,10 @@ tucker <- function(A, ranks = ranks, max_iter = 2000, tol = 1e-3) {
       list_mats[[k]] <- svd(matricization(Y, k), nu = ranks[k])$u
     }
 
-    G_core <- n_prod(A, t(list_mats[[1]]), 1)
+    G_core <- n_prod(A, 1, t(list_mats[[1]]))
 
     for(k_mult in 2:order) {
-      G_core <- n_prod(G_core, t(list_mats[[k_mult]]), k_mult)
+      G_core <- n_prod(G_core, k_mult, t(list_mats[[k_mult]]))
     }
 
     recon_A <- tucker_reconstruct(list(G = G_core, mats = list_mats))
@@ -62,4 +62,3 @@ tucker <- function(A, ranks = ranks, max_iter = 2000, tol = 1e-3) {
 
   list(G = G_core, mats = list_mats)
 }
-

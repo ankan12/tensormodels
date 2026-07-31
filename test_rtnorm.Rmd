@@ -324,7 +324,7 @@ inv_real <- lapply(list(s1, s2, s3), invert_safe)
 inv_real_except_k <- inv_real[-k]
 
 
-matricization(((test |> n_prod(inv_real_except_k[[1]], 2)) |> n_prod(inv_real_except_k[[2]], 3)), 1) %*%
+matricization(((test |> n_prod(2, inv_real_except_k[[1]])) |> n_prod(3, inv_real_except_k[[2]])), 1) %*%
   t(matricization(test, 1))
 
   # Kronecker product of inverses except k
@@ -335,7 +335,7 @@ Xik_real <- matricization(test, 1) #2x12
 
 Xik_real %*% kron_real_except_k %*% t(Xik)
 
-a <- n_prod(test, inv_real_except_k[[1]], 2) |> n_prod(inv_real_except_k[[2]], 3)
+a <- n_prod(test, 2, inv_real_except_k[[1]]) |> n_prod(3, inv_real_except_k[[2]])
 
 (Xik_real %*% kron_real_except_k)
 
@@ -346,7 +346,7 @@ Xik_real %*% kron_real_except_k
 matricization(a, 1)
 
 
-test |> n_prod(inv_real_except_k[[1]], 2) |> n_prod(inv_real_except_k[[2]], 3)
+test |> n_prod(2, inv_real_except_k[[1]]) |> n_prod(3, inv_real_except_k[[2]])
 ```
 
 
@@ -480,7 +480,7 @@ centered <- (rtnorm_draws - array(rep(rtnorm_mles$mu, each = n),
 
 centered[1, ] %x1% s1 %x2% s2 %x3% s3
 
-n_prod(centered[1,], s1, 1) |> n_prod(s2, 2) |> n_prod(s3, 3)
+n_prod(centered[1,], 1, s1) |> n_prod(2, s2) |> n_prod(3, s3)
 ```
 
 
@@ -627,7 +627,7 @@ whiten_residuals <- function(draws, fit) {
     # whiten by Δ_d^{-1/2}
     for (d in rev(1:D)) {
       #R <- chol(fit$sigmas[[d]])          # Δ_d^{1/2}
-      V <- n_prod(V, chol2inv(chol(fit$sigmas[[d]])), d)  # multiply by Δ_d^{-1/2}
+      V <- n_prod(V, d, chol2inv(chol(fit$sigmas[[d]])))  # multiply by Δ_d^{-1/2}
     }
     out[i,,,] <- V
   }
@@ -900,7 +900,7 @@ for(i in 1:n) {
   
   for(j in 1:length(dims)) { # standardize with sigma estimates
     centered_multiply <- n_prod(centered_multiply, 
-                                solve(sample_stats$sigmas[[j]]), j)
+                                j, solve(sample_stats$sigmas[[j]]))
   }
   
   all_dist[i] <- c(centered) %*% c(centered_multiply)
@@ -1457,7 +1457,7 @@ ggplot() +
 #     
 #       for(d in 1:3) {
 #         S_half_inv <- chol2inv(chol(mle_estimates$sigmas[[d]]))
-#         centered <- n_prod(centered, S_half_inv, n = d)
+#         centered <- n_prod(centered, n = d, mat = S_half_inv)
 #       }
 #     resids[i] <- sum(centered^2)
 #   }
@@ -1470,7 +1470,7 @@ ggplot() +
 #   # Apply whitening: multiply by Sigma_d^{-1/2}
 #   for(d in 1:3) {
 #     S_half_inv <- chol2inv(chol(sigmas[[d]]))   # Σ_d^{-1/2} Σ_d^{-1/2}ᵀ = Σ_d^{-1}
-#     centered <- n_prod(centered, S_half_inv, n = d)
+#     centered <- n_prod(centered, n = d, mat = S_half_inv)
 #   }
 # 
 #   res[i] <- sum(centered^2)   # equivalent to diffᵀ Σ^{-1} diff
@@ -1499,4 +1499,3 @@ ggplot() +
 
 vec <- c(rtnorm_draws)
 ```
-

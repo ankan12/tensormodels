@@ -24,11 +24,10 @@ hosvd_reconstruct <- function(hosvd_cores) {
 
   order <- length(mats)
 
-  reconstruct <- n_prod(G_core, mats[[1]], 1)
+  reconstruct <- n_prod(G_core, 1, mats[[1]])
 
   for(i in 2:order) {
-    reconstruct <- n_prod(reconstruct, mats[[i]], i)
+    reconstruct <- n_prod(reconstruct, i, mats[[i]])
   }
   reconstruct
 }
-

@@ -47,7 +47,7 @@ rtnorm <- function(n, mu = 0, sigmas = list(matrix(1))) {
   chol_sigmas <- lapply(sigmas, chol)
 
   for (k in seq_along(chol_sigmas)) {
-    X <- n_prod(X, t(chol_sigmas[[k]]), k+1) # multiply
+    X <- n_prod(X, k+1, t(chol_sigmas[[k]])) # multiply
   }
   norm_array <- X + array(rep(mu, each = n), dim = c(n, dims)) # add mean
 

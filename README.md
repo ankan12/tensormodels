@@ -74,7 +74,7 @@ The n-mode product between a tensor and a matrix can be computed with
 a <- array(1:3, dim = c(3, 1, 1))
 x <- matrix(4:9, nrow = 2, ncol = 3)
 
-n_prod(a, x, 1)
+n_prod(a, 1, x)
 #> , , 1
 #> 
 #>      [,1]

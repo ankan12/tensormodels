@@ -6,7 +6,7 @@
 #' @param mat A matrix with compatible dimensions.
 #' @export
 `%x1%` <- function(tensor, mat) {
-  n_prod(tensor, mat, n = 1)
+  n_prod(tensor, n = 1, mat = mat)
 }
 
 #' n-mode product (mode 2)
@@ -17,7 +17,7 @@
 #' @param mat A matrix with compatible dimensions.
 #' @export
 `%x2%` <- function(tensor, mat) {
-  n_prod(tensor, mat, n = 2)
+  n_prod(tensor, n = 2, mat = mat)
 }
 
 #' n-mode product (mode 3)
@@ -28,7 +28,7 @@
 #' @param mat A matrix with compatible dimensions.
 #' @export
 `%x3%` <- function(tensor, mat) {
-  n_prod(tensor, mat, n = 3)
+  n_prod(tensor, n = 3, mat = mat)
 }
 
 #' n-mode product with an explicit mode specification
@@ -61,5 +61,5 @@
     stop("`mode` must be a positive integer.", call. = FALSE)
   }
 
-  n_prod(tensor, mat, n = as.integer(mode))
+  n_prod(tensor, n = as.integer(mode), mat = mat)
 }

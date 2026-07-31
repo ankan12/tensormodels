@@ -1,8 +1,8 @@
 ---
-title: 'Tensortools: Tools for Tensor-Variate Distributions and Decompositions'
+title: 'tensortools: Tools for Tensor-Variate Distributions and Decompositions'
 date: today
 date-format: "MM/DD/YY"
-#bibliography: citations.bib
+bibliography: tensormodels.bib
 #csl: nature.csl
 format: 
   baylor_theme-revealjs:
@@ -40,7 +40,7 @@ $$
 :::
 
 
-```{r, include = FALSE}
+```{r setup, include = FALSE}
 knitr::opts_chunk$set(dev = "png", dpi = 300)
 library(tidyverse)
 library(patchwork)
@@ -94,14 +94,14 @@ $$c_{\color{red}{i_1, \dots, i_{n-1},} \color{blue}{j} \color{red}{, i_{n+1}, \d
 
 <tbody>
 <tr>
-<td>Univar</td>
+<td>Scalar</td>
 <td>$Z \in \mathbb{R}^{1}$</td>
 <td>$X=\mu+\sigma Z$</td>
 <td>$\sigma^2$</td>
 </tr>
 
 <tr class="fragment">
-<td>Multivar</td>
+<td>Vector</td>
 <td>$\ve{Z}\in\mathbb{R}^{p}$</td>
 <td>$\ve{X}=\boldsymbol{\mu}+\mat{A}\ve{Z}$</td>
 <td>$\mat{A}\mat{A}^{T}=\Sigma$</td>
@@ -144,7 +144,7 @@ $$\mat{X} = \mat{M} + \mat{Z} \times_{1} \mat{A} \times_{2} \mat{B}$$
   
 ::: {.fragment}
 - Scaling identifiability issue: covariance structure is the same for different scalings of the covariance matrices
-  + $\Sigma_3 \otimes \Sigma_{2} \otimes\Sigma_1 = a_{3} \Sigma_3 \otimes a_{2} \Sigma_{2} \otimes (a_{3} a_{2})^{-1} \Sigma_1$
+  + $\Sigma_{2} \otimes\Sigma_1 = a \Sigma_2 \otimes \frac{1}{a} \Sigma_{1}$
   + Only the full Kronecker product is uniquely determined
 :::
 
@@ -156,33 +156,33 @@ $$\mat{X} = \mat{M} + \mat{Z} \times_{1} \mat{A} \times_{2} \mat{B}$$
     + mu is the mean tensor. Its dimension is the same as the draws $\tensor{X}$ 
     + sigmas expects a list of covariance matrices. For mode $d$, $\Sigma_d \in \mathbb{R}^{I_d \times I_d}$
 
-```{r, echo = FALSE}
+```{r param, echo = FALSE}
 mu_true <- tensor(data = 1:24, dim = c(2, 3, 4))
 
-s1 <- matrix(c(
+S1 <- matrix(c(
   1.0, 0.5,
   0.5, 1.0
 ), nrow = 2, byrow = TRUE)
 
-s2 <- matrix(c(
+S2 <- matrix(c(
   1.0, 0.4, 0.2,
   0.4, 1.0, 0.3,
   0.2, 0.3, 1.0
 ), nrow = 3, byrow = TRUE)
 
-s3 <- matrix(c(
+S3 <- matrix(c(
   1.0, 0.3, 0.2, 0.1,
   0.3, 1.0, 0.4, 0.2,
   0.2, 0.4, 1.0, 0.3,
   0.1, 0.2, 0.3, 1.0
 ), nrow = 4, byrow = TRUE)
 
-sigmas_true <- list(s1, s2, s3)
+sigmas_true <- list(S1, S2, S3)
 ```
 
 
-```{r, echo = TRUE}
-(draws <- rtnorm(n = 100, mu = mu_true, sigmas = list(s1, s2, s3)))
+```{r generate-normals, echo = TRUE}
+(draws <- rtnorm(n = 100, mu = mu_true, sigmas = list(S1, S2, S3)))
 ```
 
 ## TVN in tensortools
@@ -190,8 +190,8 @@ sigmas_true <- list(s1, s2, s3)
 - Density evaluation is also supported with `dtnorm()`
   + Requires arguments x, mu, sigmas 
 
-```{r, echo = TRUE}
-dtnorm(draws[1], mu_true, sigmas = list(s1, s2, s3))
+```{r density-normal, echo = TRUE}
+dtnorm(draws[1], mu_true, sigmas = list(S1, S2, S3), log = TRUE)
 ```
 
 
@@ -201,32 +201,32 @@ dtnorm(draws[1], mu_true, sigmas = list(s1, s2, s3))
   + Requires arguments draws and model 
   + Output is a list of the MLEs along with the log-likelihood, k, AIC, BIC
 
-```{r, echo = TRUE}
+```{r mles, echo = TRUE}
 tvn_mles <- tensor_mle(draws, model = "normal")
 
 tvn_mles$sigmas[[1]]
-s1
+S1
 ```
 
 
-<!-- ```{r, echo = FALSE} -->
-<!-- mu_mse <- mean((tvn_mles$mu - mu_true)^2) -->
+## Tensor class
 
-<!-- sigma_mse <- sapply(seq_along(sigmas_true), function(i) { -->
-<!--   true_scaled <- sigmas_true[[i]] / sum(diag(sigmas_true[[i]])) -->
-<!--   est_scaled <- tvn_mles$sigmas[[i]] / -->
-<!--     sum(diag(tvn_mles$sigmas[[i]])) -->
+- Tensor class is internally an array
+  + Stores $n$ IID observations, operations apply to each one
 
-<!--   mean((est_scaled - true_scaled)^2) -->
-<!-- }) -->
+```{r tensor-class, echo = TRUE}
+print(draws[1:2], entries = 6)
+```
 
-<!-- results <- data.frame( -->
-<!--   Parameter = c("Mean tensor", paste0("Mode ", seq_along(sigma_mse), " covariance")), -->
-<!--   MSE = c(mu_mse, sigma_mse) -->
-<!-- ) -->
 
-<!-- knitr::kable(results, digits = 4) -->
-<!-- ``` -->
+## Tensor class
+```{r tensor-class-subtract, echo = TRUE}
+centered_draws <- draws - mu_true
+
+print(centered_draws[1:2], entries = 6)
+
+n_prod(centered_draws[1:2], 1, S1)
+```
 
 ## Application: Gesture Recognition and Biometrics ElectroMyogram (GRABMyo)
 
@@ -257,7 +257,7 @@ s1
 
 ## GRABMyo Values
 
-```{r, echo = FALSE}
+```{r grabmyo-explore, echo = FALSE}
 grabmyo_data <- readRDS("grabmyo_session1_tensors_16x28x16.rds")
 grabmyo_array <- simplify2array(grabmyo_data)
 grabmyo_tensor <- as_tensor(grabmyo_array, obs = 4)
@@ -363,9 +363,9 @@ knitr::kable(
 ## Skewed Tensor Distributions
 
 $$\tensor{X} = \tensor{M} + W \tensor{A} + \sqrt{W} \tensor{V}, \qquad
-\tensor{V}\sim\text{TVN}\!\left(\tensor{0},\{\Sigma_d\}_{d=1}^{D}\right).$$
+\tensor{V}\sim\text{TVN}\!\left(\tensor{0},\{\Sigma_d\}_{d=1}^{D}\right)$$ @variancemeanmix
 
-```{r, echo=FALSE, results='asis'}
+```{r skewed-table, echo=FALSE, results='asis'}
 mixing_table <- data.frame(
   Distribution = c(
     "Skewed-t",
@@ -409,23 +409,22 @@ knitr::kable(
 
 ## Skewed Tensor Distributions in tensortools
 
-- `tensortools()` supports r, d, and MLE functions for all of these distributions
+- `tensortools()` supports r, d, MLE for all of these distributions
+- MLE estimation is done using the EM algorithm
 
-```{r, echo = FALSE}
+```{r skew, echo = FALSE}
 skew_true <- array(data = seq(1, 10, length.out = prod(dim(mu_true))), dim = dim(mu_true))
 ```
 
 
-```{r, echo = TRUE}
+```{r skewt, echo = TRUE}
 (skewt_draws <- rtskewt(n = 1e3, mu = mu_true, sigmas = sigmas_true,
                        skew = skew_true, nu = 20))
 
 mle_skewt <- tensor_mle(skewt_draws, model = "skewt")
 ```
 
-## GRABMyo Data with Skew
-
-```{r, cache = TRUE}
+```{r skew-mods, cache = TRUE}
 grabmyo_non_normal_models <- c(
   "skewt", "vargamma", "invgauss", "genhyper"
 )
@@ -444,8 +443,8 @@ grabmyo_distribution_fits <- c(
 ```
 
 
-# Cross Validation
-```{r, cache = TRUE}
+## GRABMyo Data with Skew
+```{r compute-density, eval = FALSE}
 tensor_log_density <- function(x, fit, model) {
   if (model == "normal") {
     return(
@@ -519,7 +518,6 @@ loo_tensor_cv <- function(draws, model) {
   heldout_loglik <- numeric(n)
 
   for (i in seq_len(n)) {
-    print(i)
     train_indices <- setdiff(seq_len(n), i)
 
     train_draws <- slice_draws(draws, train_indices)
@@ -568,7 +566,7 @@ tibble(
 ```
 
 
-```{r, echo = FALSE}
+```{r skew-res, echo = FALSE}
 grabmyo_distribution_labels <- c(
   normal = "Normal",
   skewt = "Skew-t",
@@ -614,12 +612,64 @@ knitr::kable(
 - Skew-$t$ has lowest AIC and BIC even with an additional skew tensor
 - The data exhibit skewness, so skew-$t$ is better than normal
 
-<!-- ## Citations -->
 
-<!-- ::: {#refs} -->
-<!-- ::: -->
+## Intepretation
+
+```{r plot-cor}
+#| fig-width: 12
+#| fig-height: 4
+#| out-width: 100%
+
+cor_scale <- scale_fill_gradient2(
+  limits = c(-1, 1),
+  midpoint = 0,
+  name = "Correlation"
+)
+
+p1 <- plot_matrix(cov2cor(grabmyo_distribution_fits$skewt$sigmas[[1]])) +
+  cor_scale + coord_equal() + labs(title = "Hand Gesture")
+
+p2 <- plot_matrix(cov2cor(grabmyo_distribution_fits$skewt$sigmas[[2]])) +
+  cor_scale + coord_equal() + labs(title = "EMG Channel")
+
+p3 <- plot_matrix(cov2cor(grabmyo_distribution_fits$skewt$sigmas[[3]])) +
+  cor_scale + coord_equal() + labs(title = "Time Bin")
+
+(p1 | p2 | p3) +
+  plot_layout(guides = "collect") &
+  theme(
+    legend.position = "bottom",
+    axis.title = element_blank()
+  )
+```
+
+- Hand gestures are not correlated while time is strongly correlated
+- EMG has two blocks of stronger within-group correlation: 16 forearm channels and 12 wrist channels
+
+## Citations
+
+::: {#refs}
+:::
 
 ## Thank You! 
 
 - Thank you to my advisors Dr. David Kahle and Dr. Michael Gallaugher
 - Any questions? 
+
+## W Latent Distributions {visibility="uncounted"}
+
+$W \sim \text{Inverse-Gamma}(\nu/2, \nu/2)$
+
+$$f(w|\nu) = \frac{(\nu/2)^{\nu/2}}{\Gamma(\nu/2)} w^{-(\nu/2+1)} \exp\left[-\frac{\nu/2}{w}\right]$$
+
+- $W \sim \text{Gamma}(\gamma, \gamma)$
+
+$$f(w|\gamma) = \frac{1}{\gamma^{\gamma}\Gamma(\gamma)} w^{\gamma - 1} e^{-w/\gamma}$$
+
+- $W \sim \text{Inverse-Gaussian}(1, \kappa)$
+
+$$f(w|\kappa) = \frac{1}{\sqrt{2\pi}} w^{-\frac{3}{2}} \exp\left\{-\frac{1}{2}\left(\frac{1}{w} + \kappa^2 w\right)\right\}$$
+
+- $Y \sim \text{Generalized Inverse Gaussian}(\omega, 1, \lambda)$
+
+$$f(w|\omega, b, \lambda) = \frac{\left(\omega\right)^{\frac{\lambda}{2}} y^{\lambda -1}}{2 K_{\lambda}(\sqrt{\omega})} \exp\left\{-\frac{x}{2} \left(w + \frac{1}{w}\right)\right\}$$

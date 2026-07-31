@@ -5,6 +5,6 @@
 
 // Declare functions here
 Rcpp::NumericVector nm_prod(Rcpp::NumericVector A, Rcpp::NumericVector B, int n, int m);
-Rcpp::NumericVector n_prod(Rcpp::NumericVector tensor, Rcpp::NumericMatrix mat, int n);
+Rcpp::NumericVector n_prod(Rcpp::NumericVector tensor, int n, Rcpp::NumericMatrix mat);
 
 #endif
