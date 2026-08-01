@@ -71,7 +71,7 @@ test_that("modewise whitening gives the known symmetric-t Rosenblatt values", {
 })
 
 test_that("quadrature respects the skew-reflection identity", {
-  lower <- tensormodels:::.tskewt_rosenblatt_conditional_cdf(
+  lower <- tensortools:::.tskewt_rosenblatt_conditional_cdf(
     value = 0.4,
     skew = 0.7,
     lambda = -4,
@@ -81,7 +81,7 @@ test_that("quadrature respects the skew-reflection identity", {
     abs.tol = 1e-11,
     subdivisions = 200L
   )
-  reflected <- tensormodels:::.tskewt_rosenblatt_conditional_cdf(
+  reflected <- tensortools:::.tskewt_rosenblatt_conditional_cdf(
     value = -0.4,
     skew = -0.7,
     lambda = -4,

@@ -1,6 +1,6 @@
 ---
-title: "tensormodels"
-subtitle: "Statistical models for tensor-valued data"
+title: "tensortools"
+subtitle: "Statistical modeling and computation for tensor-valued data"
 author:
   - name: "Anupama Kannan"
     affiliations:
@@ -15,7 +15,7 @@ date: "2026"
 format:
   revealjs:
     theme: default
-    css: tensormodels-slides.css
+    css: tensortools-slides.css
     width: 1600
     height: 900
     margin: 0.07
@@ -28,7 +28,7 @@ format:
     center: false
     self-contained: true
     html-math-method: katex
-    footer: "tensormodels · Baylor University"
+    footer: "tensortools · Baylor University"
 execute:
   enabled: false
 lang: en
@@ -93,7 +93,7 @@ The same operations used to describe tensors also power covariance estimation an
 ::: {.notes}
 Suggested pace: 1:10.
 
-Establish only the notation needed for the rest of the talk. The order is the number of indices required to locate an entry; a mode is one specific axis. The important point is that modes carry meaning. Matricization lets us focus on one mode by placing it in the rows of a matrix, while an n-mode product applies a matrix transformation along one axis without destroying the rest of the array. These are not merely algebra helpers. In tensormodels, matricization is used to initialize and update mode-specific covariance estimates, and n-mode products apply covariance factors during simulation, likelihood evaluation, and diagnostic whitening.
+Establish only the notation needed for the rest of the talk. The order is the number of indices required to locate an entry; a mode is one specific axis. The important point is that modes carry meaning. Matricization lets us focus on one mode by placing it in the rows of a matrix, while an n-mode product applies a matrix transformation along one axis without destroying the rest of the array. These are not merely algebra helpers. In tensortools, matricization is used to initialize and update mode-specific covariance estimates, and n-mode products apply covariance factors during simulation, likelihood evaluation, and diagnostic whitening.
 :::
 
 ## Separable covariance makes high-dimensional modeling feasible
@@ -327,7 +327,7 @@ This is an intentional package-design choice. A single tensor draw is a base R a
 :::
 
 ::: {.column width="52%"}
-### `tensormodels` adds
+### `tensortools` adds
 
 - Tensor-normal and four skewed distributions
 - Random generation and density evaluation
@@ -343,7 +343,7 @@ Tensor algebra is the infrastructure; tensor-valued inference is the distinguish
 ::: {.notes}
 Suggested pace: 1:05.
 
-Several excellent ecosystems already cover tensor representation and decomposition: MATLAB Tensor Toolbox, TensorLy and pyttb in Python, TensorOperations and related packages in Julia, and rTensor or ttTensor in R. Their center of gravity is algebra, decomposition, sparse or factored representations, and computational backends. Tensormodels deliberately overlaps on the core operations needed for statistical work, but its distinctive contribution is distributional: tensor-normal and skewed probability models, simulation and densities, maximum-likelihood or EM estimation, and diagnostics for the covariance assumptions. That is the gap the package is intended to fill.
+Several excellent ecosystems already cover tensor representation and decomposition: MATLAB Tensor Toolbox, TensorLy and pyttb in Python, TensorOperations and related packages in Julia, and rTensor or ttTensor in R. Their center of gravity is algebra, decomposition, sparse or factored representations, and computational backends. Tensortools deliberately overlaps on the core operations needed for statistical work, but its distinctive contribution is distributional: tensor-normal and skewed probability models, simulation and densities, maximum-likelihood or EM estimation, and diagnostics for the covariance assumptions. That is the gap the package is intended to fill.
 :::
 
 ## Take the structure seriously—and test it {.close-slide}
@@ -355,7 +355,7 @@ Several excellent ecosystems already cover tensor representation and decompositi
 </ol>
 
 <div class="lead" style="margin-top: 1.1em;">
-`tensormodels` makes multiway structure a modeling asset rather than a preprocessing obstacle.
+`tensortools` makes multiway structure a modeling asset rather than a preprocessing obstacle.
 </div>
 
 ::: {.notes}

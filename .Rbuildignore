@@ -5,3 +5,12 @@
 ^pkgdown$
 ^\.positai$
 ^\.claude$
+^\.Rlib$
+^cache$
+^paper$
+^tensortools$
+^.*_cache$
+^.*_files$
+^.*\.(Rmd|qmd|html|pdf|bib|csv|rds|RData)$
+^figure$
+^_extensions$

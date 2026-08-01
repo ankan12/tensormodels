@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 
-# Generate the processed GRABMyo tensor sample used in tensormodels.Rmd.
+# Generate the processed GRABMyo tensor sample used in tensortools.Rmd.
 #
 # Fixed processing specification:
 #   * GRABMyo v1.1.0, Session 1 only
@@ -35,7 +35,7 @@ grabmyo_find_project <- function() {
     logical(1)
   )
   if (!any(is_project)) {
-    stop("Run this script from the tensormodels project, paper, or scripts directory.")
+    stop("Run this script from the tensortools project, paper, or scripts directory.")
   }
   candidates[which(is_project)[1]]
 }

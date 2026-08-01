@@ -614,7 +614,7 @@ $$
 \hat{\Sigma}_j = \frac{n_j}{Nn^*} \mat{S}_j.
 $$
 
-Since the individual Kronecker factors are identifiable only up to compensating scale changes, the algorithm rescales the covariance matrices after each update. In \pkg{tensormodels}, the traces of the first $D-1$ covariance matrices are normalized to their mode dimensions, and the final covariance matrix absorbs the product of the removed scales so that the full Kronecker covariance is preserved.
+Since the individual Kronecker factors are identifiable only up to compensating scale changes, the algorithm rescales the covariance matrices after each update. In \pkg{tensortools}, the traces of the first $D-1$ covariance matrices are normalized to their mode dimensions, and the final covariance matrix absorbs the product of the removed scales so that the full Kronecker covariance is preserved.
 
 
 ## Proof of Flip-Flop for TVN

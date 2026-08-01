@@ -2,7 +2,7 @@
 title: 'tensortools: Tools for Tensor-Variate Distributions and Decompositions'
 date: today
 date-format: "MM/DD/YY"
-bibliography: tensormodels.bib
+bibliography: tensortools.bib
 #csl: nature.csl
 format: 
   baylor_theme-revealjs:
@@ -44,7 +44,7 @@ $$
 knitr::opts_chunk$set(dev = "png", dpi = 300)
 library(tidyverse)
 library(patchwork)
-library(tensormodels)
+library(tensortools)
 theme_set(theme_minimal(16))
 theme_update(plot.title = element_text(hjust = 0.5))
 

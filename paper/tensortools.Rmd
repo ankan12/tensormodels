@@ -1,5 +1,5 @@
 ---
-title: "tensormodels: Statistical Models for Tensor-Valued Data"
+title: "tensortools: Statistical Modeling and Computation for Tensor-Valued Data"
 date: "2026-06-22"
 header-includes:
   - |
@@ -18,7 +18,7 @@ header-includes:
       \usepackage{placeins}
       \usepackage{float}
 abstract: >
-  tensormodels is an R package for simulation, maximum likelihood estimation, and model diagnostics for tensor-variate distributions arising in multiway array data. The package implements the tensor-variate normal distribution and several normal variance–mean mixture families, including the skew-t, generalized hyperbolic, variance gamma, and normal inverse Gaussian distributions. Estimation is performed via likelihood-based and expectation–maximization algorithms under a Kronecker-separable covariance model, yielding mode-specific covariance estimates through iterative updates. Model assessment tools include distance-based diagnostics, such as Mahalanobis distance plots constructed from tensor-whitened residuals. In addition, tensormodels provides implementations of widely used tensor decompositions for approximation and dimension reduction, including Tensor-Train decomposition via TT-SVD, Higher-Order Singular Value Decomposition (HOSVD), and Parallel Factor Analysis (CP/PARAFAC) computed using alternating least squares. It includes common linear algebra and tensor operations, such as matricization, the n-mode products, and the Khatri-Rao product.
+  tensortools is an R package for simulation, maximum likelihood estimation, and model diagnostics for tensor-variate distributions arising in multiway array data. The package implements the tensor-variate normal distribution and several normal variance–mean mixture families, including the skew-t, generalized hyperbolic, variance gamma, and normal inverse Gaussian distributions. Estimation is performed via likelihood-based and expectation–maximization algorithms under a Kronecker-separable covariance model, yielding mode-specific covariance estimates through iterative updates. Model assessment tools include distance-based diagnostics, such as Mahalanobis distance plots constructed from tensor-whitened residuals. In addition, tensortools provides implementations of widely used tensor decompositions for approximation and dimension reduction, including Tensor-Train decomposition via TT-SVD, Higher-Order Singular Value Decomposition (HOSVD), and Parallel Factor Analysis (CP/PARAFAC) computed using alternating least squares. It includes common linear algebra and tensor operations, such as matricization, the n-mode products, and the Khatri-Rao product.
 draft: true
 author:
   - name: "Anupama Kannan"
@@ -53,7 +53,7 @@ output:
 #   bookdown::pdf_document2:
 #     keep_tex: true
 #     number_sections: true
-bibliography: tensormodels.bib
+bibliography: tensortools.bib
 packages:
   cran: []
   bioc: []
@@ -72,7 +72,7 @@ knitr::opts_chunk$set(
   fig.height = 4
 )
 
-library(tensormodels)
+library(tensortools)
 library(tidyverse)
 library(patchwork)
 set.seed(2026)
@@ -92,14 +92,14 @@ plot_matrix <- function(input) { # function to plot matrices
 
 # Introduction
 
-Lately, with the rise of data measurement tools and big data, the creation of higher dimensional data has become more and more common. These unique types of data require corresponding unique analytical tools to properly fit models with interpretation. Many researchers default to vectorizing or matricizing this higher order data to fit models that they are comfortable with and have pre-established tools. Additionally, they will commonly assume that data satisfies the assumptions of normality, which can sometimes be a very extreme choice that is only made to make computation and analysis easier. 
+Lately, with the rise of data measurement tools and big data, the creation of higher dimensional data has become more and more common. These unique types of data require corresponding unique analytical tools to properly fit models with interpretation. Many researchers default to vectorizing or matricizing this higher order data to fit models that they are comfortable with and have pre-established tools. Additionally, they will commonly assume that data satisfies the assumptions of normality, which can sometimes be a very extreme choice that is only made to make computation and analysis easier.
 
-The package \pkg{tensormodels} aims to assist with both of these issues. Firstly, it contains the tensor variate normal distribution and several skewed distributions under the normal mean-variance family model that can model a multitude of different shapes of data. Secondly, it contains diagnostic test and model heuristics to pick the best distribution for the user's data set. It also contains random number generation and density functions for researchers who merely want to better understand tensor variate distributions. 
+The package \pkg{tensortools} aims to assist with both of these issues. Firstly, it contains the tensor variate normal distribution and several skewed distributions under the normal mean-variance family model that can model a multitude of different shapes of data. Secondly, it contains diagnostic test and model heuristics to pick the best distribution for the user's data set. It also contains random number generation and density functions for researchers who merely want to better understand tensor variate distributions.
 
-In the following sections, we will explain the theory behind tensor variate distributions, compare related tensor software across several programming languages, explain some unique choices in the package design, show a simulation set up, and apply the models to a real-world problem. 
+In the following sections, we will explain the theory behind tensor variate distributions, compare related tensor software across several programming languages, explain some unique choices in the package design, show a simulation set up, and apply the models to a real-world problem.
 
 <!-- Explain the statistical or computational problem that motivates -->
-<!-- \pkg{tensormodels}. State who the package is for and summarize its main -->
+<!-- \pkg{tensortools}. State who the package is for and summarize its main -->
 <!-- contributions. End this section with a short roadmap of the paper. -->
 
 # Background and related work
@@ -108,7 +108,7 @@ The tensor space is still being established, with works using conflicting notati
 
 ## Order
 
-The order of a tensor is the number of indices needed to identify an entry. This is the same as the number of values needed inside R's subsetting brackets to pull one element out. A vector is a first-order tensor, a matrix is a second-order tensor, and any object beyond that is a higher-order tensor. 
+The order of a tensor is the number of indices needed to identify an entry. This is the same as the number of values needed inside R's subsetting brackets to pull one element out. A vector is a first-order tensor, a matrix is a second-order tensor, and any object beyond that is a higher-order tensor.
 
 
 For example, take the vector $\ve{a} = (1, 2, 3)$. To extract a specific element, you only require one value, so it has an order 1.
@@ -124,7 +124,7 @@ The matrix
 $$\mat{A} = \begin{bmatrix}
   1 & 2 & 3 \\
   4 & 5 & 6 \end{bmatrix}.$$
-has order two, since its entries are indexed by row and column. 
+has order two, since its entries are indexed by row and column.
 
 ```{r matrix}
 A <- matrix(data = 1:6, nrow = 2, ncol = 3)
@@ -133,7 +133,7 @@ A[2, 1]
 ```
 
 
-A third-order tensor requires three indices. The following tensor has dimensions $4 \times 3 \times 2$, so we need to specify a position along each mode to pull an element. 
+A third-order tensor requires three indices. The following tensor has dimensions $4 \times 3 \times 2$, so we need to specify a position along each mode to pull an element.
 
 \begin{figure}[htbp]
 \centering
@@ -154,34 +154,34 @@ A[3, 1, 1]
 
 The mode is a specific axis of a tensor. For a matrix, the two modes are usually called rows and columns. However, since a tensor can have three or more dimensions, we now need a term for the specific dimension being referred to.
 
-Consider a tensor $\tensor{A} \in \mathbb{k}^{4 \times 2 \times 3}$. We would say the first mode has dimension 4, the second mode has dimension 2, and the third mode has dimension 3. Note that the modes of a tensor are dependent on the structure of the object. For example, we could keep the same data in $\tensor{A}$ but permute the modes, leading to a new tensor $\tensor{B} \in \mathbb{k}^{4 \times 3 \times 2}$. When communicating a tensor, it is important to keep the modes consistent and keep track of what each mode represents. For example, the modes of a tensor could represent a specific sensor ID, time of measurement, and spatial location. 
+Consider a tensor $\tensor{A} \in \mathbb{k}^{4 \times 2 \times 3}$. We would say the first mode has dimension 4, the second mode has dimension 2, and the third mode has dimension 3. Note that the modes of a tensor are dependent on the structure of the object. For example, we could keep the same data in $\tensor{A}$ but permute the modes, leading to a new tensor $\tensor{B} \in \mathbb{k}^{4 \times 3 \times 2}$. When communicating a tensor, it is important to keep the modes consistent and keep track of what each mode represents. For example, the modes of a tensor could represent a specific sensor ID, time of measurement, and spatial location.
 
 
 ## $n$-mode product
 
-In regular matrix multiplication, we can multiply two matrices as long as the number of columns in the first matrix matches the rows of the second matrix. Now, suppose we want to multiply a tensor and a matrix. Now, we need a new operator to specify which mode from the tensor should line up with the matrix. The $n$-mode product specifies that the $n$-th mode of a tensor should have the same size as the columns of a matrix.   
+In regular matrix multiplication, we can multiply two matrices as long as the number of columns in the first matrix matches the rows of the second matrix. Now, suppose we want to multiply a tensor and a matrix. Now, we need a new operator to specify which mode from the tensor should line up with the matrix. The $n$-mode product specifies that the $n$-th mode of a tensor should have the same size as the columns of a matrix.
 
 Let tensor $\tensor{A} \in \field{k}^{I_1 \times I_2 \times ... \times I_n}$ and let a matrix $\mat{U} \in \field{k}^{J \times I_n}$. Then the $n$-mode product of $\tensor{A}$ and $\mat{U}$ can be defined as
 
-$$(\tensor{A} \times_n \mat{U}) \in \field{k}^{I_1 \times ... \times I_{n-1} \times J \times I_{n+1} \times ... \times I_N}.$$ Note that the modes of the result stay the same as $\tensor{A}$ other than the $n$-th mode being replaced with $J$. 
+$$(\tensor{A} \times_n \mat{U}) \in \field{k}^{I_1 \times ... \times I_{n-1} \times J \times I_{n+1} \times ... \times I_N}.$$ Note that the modes of the result stay the same as $\tensor{A}$ other than the $n$-th mode being replaced with $J$.
 
 Its entries are
 
-$$(\tensor{A} \times_{n} \mat{U})_{i_1, ..., i_{n-1}, j, i_{n+1}, ... I_N} = \sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_N} u_{j, i_n}.$$ 
+$$(\tensor{A} \times_{n} \mat{U})_{i_1, ..., i_{n-1}, j, i_{n+1}, ... I_N} = \sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_N} u_{j, i_n}.$$
 
 The tensor and matrix share one mode in common, denoted here as $I_n$. This operation is also called the tensor times matrix product.
 
-This function is called `n_prod()` in the package \pkg{tensormodels}. It accepts a tensor, a value $n$ specifying which mode to multiply across, and a matrix. For example, let us take $\ve{a} \in \field{k}^3$ and $\mat{U} \in \field{k}^{2\times 3}.$ Then if we compute $\ve{a} \times_{1} \mat{U}$, we expect the final result to be $\in \field{k}^{2 \times 1}.$
+This function is called `n_prod()` in the package \pkg{tensortools}. It accepts a tensor, a value $n$ specifying which mode to multiply across, and a matrix. For example, let us take $\ve{a} \in \field{k}^3$ and $\mat{U} \in \field{k}^{2\times 3}.$ Then if we compute $\ve{a} \times_{1} \mat{U}$, we expect the final result to be $\in \field{k}^{2 \times 1}.$
 
 ```{r}
-a_vec <- c(1, 2, 3) 
+a_vec <- c(1, 2, 3)
 u_mat <- matrix(4:9, ncol = 3)
 
 n_prod(tensor = a_vec, n = 1, mat = u_mat)
 ```
 
 
-This function is supported as an infix operator with the notation `A %xn% (x~n)`, where `%xn%` is an infix operator and `n` is the mode computed across. 
+This function is supported as an infix operator with the notation `A %xn% (x~n)`, where `%xn%` is an infix operator and `n` is the mode computed across.
 
 ```{r}
 a %xn% (u_mat~1)
@@ -196,17 +196,17 @@ dim(A_tensor %xn% (u_mat ~ 2))
 ```
 
 
-In \pkg{tensormodels}, the $n$-mode product is used internally to apply covariance transformations one mode at a time. For random generation, independent standard normal tensors are multiplied by Cholesky factors along each mode to induce the desired covariance structure. For density evaluation and model diagnostics, centered tensors are multiplied by inverse covariance factors along each mode, producing standardized tensor residuals and Mahalanobis distances.
+In \pkg{tensortools}, the $n$-mode product is used internally to apply covariance transformations one mode at a time. For random generation, independent standard normal tensors are multiplied by Cholesky factors along each mode to induce the desired covariance structure. For density evaluation and model diagnostics, centered tensors are multiplied by inverse covariance factors along each mode, producing standardized tensor residuals and Mahalanobis distances.
 
 
 ## Matricization
 
-Matricization, also called unfolding, collapses a tensor into a matrix. It accepts an argument $k$ that determines which mode to place in the rows, and then combines every other mode into the columns. This allows us to focus on variation along a specific mode. 
+Matricization, also called unfolding, collapses a tensor into a matrix. It accepts an argument $k$ that determines which mode to place in the rows, and then combines every other mode into the columns. This allows us to focus on variation along a specific mode.
 
 Let $\tensor{A} \in \field{k}^{I_1 \times ... \times I_N}$ be an $N$-th order tensor. The $k$-th matricization of $\tensor{A}$ is a matrix $\mat{A}_k \in \field{k}^{I_1I_2,...,I_k \times I_{k+1} \times I_{k+2} \times... \times I_N}$, whose elements are taken column-wise from A. The elements are
 $\mat{A}_{(k)}(i_1 ..., i_k, i_{k+1}, ...., i_N) = \tensor{A}(i_1,..., i_k, i_{k+1}, ..., i_N).$
 
-In \pkg{tensormodels}, this function is called `matricization().` It accepts a tensor and $k$. 
+In \pkg{tensortools}, this function is called `matricization().` It accepts a tensor and $k$.
 
 \subsubsection{Example} \label{sec_1.3.5.1}
 
@@ -230,39 +230,39 @@ $$A_{(1)} = \begin{bmatrix} 1 & 5 & 9 & 13 & 17 & 21 \\
                             3 & 7 & 11 & 15 & 19 & 23 \\
                             4 & 8 & 12 & 16 & 20 & 24
             \end{bmatrix}$$
-            
+
 ```{r}
 A <- tensor(array(1:24, dim = c(4, 3, 2)))
 
 matricization(A, k = 1)
 ```
-            
 
-In \pkg{tensormodels}, matricization is used to initialize and update mode-specific covariance matrices through ordinary matrix crossproducts.
+
+In \pkg{tensortools}, matricization is used to initialize and update mode-specific covariance matrices through ordinary matrix crossproducts.
 
 
 ## Tensor variate distributions
 
-There are several tensor variate distributions that are generalizations of matrix variate distributions. This section introduces the distributions that are used by \pkg{tensormodels}.
+There are several tensor variate distributions that are generalizations of matrix variate distributions. This section introduces the distributions that are used by \pkg{tensortools}.
 
-The tensor variate normal distribution can be considered a generalization of the multivariate and matrix variate normal distributions. 
+The tensor variate normal distribution can be considered a generalization of the multivariate and matrix variate normal distributions.
 
 ### Univariate Normal
-First, consider a standard univariate normal draw $Z \sim N(0, 1).$ If we shift and scale it to generate $X = \mu + \sigma Z$, then $X \sim N(\mu, \sigma^2).$ That is, an affine transformation of a standard univariate normal draw describes all possible univariate normal distributions. 
+First, consider a standard univariate normal draw $Z \sim N(0, 1).$ If we shift and scale it to generate $X = \mu + \sigma Z$, then $X \sim N(\mu, \sigma^2).$ That is, an affine transformation of a standard univariate normal draw describes all possible univariate normal distributions.
 
 
 ### Multivariate Normal
-That generated one element. Now let $\mat{Z}$ be a $p \times 1$ vector containing IID standard normal draws. Then $\ve{Z} \sim N_{p}(\textbf{0}, \mat{I}_p)$. If we let $\mat{A}\mat{A}^{T} = \Sigma$, then define $\ve{X} = \mathbf{\mu} + \mat{A}\ve{Z}.$ Now $\ve{X} \sim  N_{p}(\mathbf{\mu}, \mathbf{\Sigma}).$ That is, $\ve{X}$ defines all the possible multivariate normal distributions. 
+That generated one element. Now let $\mat{Z}$ be a $p \times 1$ vector containing IID standard normal draws. Then $\ve{Z} \sim N_{p}(\textbf{0}, \mat{I}_p)$. If we let $\mat{A}\mat{A}^{T} = \Sigma$, then define $\ve{X} = \mathbf{\mu} + \mat{A}\ve{Z}.$ Now $\ve{X} \sim  N_{p}(\mathbf{\mu}, \mathbf{\Sigma}).$ That is, $\ve{X}$ defines all the possible multivariate normal distributions.
 
 
 ### Matrix Variate Normal
-Let $\mat{Z}$ be a $p \times q$ matrix with IID standard normal entries. Choose matrices $\mat{A}$ and $\mat{B}$ such that $\mat{U} = \mat{A}\mat{A}^{T}, \qquad \mat{V} = \mat{B}\mat{B}^{T}$. Now define $\mat{X} = \mat{M} + \mat{A}\mat{Z}\mat{B}^{T}.$ We say that  $\mat{X} \sim N_{pq}(\mat{M}, \mat{U}, \mat{V}).$ That is, $\mat{X}$ defines all the possible matrix variate normal distributions. 
+Let $\mat{Z}$ be a $p \times q$ matrix with IID standard normal entries. Choose matrices $\mat{A}$ and $\mat{B}$ such that $\mat{U} = \mat{A}\mat{A}^{T}, \qquad \mat{V} = \mat{B}\mat{B}^{T}$. Now define $\mat{X} = \mat{M} + \mat{A}\mat{Z}\mat{B}^{T}.$ We say that  $\mat{X} \sim N_{pq}(\mat{M}, \mat{U}, \mat{V}).$ That is, $\mat{X}$ defines all the possible matrix variate normal distributions.
 
 
 ### Tensor Variate Normal
-Let $\tensor{Z}$ be an order-$D$ tensor with IID standard normal entries and $\mat{\Sigma}_{1}, \dots, \mat{\Sigma}_{D}$ be positive definite matrices describing the variance-covariance structure along each mode. For each mode, choose $\mat{A}_{j}$ such that $\mat{\Sigma}_{j} = \mat{A}_{j}\mat{A}_{j}^{T}, \qquad j = 1,\dots,D$. 
+Let $\tensor{Z}$ be an order-$D$ tensor with IID standard normal entries and $\mat{\Sigma}_{1}, \dots, \mat{\Sigma}_{D}$ be positive definite matrices describing the variance-covariance structure along each mode. For each mode, choose $\mat{A}_{j}$ such that $\mat{\Sigma}_{j} = \mat{A}_{j}\mat{A}_{j}^{T}, \qquad j = 1,\dots,D$.
 
-Then we can define $\tensor{X}$ as  $\tensor{X} = \tensor{M} + \tensor{Z} \nProd{1}\mat{A}_{1} \nProd{2}\mat{A}_{2} \cdots \nProd{D}\mat{A}_{D}.$ That is, $\tensor{X}$ defines all the possible tensor variate normal distributions. 
+Then we can define $\tensor{X}$ as  $\tensor{X} = \tensor{M} + \tensor{Z} \nProd{1}\mat{A}_{1} \nProd{2}\mat{A}_{2} \cdots \nProd{D}\mat{A}_{D}.$ That is, $\tensor{X}$ defines all the possible tensor variate normal distributions.
 
 <!-- Setting this restriction leads to a curved exponential family. To see this, first consider the ordinary multivariate normal distribution. If $\boldsymbol{y} \sim(\boldsymbol{\mu}, \boldsymbol{\Sigma}) \in \mathbb{R}^{np}$, then -->
 <!-- \[ -->
@@ -414,7 +414,7 @@ The tensor variate variance gamma distribution can be generated by setting $W \s
 
 The tensor variate normal inverse Gaussian distribution can be generated by setting $W \sim \text{IG}(1, \kappa)$ in Equation \ref{eq-skewmix}. We then say that $\tensor{X} \sim \text{TVNIG}_n(\tensor{M}, \tensor{A}, \bigotimes_{d=1}^{D} \Sigma_d, \kappa)$.
 
-These choices of $W$ give the four skewed families implemented in \pkg{tensormodels}. Their common representation also makes it possible to use a shared estimation framework while changing the distribution of the latent mixing variable.
+These choices of $W$ give the four skewed families implemented in \pkg{tensortools}. Their common representation also makes it possible to use a shared estimation framework while changing the distribution of the latent mixing variable.
 
 <!-- Introduce the tensor notation and modeling ideas needed by the reader. Compare -->
 <!-- the package with the closest existing R software and cite relevant literature -->
@@ -422,13 +422,13 @@ These choices of $W$ give the four skewed families implemented in \pkg{tensormod
 
 # Tensor software across programming languages
 
-There are several existing software packages for tensors in several programming languages, but most emphasize tensor algebra or decompositions over probability models. The unique aspect of \pkg{tensormodels} is the support for tensor-variate normal and skewed tensor-variate distributions. These include random number generation, density functions, likelihood estimation, and model diagnostics. 
+There are several existing software packages for tensors in several programming languages, but most emphasize tensor algebra or decompositions over probability models. The unique aspect of \pkg{tensortools} is the support for tensor-variate normal and skewed tensor-variate distributions. These include random number generation, density functions, likelihood estimation, and model diagnostics.
 
 One of the most popular softwares is the Tensor Toolbox for MATLAB [@matlabTensorToolbox; @bader2006algorithm862]. This toolbox introduces a `tensor` class to generate dense tensors from a multidimensional MATLAB array. This class object has unique attributes so that the user can use methods such as `size`, `ndims`, `norm`, `unfold`, and `ttm`. It also supports decompositions on the tensor object with methods like `mttkrp`, `cp_als`, `tucker_als`, and `hosvd`. Tensor Toolbox also defines separate intentional classes for other tensor formats: `sptensor` for sparse tensors, `ktensor` for Kruskal/CP factored tensors, and `ttensor` for Tucker factored tensors [@bader2007sparseFactored].
 
-TensorLy in Python is similar to the Tensor Toolbox for MATLAB. It contains basic tensor operations and common decompositions including CP, Tucker, and Tensor-Train. A major pr oof TensorLy is that it has backend support across other common frameworks in Pythin, including NumPy, PyTorch, and TensorFlow. This makes it easier for the user to run functions on their GPU or along multiple machines [@tensorly2019]. TensorFlow is another well-known package in Python, but it primarily uses the tensor object as inputs for machine learning methodologies rather than trying to expand on operations and decompositions. 
+TensorLy in Python is similar to the Tensor Toolbox for MATLAB. It contains basic tensor operations and common decompositions including CP, Tucker, and Tensor-Train. A major pr oof TensorLy is that it has backend support across other common frameworks in Pythin, including NumPy, PyTorch, and TensorFlow. This makes it easier for the user to run functions on their GPU or along multiple machines [@tensorly2019]. TensorFlow is another well-known package in Python, but it primarily uses the tensor object as inputs for machine learning methodologies rather than trying to expand on operations and decompositions.
 
-The Python Tensor Toolbox, \pkg{pyttb} is a refactoring of the Tensor Toolbox for MATLAB. Thus, it ports the common functions from Tensor Toolbox into Python, including the various unique tensor classes and decompositions [@pyttb]. 
+The Python Tensor Toolbox, \pkg{pyttb} is a refactoring of the Tensor Toolbox for MATLAB. Thus, it ports the common functions from Tensor Toolbox into Python, including the various unique tensor classes and decompositions [@pyttb].
 
 In Julia, \pkg{TensorOperations.jl} have support for tensor contractions and \pkg{TensorToolbox.jl} is Julia's port of the MATLAB Tensor Toolbox [@juliaTensorToolbox; @juliaTensorOperations].
 
@@ -447,7 +447,7 @@ software_function_crosswalk <- data.frame(
     "Tensor-Train",
     "Tensor-variate distributions"
   ),
-  `tensormodels` = c(
+  `tensortools` = c(
     "Uses base R array object",
     "No separate sparse/factored tensor class; decomposition results are ordinary lists",
     "`matricization()`",
@@ -480,19 +480,19 @@ knitr::kable(
   kableExtra::column_spec(3, width = "2.6in")
 ```
 
-The comparison also explains the class design adopted in \pkg{tensormodels}. Packages such as MATLAB Tensor Toolbox and \pkg{rTensor} make the tensor class central: users create a tensor object first, and then methods dispatch on that object. \pkg{tensormodels} uses the base R array so that users do not have to learn the S4 class. This keeps \pkg{tensormodels} close to ordinary R array workflows.
+The comparison also explains the class design adopted in \pkg{tensortools}. Packages such as MATLAB Tensor Toolbox and \pkg{rTensor} make the tensor class central: users create a tensor object first, and then methods dispatch on that object. \pkg{tensortools} uses the base R array so that users do not have to learn the S4 class. This keeps \pkg{tensortools} close to ordinary R array workflows.
 
 \FloatBarrier
 
 # Package design
 
-The main goal of \pkg{tensormodels} is to provide functions for random number generation, density computation, and maximum likelihood estimation for common tensor variate distributions. Additionally, the package provides diagnostic tests for the structure of input data. 
+The main goal of \pkg{tensortools} is to provide functions for random number generation, density computation, and maximum likelihood estimation for common tensor variate distributions. Additionally, the package provides diagnostic tests for the structure of input data.
 
 Distribution functions follow familiar R naming conventions: names beginning with `r` generate random draws, names beginning with `d` evaluate densities, and `tensor_mle()` fits a selected tensor-variate model. Tensor algebra helpers such as `matricization()`, `n_prod()`, `nm_prod()`, `tensor_prod()`, and `khatri_rao()` are available to users and are also used internally by the likelihood and decomposition routines. Decomposition functions are grouped with explicit reconstruction helpers: `cp()` and `cp_reconstruct()`, `tucker()` and `tucker_reconstruct()`, `hosvd()` and `hosvd_reconstruct()`, and `tt()` and `tt_reconstruct()`.
 
-One intentional decision was to store independent, identically distributed draws from a tensor variate distribution as a list. For example, if we generate $n = 100$ draws from a tensor variate normal distribution of dimension $2 \times 3 \times 4$, the resulting R object will be a list of length 100. Each element in the list is a base R array object of dimension $2 \times 3 \times 4$. Other packages in this space created unique S3 and S4 class objects to store these types of draws. However, these choices are difficult for the average R user, as they have unique interactions and functions. 
+One intentional decision was to store independent, identically distributed draws from a tensor variate distribution as a list. For example, if we generate $n = 100$ draws from a tensor variate normal distribution of dimension $2 \times 3 \times 4$, the resulting R object will be a list of length 100. Each element in the list is a base R array object of dimension $2 \times 3 \times 4$. Other packages in this space created unique S3 and S4 class objects to store these types of draws. However, these choices are difficult for the average R user, as they have unique interactions and functions.
 
-Another option would be to output a tensor of size $100 \times 2 \times 3 \times 4$; that is, create a tensor of one higher dimension where the first mode represents the index of the draw. The choice to have the first mode represent the draw is arbitrary and could potentially confuse users, especially if they permute the dimensions. 
+Another option would be to output a tensor of size $100 \times 2 \times 3 \times 4$; that is, create a tensor of one higher dimension where the first mode represents the index of the draw. The choice to have the first mode represent the draw is arbitrary and could potentially confuse users, especially if they permute the dimensions.
 
 ```{r tensor-random}
 three_dim_iid <- rtnorm(n = 100, mu = array(1:12, dim = c(2, 3, 4)))
@@ -507,7 +507,7 @@ Model fits are returned as ordinary R lists. For example, a tensor-variate norma
 ## Core workflow
 
 
-This package contains random number generations for several tensor variate distributions. Below is a simulation from a tensor variate normal of size $2 \times 3 \times 4$. The dimension of the draws is the same as the mu object provided. The covariance structure is specified with a list of matrices, where each matrix must be a square of the corresponding mode. 
+This package contains random number generations for several tensor variate distributions. Below is a simulation from a tensor variate normal of size $2 \times 3 \times 4$. The dimension of the draws is the same as the mu object provided. The covariance structure is specified with a list of matrices, where each matrix must be a square of the corresponding mode.
 
 
 ```{r rtnorm}
@@ -524,7 +524,7 @@ tvn_draws <- rtnorm(n = 1e3, mu = mu_true,
 ```
 
 
-Given a list of draws, the package can estimate the MLEs using the function `tensor_mle()`{.R}. The model argument is required to know which distribution to fit to the data. 
+Given a list of draws, the package can estimate the MLEs using the function `tensor_mle()`{.R}. The model argument is required to know which distribution to fit to the data.
 
 ```{r tensor-mle-normal}
 tvn_mles <- tensor_mle(tvn_draws, model = "normal")
@@ -533,7 +533,7 @@ str(tvn_mles)
 ```
 
 
-There are also density functions for each distribution. For the tensor variate normal, the required arguments are mu and sigmas. There is an optional log argument to compute the log density rather than the density itself. 
+There are also density functions for each distribution. For the tensor variate normal, the required arguments are mu and sigmas. There is an optional log argument to compute the log density rather than the density itself.
 
 ```{r dtnorm}
 dtnorm(pull_draw(tvn_draws, 1), mu = mu_true, sigmas = sigmas_true)
@@ -589,7 +589,7 @@ The package computes this decomposition using the TT-SVD algorithm. The user can
 
 # Model fitting and inference
 
-One major functionality that tensormodels provides is MLE estimation. This is done via two different algorithms: for the tensor variate normal distribution, a flip-flop algorithm is used. For tensor variate skewed distributions, an EM algorithm is used. 
+One major functionality that tensortools provides is MLE estimation. This is done via two different algorithms: for the tensor variate normal distribution, a flip-flop algorithm is used. For tensor variate skewed distributions, an EM algorithm is used.
 
 Before discussing the tensor variate normal, we discuss the simpler matrix variate normal distribution. The matrix variate normal distribution can be considered a special case of the multivariate normal distribution, where we force the restriction that the covariance matrix is separable. That is, the covariance of the vectorized matrix draws can be described as the Kronecker product of two matrices.
 
@@ -604,7 +604,7 @@ N_{np}\left(\operatorname{vec}(\mat{M}), \mat{V} \otimes \mat{U}\right).
 \]
 This is a nonlinear restriction on the natural parameter space of the full multivariate normal family. For the matrix variate normal, the covariance matrix is restricted to be defined as the Kronecker product of two covariance matrices. This makes its parameter space a lower-dimensional curved subset of the full multivariate normal distribution [@existenceMLEKronecker].
 
-By default, the initial values for the parameters are chosen in different ways. The location parameter $\mathcal{M}$ is started as the median of the draws. This is because the mean of the draws is dependent on the skew and parameters. Each covariance matrix is initialized by centering by the median, matricizing along the corresponding dimension, and adding up the scatter matrix across all of the draws. This total is normalized to have a trace equal to its dimension to ensure the scale is not disproportionate. Initial values for the parameters are set to be conservative and specific to the distribution. For example, for the skewed t, $\nu = 20$. Finally, the skew parameter $\mathcal{A}$ is computed as a function of the expected value of the draws, $\mathcal{M}$, and the relevant parameters for that distribution. 
+By default, the initial values for the parameters are chosen in different ways. The location parameter $\mathcal{M}$ is started as the median of the draws. This is because the mean of the draws is dependent on the skew and parameters. Each covariance matrix is initialized by centering by the median, matricizing along the corresponding dimension, and adding up the scatter matrix across all of the draws. This total is normalized to have a trace equal to its dimension to ensure the scale is not disproportionate. Initial values for the parameters are set to be conservative and specific to the distribution. For example, for the skewed t, $\nu = 20$. Finally, the skew parameter $\mathcal{A}$ is computed as a function of the expected value of the draws, $\mathcal{M}$, and the relevant parameters for that distribution.
 
 The individual covariance matrices in a Kronecker product are not defined uniquely. Multiplying one covariance matrix by a constant and another by the inverse of that constant produces the same full covariance matrix. The package addresses this by normalizing the trace of each covariance matrix except the final one to equal its corresponding mode dimension. This preserves the overall Kronecker covariance while giving the individual mode covariance estimates a consistent scale.
 
@@ -631,7 +631,7 @@ quantification, and any constraints or identifiability conventions.
 
 # Diagnostic Tests
 
-We assess tensor variate normality using the Mahalanobis distance. If $\mathcal{X}$ follows an order-$O$ tensor variate normal distribution, then $\text{vec}(\mathcal{X})$ follows a multivariate normal distribution with mean $\text{vec}(\mathcal{M})$ and covariance matrix $\boldsymbol{\Sigma}_{O} \otimes \cdots \otimes \boldsymbol{\Sigma}_{1}$. This is why we can vectorize the tensor draws and compare the multivariate Mahalanobis distances to the tensor variate Mahalanobis distances. If we have properly reconstructed the structure using the MLEs $\hat{\mathcal{M}}$ and $\hat{\Sigma}_{O}, \cdots \hat{\Sigma}_{1}$, then the standardized draws should be from a standard normal. 
+We assess tensor variate normality using the Mahalanobis distance. If $\mathcal{X}$ follows an order-$O$ tensor variate normal distribution, then $\text{vec}(\mathcal{X})$ follows a multivariate normal distribution with mean $\text{vec}(\mathcal{M})$ and covariance matrix $\boldsymbol{\Sigma}_{O} \otimes \cdots \otimes \boldsymbol{\Sigma}_{1}$. This is why we can vectorize the tensor draws and compare the multivariate Mahalanobis distances to the tensor variate Mahalanobis distances. If we have properly reconstructed the structure using the MLEs $\hat{\mathcal{M}}$ and $\hat{\Sigma}_{O}, \cdots \hat{\Sigma}_{1}$, then the standardized draws should be from a standard normal.
 
 
 If a tensor normal covariance structure is present, then the multivariate and tensor variate distances should be close to one another. Following the matrix variate normality paper, this can be visualized with a distance-distance plot: when the tensor normal structure is appropriate, the distances lie close to the reference line; when the Kronecker product structure is absent, the distances diverge.
@@ -666,7 +666,7 @@ plot_malanobis <- function(draws, title = "Dist") {
   test <- mahalanobis_test(distances)
   plot_dist(distances)
   title(main = title)
-  with(test, mtext(text = sprintf("D = %.3f, p = %.3f", statistic, p.value)), 
+  with(test, mtext(text = sprintf("D = %.3f, p = %.3f", statistic, p.value)),
        side = 3, line = 1)
 }
 ```
@@ -681,13 +681,13 @@ plot_malanobis(matrix_nocovar_draws, title = "Mat no covar norm")
 plot_malanobis(tvn_draws, title = "Tensor norm")
 ```
 
-We are also interested in performing a likelihood ratio test to see if one of the covariance matrices might be the identity matrix. Thus, we run the algorithm and restrict these matrices. 
+We are also interested in performing a likelihood ratio test to see if one of the covariance matrices might be the identity matrix. Thus, we run the algorithm and restrict these matrices.
 
-For a restriction set \(\mathcal{R} \subset \{1,\ldots,D\}\), the restricted model fixes \(\Sigma_r = I_{n_r}\) for every \(r \in \mathcal{R}\), while all other covariance matrices are estimated. The likelihood ratio test compares 
+For a restriction set \(\mathcal{R} \subset \{1,\ldots,D\}\), the restricted model fixes \(\Sigma_r = I_{n_r}\) for every \(r \in \mathcal{R}\), while all other covariance matrices are estimated. The likelihood ratio test compares
 
 $$H_0: \Sigma_r = I_{n_r} \ \forall r \in \mathcal{R} \quad \text{vs.} \quad H_A: \Sigma_r \neq I_{n_r} \ \text{for at least one } r \in \mathcal{R}.$$
 
-The test statistic is 
+The test statistic is
 
 $$2\{\ell(\hat\theta_{\mathrm{full}}) - \ell(\hat\theta_{\mathcal{R}})\}
 \sim \chi^2_{\nu_{\mathcal{R}}}, \quad \nu_{\mathcal{R}} = \sum_{r \in \mathcal{R}} \biggl\{\frac{n_r(n_r+1)}{2} - 1\biggr\}$$
@@ -697,9 +697,9 @@ If the $p$-value is large, then we fail to reject the null hypothesis and conclu
 ```{r lrt-function, echo = FALSE}
 test_restrict <- function(draws, restrict) {
   full_mod <- tensor_mle(draws, restrict = NULL, model = "normal")
-  
+
   curr_mod <- tensor_mle(draws, restrict = restrict, model = "normal")
-  
+
   if(is.null(restrict)) restrict <- "None"
 
   tibble(restrict = paste(restrict, collapse = ", "),
@@ -724,13 +724,13 @@ knitr::kable(
 ```
 
 
-Now, we generate data where the second covariance matrix is diagonal. The model that restricts the 2nd covariance to be diagonal has a $p-val > 0.05$, meaning it is does not have a significantly smaller likelihood than the full unrestricted model. 
+Now, we generate data where the second covariance matrix is diagonal. The model that restricts the 2nd covariance to be diagonal has a $p-val > 0.05$, meaning it is does not have a significantly smaller likelihood than the full unrestricted model.
 ```{r lrt-test-2, cache = TRUE, echo = FALSE}
-second_identity <- rtnorm(n = 1e3, mu = mu_true, 
+second_identity <- rtnorm(n = 1e3, mu = mu_true,
                           sigmas = list(S1, diag(3), S3))
 
 res_second_identity <-
-  map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)), 
+  map_dfr(list(NULL, c(1), c(2), c(3), c(1, 2), c(1, 3), c(2, 3)),
           draws = second_identity, test_restrict)
 
 knitr::kable(
@@ -747,14 +747,14 @@ knitr::kable(
 
 ## Parameter recovery
 
-To validate the distributions, we can compare the MLEs to the true values used to generate draws. 
+To validate the distributions, we can compare the MLEs to the true values used to generate draws.
 ```{r}
 mean((tvn_mles$mu - mu_true)^2)
 
 for(i in 1:3) {
   true_scaled <- sigmas_true[[i]] / sum(diag(sigmas_true[[i]]))
   est_scaled <- tvn_mles$sigmas[[i]] / sum(diag(tvn_mles$sigmas[[i]]))
-  
+
   print(mean((est_scaled - true_scaled)^2))
 }
 ```
@@ -796,7 +796,7 @@ grabmyo_tensors[[1]][1, , ] |>
 
 We fit a tensor-variate normal model to the 43 participant tensors. For
 comparison, each tensor is matricized along each of its three modes, and an
-ordinary matrix-variate normal model is fitted to each dataset. 
+ordinary matrix-variate normal model is fitted to each dataset.
 
 ```{r grabmyo-fit-models, cache=TRUE}
 grabmyo_fit_timed <- function(label, draws, model = "normal") {
@@ -977,7 +977,7 @@ skewt_draws <- rtskewt(
   nu = 20
 )
 
-invgauss_draws <- rtinvgauss(n = 1e3, 
+invgauss_draws <- rtinvgauss(n = 1e3,
                              mu = mu_true,
                              sigmas = sigmas_true,
                              skew = skew_true)
@@ -1165,9 +1165,9 @@ ggplot(cf_ray, aes(x = scale, y = value, color = source)) +
 
 
 ```{r}
-cf_ray |> 
-  group_by(value) |> 
-  
+cf_ray |>
+  group_by(value) |>
+
 ```
 
 For a goodness-of-fit diagnostic, replace the true parameters above with the
@@ -1177,7 +1177,7 @@ the discrepancy using a parametric bootstrap.
 
 # Discussion
 
-The package `tensormodels` provides support for tensor variate distributions, allowing for random number generation, density calculation, and MLE estimation.
+The package `tensortools` provides support for tensor variate distributions, allowing for random number generation, density calculation, and MLE estimation.
 
 # Reproducibility
 

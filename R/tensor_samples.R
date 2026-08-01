@@ -6,8 +6,8 @@
 #' @param digits Significant digits for the preview.
 #' @return `x`, invisibly.
 #' @export
-print.tensor <- function(x, ..., n = getOption("tensormodels.print_draws", 3L),
-                         entries = getOption("tensormodels.print_entries", 6L),
+print.tensor <- function(x, ..., n = getOption("tensortools.print_draws", 3L),
+                         entries = getOption("tensortools.print_entries", 6L),
                          digits = getOption("digits", 7L)) {
   size <- n_draws(x); shape <- draw_shape(x)
   label <- format(size, big.mark = ",", scientific = FALSE)

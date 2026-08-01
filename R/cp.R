@@ -7,6 +7,7 @@
 #' @param R A rank. Must be smaller or equal to the smallest dim of A.
 #' @param max_iter A maximum number of iterations to try.
 #' @param tol Tolerance for convergence criterion.
+#' @param method Decomposition method. Currently only `"ALS"` is supported.
 #' Ends algorithm if relative Frobenius norm between true and reconstructed tensor
 #' is smaller than tol.
 #'
@@ -16,7 +17,7 @@
 #'
 #' @examples
 #' A <- array(1:24, dim = c(2, 3, 4))
-#' (res <- cp_als(A, ranks = c(2, 2, 2)))
+#' (res <- cp(A, R = 2))
 #'
 #' @seealso [cp_reconstruct()] to reconstruct the tensor from the decomposed parts.
 #'
@@ -66,4 +67,3 @@ cp <- function(A, R = 2, max_iter = 2000, tol = 1e-3, method = "ALS") {
 
   list(lambda = lambda, mats = list_mats)
 }
-

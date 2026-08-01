@@ -388,7 +388,59 @@ tensor_rosenblatt <- function(
   }
 
   root <- sqrt(lambda^2 + chi * psi)
-  log(chi) - log(root - lambda)
+
+  if (lambda >= 0) {
+    log(root + lambda) - log(psi)
+  } else {
+    log(chi) - log(root - lambda)
+  }
+}
+
+.tensor_rosenblatt_gig_log_bounds <- function(lambda,
+                                              chi,
+                                              psi,
+                                              log_center,
+                                              rel.tol,
+                                              abs.tol) {
+  center <- exp(log_center)
+  scaled_chi <- if (chi == 0) 0 else chi / center
+  scaled_psi <- if (psi == 0) 0 else psi * center
+  log_drop <- max(
+    40,
+    -log(min(rel.tol, abs.tol)) + 10
+  )
+
+  relative_log_kernel <- function(log_ratio) {
+    lower_tail <- if (scaled_chi == 0) {
+      0
+    } else {
+      scaled_chi * expm1(-log_ratio)
+    }
+    upper_tail <- if (scaled_psi == 0) {
+      0
+    } else {
+      scaled_psi * expm1(log_ratio)
+    }
+    value <- lambda * log_ratio - (lower_tail + upper_tail) / 2
+
+    if (is.nan(value)) -Inf else value
+  }
+
+  expand_bound <- function(direction) {
+    width <- 1
+
+    while (width < 1024 &&
+           relative_log_kernel(direction * width) > -log_drop) {
+      width <- width * 2
+    }
+
+    width
+  }
+
+  c(
+    lower = -expand_bound(-1),
+    upper = expand_bound(1)
+  )
 }
 
 .tensor_rosenblatt_gig_cdf <- function(value,
@@ -437,14 +489,57 @@ tensor_rosenblatt <- function(
     answer
   }
 
-  result <- stats::integrate(
-    integrand,
-    lower = -Inf,
-    upper = Inf,
-    rel.tol = rel.tol,
-    abs.tol = abs.tol,
-    subdivisions = subdivisions,
-    stop.on.error = TRUE
+  result <- tryCatch(
+    stats::integrate(
+      integrand,
+      lower = -Inf,
+      upper = Inf,
+      rel.tol = rel.tol,
+      abs.tol = abs.tol,
+      subdivisions = subdivisions,
+      stop.on.error = TRUE
+    ),
+    error = function(infinite_range_error) {
+      bounds <- .tensor_rosenblatt_gig_log_bounds(
+        lambda = lambda,
+        chi = chi,
+        psi = psi,
+        log_center = log_center,
+        rel.tol = rel.tol,
+        abs.tol = abs.tol
+      )
+      fallback_subdivisions <- max(200L, 2L * subdivisions)
+
+      finite_piece <- function(lower, upper) {
+        stats::integrate(
+          integrand,
+          lower = lower,
+          upper = upper,
+          rel.tol = rel.tol,
+          abs.tol = abs.tol / 2,
+          subdivisions = fallback_subdivisions,
+          stop.on.error = TRUE
+        )
+      }
+
+      tryCatch(
+        {
+          left <- finite_piece(bounds[["lower"]], 0)
+          right <- finite_piece(0, bounds[["upper"]])
+          left$value <- left$value + right$value
+          left$abs.error <- left$abs.error + right$abs.error
+          left
+        },
+        error = function(finite_range_error) {
+          stop(
+            conditionMessage(infinite_range_error),
+            "; finite-range fallback also failed: ",
+            conditionMessage(finite_range_error),
+            call. = FALSE
+          )
+        }
+      )
+    }
   )
 
   probability <- result$value

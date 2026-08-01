@@ -4,7 +4,7 @@ output: pdf_document
 ---
 
 ```{r, include = FALSE}
-#library(tensormodels)
+#library(tensortools)
 library(tidyverse)
 #library(patchwork)
 #library(MVN)

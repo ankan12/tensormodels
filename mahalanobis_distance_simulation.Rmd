@@ -6,7 +6,7 @@ date: "2026-02-26"
 
 ```{r}
 library(tidyverse)
-library(tensormodels)
+library(tensortools)
 library(patchwork)
 ```
 

@@ -1,17 +1,17 @@
-\name{tensormodels-package}
-\alias{tensormodels-package}
-\alias{tensormodels}
+\name{tensortools-package}
+\alias{tensortools-package}
+\alias{tensortools}
 \docType{package}
 \title{
-  A short title line describing what the package does
+  Statistical Modeling and Computation for Tensor-Valued Data
 }
 \description{
-  A more detailed description of what the package does. A length
-  of about one to five lines is recommended.
+  Tools for tensor-valued data, including tensor algebra, decompositions,
+  probability distributions, estimation, and diagnostics.
 }
 \details{
-  This section should provide a more detailed overview of how to use the
-  package, including the most important functions.
+  The package provides computational building blocks for working with
+  tensor-valued data in R.
 }
 \author{
 Your Name, email optional.

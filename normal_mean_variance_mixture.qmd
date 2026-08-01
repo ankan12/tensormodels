@@ -7,7 +7,7 @@ execute:
 ---
 
 ```{r, message = FALSE, warning = FALSE, cache = FALSE}
-library(tensormodels)
+library(tensortools)
 library(tidyverse)
 library(latex2exp)
 library(patchwork)

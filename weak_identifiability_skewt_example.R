@@ -1,6 +1,6 @@
-load_tensormodels <- function() {
-  if (requireNamespace("tensormodels", quietly = TRUE)) {
-    suppressPackageStartupMessages(library(tensormodels))
+load_tensortools <- function() {
+  if (requireNamespace("tensortools", quietly = TRUE)) {
+    suppressPackageStartupMessages(library(tensortools))
     return(invisible(TRUE))
   }
 
@@ -10,7 +10,7 @@ load_tensormodels <- function() {
   }
 
   stop(
-    "Could not load tensormodels. Install the package or install pkgload ",
+    "Could not load tensortools. Install the package or install pkgload ",
     "to load the local source tree."
   )
 }
@@ -46,7 +46,7 @@ profile_skew <- function(draws, mu, sigma, nu, interval = c(0.2, 2.0)) {
   )
 }
 
-load_tensormodels()
+load_tensortools()
 
 set.seed(42)
 

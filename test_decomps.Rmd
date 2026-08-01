@@ -7,7 +7,7 @@ date: "2026-01-24"
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
-conflicted::conflict_prefer_all("tensormodels", "rTensor")
+conflicted::conflict_prefer_all("tensortools", "rTensor")
 ```
 
 
@@ -119,7 +119,7 @@ tucker_reconstruct(tucker_res)
 ```{r}
 ranks <- c(2, 2, 2)
 
-conflicted::conflict_prefer_all("tensormodels", "rTensor")
+conflicted::conflict_prefer_all("tensortools", "rTensor")
 
 dims <- dim(A)
 order <- length(dims)

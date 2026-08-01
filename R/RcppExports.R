@@ -2,7 +2,7 @@
 # Generator token: 10BE3573-1514-4C36-9D1C-5A225CD40393
 
 cp_c <- function(X, R = 2L, max_iter = 2000L, tol = 1e-3, init = NULL, verbose = FALSE) {
-    .Call(`_tensormodels_cp_c`, X, R, max_iter, tol, init, verbose)
+    .Call(`_tensortools_cp_c`, X, R, max_iter, tol, init, verbose)
 }
 
 #' n-mode product
@@ -22,7 +22,7 @@ cp_c <- function(X, R = 2L, max_iter = 2000L, tol = 1e-3, init = NULL, verbose =
 #'          \field{k}^{I_1 \times ... \times I_{n-1} \times J \times I_{n+1} \times ... \times I_N}}
 #'          with entries \deqn{(\tensor{A} \times_n \mat{U})_{i_1, ..., i_{n-1}, j, i_{n+1}, ... I_N} =
 #'          \sum_{i_n = 1}^{I_n} a_{i_1, i_2, \dots, i_N} u_{j, i_n}.}
-#'          The tensor and matrix share one mode in common, denoted here as \en{I_n}.
+#'          The tensor and matrix share one mode in common, denoted here as \eqn{I_n}.
 #'          This operation is also called the tensor times matrix product.
 #'
 #' @examples
@@ -31,7 +31,7 @@ cp_c <- function(X, R = 2L, max_iter = 2000L, tol = 1e-3, init = NULL, verbose =
 #' n_prod(a, 1, x)
 #' @export
 n_prod <- function(tensor, n, mat) {
-    .Call(`_tensormodels_n_prod`, tensor, n, mat)
+    .Call(`_tensortools_n_prod`, tensor, n, mat)
 }
 
 #' nm-mode product
@@ -51,7 +51,7 @@ n_prod <- function(tensor, n, mat) {
 #' nm_prod(A, x, 1, 1)
 #' @export
 nm_prod <- function(A, B, n, m) {
-    .Call(`_tensormodels_nm_prod`, A, B, n, m)
+    .Call(`_tensortools_nm_prod`, A, B, n, m)
 }
 
 #' tensor product
@@ -70,6 +70,6 @@ nm_prod <- function(A, B, n, m) {
 #' tensor_prod(A, x)
 #' @export
 tensor_prod <- function(A, B, simplify = TRUE) {
-    .Call(`_tensormodels_tensor_prod`, A, B, simplify)
+    .Call(`_tensortools_tensor_prod`, A, B, simplify)
 }
 

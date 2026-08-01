@@ -51,11 +51,11 @@ test_that("weighted tensor draw sums preserve array shape and values", {
   draws <- tensor(array(seq_len(24), dim = c(3, 2, 4)), obs = 1L)
   weights <- c(0.5, -1, 2)
 
-  observed <- tensormodels:::.tensor_weighted_draw_sum(draws, weights)
+  observed <- tensortools:::.tensor_weighted_draw_sum(draws, weights)
   expected <- Reduce(
     `+`,
     lapply(seq_len(n_draws(draws)), function(i) {
-      weights[i] * tensormodels:::.tensor_single_draw_array(
+      weights[i] * tensortools:::.tensor_single_draw_array(
         pull_draw(draws, i)
       )
     })

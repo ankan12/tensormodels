@@ -37,12 +37,12 @@
 
 
 
-# **tensormodels**
+# **tensortools**
 
 Tensor operations, decompositions, and distributions in R.
 
 ``` r
-library("tensormodels")
+library("tensortools")
 library("tidyverse")
 library("tictoc")
 old_digits <- getOption("digits")
@@ -1065,12 +1065,12 @@ return log densities on the same input space.
 
 ## Installation
 
-You can install the development version of tensormodels from
+You can install the development version of tensortools from
 [GitHub](https://github.com/) with:
 
 ``` r
 if (!requireNamespace("remotes")) install.packages("remotes")
-remotes::install_github("ankan12/tensormodels")
+remotes::install_github("ankan12/tensortools")
 ```
 
 Reset digits

@@ -24,7 +24,7 @@ if (!requireNamespace("curl", quietly = TRUE)) {
 
 project_dir <- normalizePath(getwd(), mustWork = TRUE)
 if (!file.exists(file.path(project_dir, "DESCRIPTION"))) {
-  stop("Run this script from the tensormodels package root.")
+  stop("Run this script from the tensortools package root.")
 }
 pkgload::load_all(project_dir, quiet = TRUE)
 

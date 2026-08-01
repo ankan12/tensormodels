@@ -1,9 +1,13 @@
-Package: tensormodels
-Title: What the Package Does (One Line, Title Case)
+Package: tensortools
+Title: Statistical Modeling and Computation for Tensor-Valued Data
 Version: 0.0.0.9000
 Authors@R: 
     person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
-Description: What the package does (one paragraph).
+Description: Tools for tensor-valued data, including tensor algebra and
+    decompositions, simulation and density evaluation for tensor-variate
+    distributions, likelihood-based estimation, and model diagnostics.
+URL: https://github.com/ankan12/tensortools
+BugReports: https://github.com/ankan12/tensortools/issues
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
@@ -13,7 +17,9 @@ Imports:
     Bessel,
     GIGrvg,
     ggplot2,
+    invgamma,
     Rcpp,
+    statmod,
     vctrs
 Suggests: 
     testthat (>= 3.0.0)
