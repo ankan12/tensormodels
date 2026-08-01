@@ -2,7 +2,11 @@ Package: tensortools
 Title: Statistical Modeling and Computation for Tensor-Valued Data
 Version: 0.0.0.9000
 Authors@R: 
-    person("First", "Last", , "first.last@example.com", role = c("aut", "cre"))
+    person(
+        "Anupama", "Kannan", , "Anupama_Kannan1@baylor.edu",
+        role = c("aut", "cre"),
+        comment = c(ORCID = "0000-0003-2789-6997")
+    )
 Description: Tools for tensor-valued data, including tensor algebra and
     decompositions, simulation and density evaluation for tensor-variate
     distributions, likelihood-based estimation, and model diagnostics.

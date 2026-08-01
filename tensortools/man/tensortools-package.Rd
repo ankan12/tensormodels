@@ -14,9 +14,9 @@
   tensor-valued data in R.
 }
 \author{
-Your Name, email optional.
+Anupama Kannan.
 
-Maintainer: Your Name <your@email.com>
+Maintainer: Anupama Kannan <Anupama_Kannan1@baylor.edu>
 }
 \references{
   This optional section can contain literature or other references for

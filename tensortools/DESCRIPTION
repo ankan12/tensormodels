@@ -3,8 +3,9 @@ Type: Package
 Title: Statistical Modeling and Computation for Tensor-Valued Data
 Version: 1.0
 Date: 2025-10-07
-Authors@R: person("Your", "Name", role = c("aut", "cre"),
-      email = "your@email.com")
+Authors@R: person("Anupama", "Kannan", role = c("aut", "cre"),
+      email = "Anupama_Kannan1@baylor.edu",
+      comment = c(ORCID = "0000-0003-2789-6997"))
 Description: Tools for tensor-valued data, including tensor algebra,
       decompositions, probability distributions, estimation, and diagnostics.
 License: GPL (>= 2)
