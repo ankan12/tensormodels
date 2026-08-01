@@ -7,16 +7,16 @@
 \method{print}{tensor}(
   x,
   ...,
-  n = getOption("tensormodels.print_draws", 3L),
-  entries = getOption("tensormodels.print_entries", 6L),
+  n = getOption("tensortools.print_draws", 3L),
+  entries = getOption("tensortools.print_entries", 6L),
   digits = getOption("digits", 7L)
 )
 
 \method{print}{tensor}(
   x,
   ...,
-  n = getOption("tensormodels.print_draws", 3L),
-  entries = getOption("tensormodels.print_entries", 6L),
+  n = getOption("tensortools.print_draws", 3L),
+  entries = getOption("tensortools.print_entries", 6L),
   digits = getOption("digits", 7L)
 )
 }

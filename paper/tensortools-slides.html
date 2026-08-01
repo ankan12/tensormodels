@@ -445,7 +445,7 @@
   <meta name="author" content="David Kahle">
   <meta name="author" content="Michael Gallaugher">
   <meta name="dcterms.date" content="2025-12-31">
-  <title>tensormodels</title>
+  <title>tensortools</title>
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, minimal-ui">
@@ -1321,7 +1321,7 @@ margin-right: 0; }
     <div class="slides">
 
 <section id="title-slide" class="quarto-title-block center">
-  <h1 class="title">tensormodels</h1>
+  <h1 class="title">tensortools</h1>
   <p class="subtitle">Statistical models for tensor-valued data</p>
 
 <div class="quarto-title-authors">
@@ -1420,7 +1420,7 @@ Order and mode
 </div>
 <aside class="notes">
 <p>Suggested pace: 1:10.</p>
-<p>Establish only the notation needed for the rest of the talk. The order is the number of indices required to locate an entry; a mode is one specific axis. The important point is that modes carry meaning. Matricization lets us focus on one mode by placing it in the rows of a matrix, while an n-mode product applies a matrix transformation along one axis without destroying the rest of the array. These are not merely algebra helpers. In tensormodels, matricization is used to initialize and update mode-specific covariance estimates, and n-mode products apply covariance factors during simulation, likelihood evaluation, and diagnostic whitening.</p>
+<p>Establish only the notation needed for the rest of the talk. The order is the number of indices required to locate an entry; a mode is one specific axis. The important point is that modes carry meaning. Matricization lets us focus on one mode by placing it in the rows of a matrix, while an n-mode product applies a matrix transformation along one axis without destroying the rest of the array. These are not merely algebra helpers. In tensortools, matricization is used to initialize and update mode-specific covariance estimates, and n-mode products apply covariance factors during simulation, likelihood evaluation, and diagnostic whitening.</p>
 <style type="text/css">
 span.MJX_Assistive_MathML {
 position:absolute!important;
@@ -1750,7 +1750,7 @@ display:block!important;
 <li>Computational backends</li>
 </ul>
 </div><div class="column" style="width:52%;">
-<h3 id="tensormodels-adds"><code>tensormodels</code> adds</h3>
+<h3 id="tensortools-adds"><code>tensortools</code> adds</h3>
 <ul>
 <li>Tensor-normal and four skewed distributions</li>
 <li>Random generation and density evaluation</li>
@@ -1763,7 +1763,7 @@ display:block!important;
 </div>
 <aside class="notes">
 <p>Suggested pace: 1:05.</p>
-<p>Several excellent ecosystems already cover tensor representation and decomposition: MATLAB Tensor Toolbox, TensorLy and pyttb in Python, TensorOperations and related packages in Julia, and rTensor or ttTensor in R. Their center of gravity is algebra, decomposition, sparse or factored representations, and computational backends. Tensormodels deliberately overlaps on the core operations needed for statistical work, but its distinctive contribution is distributional: tensor-normal and skewed probability models, simulation and densities, maximum-likelihood or EM estimation, and diagnostics for the covariance assumptions. That is the gap the package is intended to fill.</p>
+<p>Several excellent ecosystems already cover tensor representation and decomposition: MATLAB Tensor Toolbox, TensorLy and pyttb in Python, TensorOperations and related packages in Julia, and rTensor or ttTensor in R. Their center of gravity is algebra, decomposition, sparse or factored representations, and computational backends. Tensortools deliberately overlaps on the core operations needed for statistical work, but its distinctive contribution is distributional: tensor-normal and skewed probability models, simulation and densities, maximum-likelihood or EM estimation, and diagnostics for the covariance assumptions. That is the gap the package is intended to fill.</p>
 <style type="text/css">
 span.MJX_Assistive_MathML {
 position:absolute!important;
@@ -1790,7 +1790,7 @@ display:block!important;
 </li>
 </ol>
 <div class="lead" style="margin-top: 1.1em;">
-<p><code>tensormodels</code> makes multiway structure a modeling asset rather than a preprocessing obstacle.</p>
+<p><code>tensortools</code> makes multiway structure a modeling asset rather than a preprocessing obstacle.</p>
 </div>
 <aside class="notes">
 <p>Suggested pace: 0:55, then questions.</p>
@@ -1811,7 +1811,7 @@ display:block!important;
     </div>
   <div class="quarto-auto-generated-content" style="display: none;">
 <div class="footer footer-default">
-<p>tensormodels · Baylor University</p>
+<p>tensortools · Baylor University</p>
 </div>
 </div></div>
 

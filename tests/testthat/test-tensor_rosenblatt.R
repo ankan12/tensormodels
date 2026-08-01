@@ -152,6 +152,30 @@ test_that("specialized skew-t wrapper delegates to unified transform", {
   expect_equal(unclass(unified), unclass(specialized))
 })
 
+test_that("GIG quadrature remains stable for concentrated posteriors", {
+  cases <- list(
+    list(lambda = -21.5, chi = 1e4, psi = 30),
+    list(lambda = -21.5, chi = 1e4, psi = 0),
+    list(lambda = 20, chi = 0, psi = 40),
+    list(lambda = 1e-3, chi = 1e-4, psi = 1e-4)
+  )
+
+  for (parameters in cases) {
+    probability <- tensortools:::.tensor_rosenblatt_gig_cdf(
+      value = 0,
+      skew = 0,
+      lambda = parameters$lambda,
+      chi = parameters$chi,
+      psi = parameters$psi,
+      rel.tol = 1e-7,
+      abs.tol = 1e-9,
+      subdivisions = 100L
+    )
+
+    expect_equal(probability, 0.5, tolerance = 1e-7)
+  }
+})
+
 test_that("unified transform validates model-specific parameter lists", {
   draws <- tensor(array(0, dim = c(2, 2)))
   common <- list(

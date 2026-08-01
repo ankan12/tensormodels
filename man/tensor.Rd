@@ -15,6 +15,8 @@ tensor(data, dim = NULL, obs = NULL, n = 1L, dimnames = NULL)
 \item{obs}{\code{NULL} for one draw, or a numeric/character observation axis.}
 
 \item{n}{Number of draws to construct when \code{dim} is supplied. Defaults to 1.}
+
+\item{dimnames}{Optional dimension names for each tensor draw.}
 }
 \value{
 A \code{tensor} object with observations on its first dimension.

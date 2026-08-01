@@ -9,6 +9,7 @@
 #' @param dim Optional dimensions of each draw, following [array()].
 #' @param obs `NULL` for one draw, or a numeric/character observation axis.
 #' @param n Number of draws to construct when `dim` is supplied. Defaults to 1.
+#' @param dimnames Optional dimension names for each tensor draw.
 #' @return A `tensor` object with observations on its first dimension.
 #' @export
 tensor <- function(data, dim = NULL, obs = NULL, n = 1L, dimnames = NULL) {

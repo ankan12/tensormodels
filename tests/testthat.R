@@ -7,6 +7,6 @@
 # * https://testthat.r-lib.org/articles/special-files.html
 
 library(testthat)
-library(tensormodels)
+library(tensortools)
 
-test_check("tensormodels")
+test_check("tensortools")

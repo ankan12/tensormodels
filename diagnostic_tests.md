@@ -7,7 +7,7 @@ This document collects the diagnostic-test material from the README, including t
 The diagnostic examples below use simulated multivariate, matrix-variate, and tensor-variate normal draws.
 
 ``` r
-library("tensormodels")
+library("tensortools")
 library("tidyverse")
 
 old_digits <- getOption("digits")

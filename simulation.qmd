@@ -5,7 +5,7 @@ editor: visual
 ---
 
 ```{r, setup, echo = FALSE}
-library(tensormodels)
+library(tensortools)
 library(patchwork)
 library(tidyverse)
 library(scales)

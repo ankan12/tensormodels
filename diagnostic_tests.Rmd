@@ -4,7 +4,7 @@ output: html_document
 ---
 
 ```{r setup, message=FALSE}
-library("tensormodels")
+library("tensortools")
 library("tidyverse")
 
 old_digits <- getOption("digits")

@@ -13,7 +13,9 @@ cp(A, R = 2, max_iter = 2000, tol = 0.001, method = "ALS")
 
 \item{max_iter}{A maximum number of iterations to try.}
 
-\item{tol}{Tolerance for convergence criterion.
+\item{tol}{Tolerance for convergence criterion.}
+
+\item{method}{Decomposition method. Currently only \code{"ALS"} is supported.
 Ends algorithm if relative Frobenius norm between true and reconstructed tensor
 is smaller than tol.}
 }
@@ -30,7 +32,7 @@ SIAM Applied Mathematics and Applications 2009.
 }
 \examples{
 A <- array(1:24, dim = c(2, 3, 4))
-(res <- cp_als(A, ranks = c(2, 2, 2)))
+(res <- cp(A, R = 2))
 
 }
 \seealso{

@@ -14,8 +14,8 @@ n_prod <- function(tensor, n, mat) {
   n <- as.integer(n)
   if (tensor_is_tensor) {
     if (n > length(draw_shape(tensor))) stop("Invalid mode index.", call. = FALSE)
-    out <- .Call(`_tensormodels_n_prod`, unclass(tensor), n + 1L, mat)
+    out <- .Call(`_tensortools_n_prod`, unclass(tensor), n + 1L, mat)
     return(.new_tensor_array(out))
   }
-  .Call(`_tensormodels_n_prod`, tensor, n, mat)
+  .Call(`_tensortools_n_prod`, tensor, n, mat)
 }

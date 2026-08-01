@@ -145,12 +145,12 @@ test_that("finite-difference scores support every fitted distribution", {
   for (model in names(specifications)) {
     specification <- specifications[[model]]
     parameterization <-
-      tensormodels:::.tensor_score_gof_parameterization(
+      tensortools:::.tensor_score_gof_parameterization(
         specification$fit,
         model,
         dims = 1L
       )
-    scores <- tensormodels:::.tensor_score_gof_scores(
+    scores <- tensortools:::.tensor_score_gof_scores(
       specification$draws,
       model,
       parameterization,

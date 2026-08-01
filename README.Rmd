@@ -47,13 +47,13 @@ knitr::opts_chunk$set(
 set.seed(1)
 ```
 
-# **tensormodels**
+# **tensortools**
 
 Tensor operations, decompositions, and distributions in R. 
 
 ```{r}
 #| message: false
-library("tensormodels")
+library("tensortools")
 library("tidyverse")
 library("tictoc")
 library("keras")
@@ -955,13 +955,13 @@ wrap_plots(lapply(maple_trees[which(all_lik >= 9000)], plot_image),
 
 ## Installation
 
-You can install the development version of tensormodels from
+You can install the development version of tensortools from
 [GitHub](https://github.com/) with:
     
 ```{r}
 #| eval: false
 if (!requireNamespace("remotes")) install.packages("remotes")
-remotes::install_github("ankan12/tensormodels")
+remotes::install_github("ankan12/tensortools")
 ```
 
 

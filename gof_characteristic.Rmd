@@ -12,7 +12,7 @@ knitr::opts_chunk$set(
   fig.height = 4
 )
 
-library(tensormodels)
+library(tensortools)
 library(tidyverse)
 ```
 

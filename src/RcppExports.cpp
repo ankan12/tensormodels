@@ -13,7 +13,7 @@ Rcpp::Rostream<false>& Rcpp::Rcerr = Rcpp::Rcpp_cerr_get();
 
 // cp_c
 Rcpp::List cp_c(Rcpp::NumericVector X, int R, int max_iter, double tol, Rcpp::Nullable<Rcpp::List> init, bool verbose);
-RcppExport SEXP _tensormodels_cp_c(SEXP XSEXP, SEXP RSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP initSEXP, SEXP verboseSEXP) {
+RcppExport SEXP _tensortools_cp_c(SEXP XSEXP, SEXP RSEXP, SEXP max_iterSEXP, SEXP tolSEXP, SEXP initSEXP, SEXP verboseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -29,7 +29,7 @@ END_RCPP
 }
 // n_prod
 Rcpp::NumericVector n_prod(Rcpp::NumericVector tensor, int n, Rcpp::NumericMatrix mat);
-RcppExport SEXP _tensormodels_n_prod(SEXP tensorSEXP, SEXP nSEXP, SEXP matSEXP) {
+RcppExport SEXP _tensortools_n_prod(SEXP tensorSEXP, SEXP nSEXP, SEXP matSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -42,7 +42,7 @@ END_RCPP
 }
 // nm_prod
 NumericVector nm_prod(NumericVector A, NumericVector B, int n, int m);
-RcppExport SEXP _tensormodels_nm_prod(SEXP ASEXP, SEXP BSEXP, SEXP nSEXP, SEXP mSEXP) {
+RcppExport SEXP _tensortools_nm_prod(SEXP ASEXP, SEXP BSEXP, SEXP nSEXP, SEXP mSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -56,7 +56,7 @@ END_RCPP
 }
 // tensor_prod
 NumericVector tensor_prod(NumericVector A, NumericVector B, bool simplify);
-RcppExport SEXP _tensormodels_tensor_prod(SEXP ASEXP, SEXP BSEXP, SEXP simplifySEXP) {
+RcppExport SEXP _tensortools_tensor_prod(SEXP ASEXP, SEXP BSEXP, SEXP simplifySEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -69,14 +69,14 @@ END_RCPP
 }
 
 static const R_CallMethodDef CallEntries[] = {
-    {"_tensormodels_cp_c", (DL_FUNC) &_tensormodels_cp_c, 6},
-    {"_tensormodels_n_prod", (DL_FUNC) &_tensormodels_n_prod, 3},
-    {"_tensormodels_nm_prod", (DL_FUNC) &_tensormodels_nm_prod, 4},
-    {"_tensormodels_tensor_prod", (DL_FUNC) &_tensormodels_tensor_prod, 3},
+    {"_tensortools_cp_c", (DL_FUNC) &_tensortools_cp_c, 6},
+    {"_tensortools_n_prod", (DL_FUNC) &_tensortools_n_prod, 3},
+    {"_tensortools_nm_prod", (DL_FUNC) &_tensortools_nm_prod, 4},
+    {"_tensortools_tensor_prod", (DL_FUNC) &_tensortools_tensor_prod, 3},
     {NULL, NULL, 0}
 };
 
-RcppExport void R_init_tensormodels(DllInfo *dll) {
+RcppExport void R_init_tensortools(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
     R_useDynamicSymbols(dll, FALSE);
 }

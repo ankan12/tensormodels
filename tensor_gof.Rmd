@@ -1,6 +1,6 @@
 ---
 title: "Recommended Tensor Goodness-of-Fit Test"
-subtitle: "Multiscale characteristic functions with a parametric bootstrap"
+subtitle: "Score-adjusted Rosenblatt smooth testing"
 output: html_document
 ---
 
@@ -12,38 +12,272 @@ knitr::opts_chunk$set(
   fig.height = 4
 )
 
-library(tensormodels)
+library(tensortools)
 ```
 
+## Recommended score-adjusted Rosenblatt GOF test
+
+The following example assumes that `skewt_draws` is a `tensor` object
+containing the observed draws. Fit the model once and pass that fit to
+`tensor_gof_scores()` so the MLE is not calculated twice.
+
+```{r}
+sim_res <- function(i) {
+  skewt_draws <- rtskewt(1e3, mu = mu_true, sigmas = list(S1, S2, S3),
+                       skew = skew_true, nu = 20)
+
+  skewt_fit <- tensor_mle(
+    skewt_draws,
+    model = "skewt",
+    tol = 1e-6,
+    max_iter = 10000
+  )
+
+  # 2. Run the score-adjusted Rosenblatt smooth GOF test
+  skewt_gof <- tensor_gof_scores(
+    skewt_draws,
+    model = "skewt",
+    fit = skewt_fit,
+    marginal_degree = 2,
+    include_interactions = FALSE,
+    max_basis = 48,
+    calibration = "multiplier",
+    B = 1999
+  )
+
+  tibble::tibble(
+    simulation = i,
+    stat = unname(skewt_gof$statistic),
+    p = skewt_gof$p.value,
+    asymptotic_stat = unname(skewt_gof$asymptotic.statistic),
+    asymptotic_p = skewt_gof$asymptotic.p.value,
+    score_stationarity = skewt_gof$score_stationarity,
+    nu = skewt_fit$nu,
+    loglik = skewt_fit$loglik
+  )
+}
+```
+
+
+```{r}
+future::plan(
+  future::multisession,
+  workers = 8
+)
+
+progressr::handlers("txtprogressbar")
+
+progressr::with_progress({
+  progress <- progressr::progressor(steps = 100)
+
+  all_res <- furrr::future_map_dfr(
+    1:100,
+    function(iteration) {
+      result <- sim_res(iteration)
+
+      progress(
+        message = sprintf(
+          "Completed simulation %d",
+          iteration
+        )
+      )
+
+      result
+    },
+    .options = furrr::furrr_options(
+      seed = TRUE,
+      scheduling = Inf
+    )
+  )
+})
+
+ggplot() +
+  geom_histogram(aes(x = all_res$p), color = "black", fill = "pink",
+                 bins = 100) +
+  geom_vline(aes(xintercept = 0.05), color = "red", lty = 2) +
+  theme_minimal()
+
+summary(all_res$p)
+
+sum(all_res$p < 0.05)
+```
+
+
+```{r}
+# 1. Fit the proposed distribution
+
+```
+
+
+```{r, eval=FALSE}
+```{r recommended-score-gof-example, eval=FALSE}
+# 3. Extract the formal test result
+skewt_gof$statistic
+skewt_gof$p.value
+
+# The former covariance-whitened chi-squared result is diagnostic only
+skewt_gof$asymptotic.statistic
+skewt_gof$asymptotic.p.value
+
+# 4. Check whether the fit and numerical ranks support the approximation
+skewt_gof$score_stationarity
+skewt_gof$information_rank
+skewt_gof$adjusted_covariance_rank
+
+# At significance level 0.05:
+if (skewt_gof$p.value < 0.05) {
+  message("Reject the fitted tensor skew-t model.")
+} else {
+  message("Do not reject the fitted tensor skew-t model.")
+}
+
+skewt_gof$uniforms |>
+  c() |>
+  as_tibble() |>
+  ggplot() +
+  geom_histogram(aes(x = value), bins = 100)
+```
+
+Interpretation: a small p-value is evidence against the fitted distribution.
+A large p-value means that the test did not find evidence against it; it does
+not prove that the fitted model is correct. Warnings about score stationarity
+or rank deficiency should be resolved before interpreting the p-value.
+
+## Earlier unadjusted exploratory implementation
 
 ```{r}
 tensor_gof <- function(draws, model) {
   mles <- tensor_mle(draws, model = model, tol = 1e-5)
 
-  ros_unif <- tensor_rosenblatt(draws, model = model, parameters = mles)
-  
-  basis <- make_basis(ros_unif, marginal_degree = 2, include_interactions = TRUE)
-  
+  #true <- list(mu = mu_true, sigmas = list(S1, S2, S3), skew = skew_true, nu = 20)
+
+  ros_unif <- tensor_rosenblatt(draws, model = model,
+                                parameters = mles)
+
+  basis <- make_basis(ros_unif, marginal_degree = 2,
+                      include_interactions = TRUE, max_basis = 100)
+
   basis_means <- colMeans(basis)
-  
-  statistic <- n_draws(norm_draws) * sum(basis_means^2)
-  
+
+  ggplot() +
+    geom_histogram(aes(x = c(ros_unif)))
+
+  statistic <- n_draws(draws) * sum(basis_means^2)
+
   pval <- pchisq(statistic, df = ncol(basis), lower.tail = FALSE)
-  
+
   tibble(model = model, stat = statistic, p = pval)
 }
 
-S1 <- crossprod(matrix(rnorm(4), nrow = 2))
-S2 <- crossprod(matrix(rnorm(9), nrow = 3))
-S3 <- crossprod(matrix(rnorm(16), nrow = 4))
+mu_true <- array(1:24, dim = c(2, 3, 4))
 
-norm_draws <- rtnorm(n = 1e3, mu = array(1:24, dim = c(2, 3, 4)),
+S1 <- toeplitz(0.3^(0:1))
+S2 <- toeplitz(0.3^(0:2))
+S3 <- toeplitz(0.3^(0:3))
+
+norm_draws <- rtnorm(n = 1e3, mu = mu_true,
                      sigmas = list(S1, S2, S3))
 
 
+
+sim_setup <- function(draws) {
+  norm_res <- tensor_gof(draws, "normal")
+  skewt_res <- tensor_gof(draws, "skewt")
+  vargamma_res <- tensor_gof(draws, "vargamma")
+  invgauss_res <- tensor_gof(draws, "invgauss")
+  genhyper_res <- tensor_gof(draws, "genhyper")
+
+  rbind(norm_res, skewt_res, vargamma_res, invgauss_res, genhyper_res)
+}
+```
+
+
+```{r}
+tic()
+res <- sim_res(1)
+toc()
+
+res$p
+
+res$stat
+```
+
+
+```{r}
+sim_res <- function(i) {
+  tryCatch(
+    {
+      skewt_draws <- rtskewt(
+        n = 1e3,
+        mu = array(1:24, dim = c(2, 3, 4)),
+        sigmas = list(S1, S2, S3),
+        skew = skew_true,
+        nu = 20
+      )
+
+      tensor_gof(skewt_draws, "skewt") |>
+        dplyr::mutate(
+          simulation = i,
+          error = NA_character_,
+          .before = 1
+        )
+    },
+    error = function(error) {
+      tibble::tibble(
+        simulation = i,
+        model = "skewt",
+        stat = NA_real_,
+        p = NA_real_,
+        error = conditionMessage(error)
+      )
+    }
+  )
+}
+```
+
+
+```{r}
+library(furrr)
+library(progressr)
+
+
+```
+
+
+```{r}
+all_res <- tibble(model= rep("skewt", 500), stat = rep(NA, 500), p = rep(NA, 500))
+
+for(i in 1:20) {
+  if(i %% 5 == 0) print(i)
+
+  res <- sim_res(i)
+
+  all_res[i, ] <- res
+}
+
+sum(all_res$p[1:50] < 0.05)
+
+ggplot() +
+  geom_histogram(aes(x = all_res$p[1:50]), bins = 100,
+                 color = "black", fill = "pink") +
+  geom_vline(aes(xintercept = 0.05), color = "red") +
+  theme_minimal()
+
+
+plan(multisession, workers = 6)
+
+all_res <- future_map_dfr(1:50, sim_res, .progress = TRUE,
+                          .options = furrr::furrr_options(seed = TRUE))
+```
+
+
+
+```{r}
 tensor_gof(skewt_draws, "normal")
 tensor_gof(skewt_draws, "invgauss")
 tensor_gof(skewt_draws, "genhyper")
+tensor_gof(skewt_draws, "skewt")
+tensor_gof(skewt_draws, "vargamma")
 
 ```
 
@@ -72,7 +306,7 @@ skew_true <- array(seq(by = 0.1, length = 24), dim = c(2, 3, 4))
 skewt_draws <- rtskewt(n = 1e3, mu = array(1:24, dim = c(2, 3, 4)),
                        sigmas = list(S1, S2, S3), skew = skew_true, nu = 20)
 
-mles_skewt <- tensor_mle(skewt_draws, model = "normal", 
+mles_skewt <- tensor_mle(skewt_draws, model = "normal",
                          tol = 1e-5, quiet = FALSE, max_iter = 1e4)
 
 res <- tensor_rosenblatt(skewt_draws, model = "normal",
@@ -115,7 +349,7 @@ model, tensor dimensions, and sample size; finite-sample calibration can be
 poor for weakly identified skewed-model parameters.
 
 ```{r finite-basis-score-gof, eval=FALSE}
-skewt_score_gof <- 
+skewt_score_gof <-
   tensor_score_gof(draws = norm_draws,
   model = "skewt",
   marginal_degree = 2,
@@ -471,7 +705,7 @@ skewt_score_study <- score_gof_simulation(
   ),
   fitted_models = c(
     "normal", "skewt"), #, "vargamma", "invgauss", "genhyper"
-  
+
   alpha = 0.05,
   marginal_degree = 2,
   include_interactions = TRUE,
@@ -529,11 +763,11 @@ for (i in seq_along(mles_norm$sigmas)) {
 
 uniform_draws <- pnorm(standard_draws)
 
-uniform_draws |> 
-  c() |> 
-  as_tibble() |> 
+uniform_draws |>
+  c() |>
+  as_tibble() |>
   ggplot() +
-  geom_histogram(aes(x = value), color = "black", fill = "pink", 
+  geom_histogram(aes(x = value), color = "black", fill = "pink",
                    binwidth = 0.01, boundary = 0) +
   theme_minimal()
 
@@ -546,9 +780,9 @@ mean(uniform_draws)
 ```{r}
 
 
-res |> 
-  c() |> 
-  as_tibble() |> 
+res |>
+  c() |>
+  as_tibble() |>
   ggplot() +
   geom_histogram(aes(x = value), bins = 100) +
   theme_minimal()
@@ -883,12 +1117,12 @@ unif_true <- rosenblatt_tskewt(
   nu = 20
 )
 
-unif_true |> 
-  c() |> 
-  as_tibble() |> 
+unif_true |>
+  c() |>
+  as_tibble() |>
   ggplot() +
-  geom_histogram(aes(x = value, y = after_stat(density)), 
-                 color = "black", fill = "pink", 
+  geom_histogram(aes(x = value, y = after_stat(density)),
+                 color = "black", fill = "pink",
                  binwidth = 0.01, boundary = 0) +
   geom_density(aes(x = value), color = "red") +
   theme_minimal()
@@ -903,12 +1137,12 @@ unif_false <- rosenblatt_tskewt(
   nu = mles_norm_skew$nu
 )
 
-unif_false |> 
-  c() |> 
-  as_tibble() |> 
+unif_false |>
+  c() |>
+  as_tibble() |>
   ggplot() +
-  geom_histogram(aes(x = value, y = after_stat(density)), 
-                 color = "black", fill = "pink", 
+  geom_histogram(aes(x = value, y = after_stat(density)),
+                 color = "black", fill = "pink",
                  binwidth = 0.01, boundary = 0) +
   geom_density(aes(x = value), color = "red") +
   theme_minimal()
